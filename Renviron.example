@@ -1,0 +1,6 @@
+# Copiar como .Renviron y completar con valores locales.
+IMPALA_JDBC_JAR=/ruta/al/driver/ImpalaJDBC42.jar
+IMPALA_JDBC_URL=jdbc:impala://servidor:puerto/;parametros_de_conexion
+IMPALA_USER=usuario_impala
+IMPALA_PASSWORD=contrasena_impala
+

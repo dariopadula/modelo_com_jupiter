@@ -1,0 +1,321 @@
+---
+title: "Funciones utilitarias de modelos"
+format:
+  html:
+    theme: cosmo
+    toc: true
+    toc-depth: 3
+    number-sections: true
+execute:
+  echo: true
+  warning: false
+  message: false
+---
+
+## Objetivo
+
+Documentar las funciones compartidas de modelado definidas en:
+
+- `funciones/modelos_utils.R`
+
+Estas funciones separan la logica general de preparacion, evaluación y visualizacion de modelos del código específico de cada algoritmo.
+
+El objetivo es que modelos como regresion logística, Random Forest o XGBoost puedan usar las mismas reglas de preparacion y las mismas métricas, haciendo comparables los resultados.
+
+## Funciones de métricas
+
+### `auc_binaria()`
+
+Calcula el AUC para un problema de clasificación binaria.
+
+Uso esperado:
+
+```{r}
+#| eval: false
+auc_binaria(y, score)
+```
+
+Argumentos:
+
+- `y`: vector binario con valores `0/1`, `FALSE/TRUE` o equivalentes.
+- `score`: vector numerico con el puntaje o probabilidad predicha por el modelo.
+
+Salida:
+
+- Un número entre 0 y 1.
+- `NA_real_` si no hay casos positivos o no hay casos negativos.
+
+Interpretación:
+
+- `0.5`: ordenamiento similar al azar.
+- Mayor que `0.5`: el modelo tiende a asignar mayor score a los casos positivos.
+- `1`: separacion perfecta entre positivos y negativos.
+
+Fundamento:
+
+El AUC mide la capacidad del modelo para ordenar correctamente los casos según riesgo. Es útil cuando interesa priorizar clusters con mayor probabilidad de reclamo.
+
+### `logloss_binaria()`
+
+Calcula la logloss para clasificación binaria.
+
+Uso esperado:
+
+```{r}
+#| eval: false
+logloss_binaria(y, p)
+```
+
+Argumentos:
+
+- `y`: vector binario con el target observado.
+- `p`: vector numerico con probabilidades predichas.
+
+Salida:
+
+- Un valor numerico de logloss.
+
+Interpretación:
+
+- Valores menores indican mejores probabilidades.
+- Penaliza con fuerza predicciones muy seguras pero equivocadas.
+
+Fundamento:
+
+La logloss evalua la calidad probabilistica del modelo, no solo su capacidad de ranking. Esto es importante si las probabilidades se usan para calibrar umbrales operativos.
+
+## Funciones de priorizacion
+
+### `lift_top()`
+
+Calcula precisión, capture rate y lift para los clusters/día con mayor score.
+
+Uso esperado:
+
+```{r}
+#| eval: false
+lift_top(
+  dt,
+  score_col = "pred_prob",
+  y_col = "target",
+  cortes = c(0.01, 0.05, 0.10, 0.20)
+)
+```
+
+Argumentos:
+
+- `dt`: `data.table` con predicciones y target observado.
+- `score_col`: nombre de la columna con el score o probabilidad predicha.
+- `y_col`: nombre de la columna con el target binario observado.
+- `cortes`: proporciones superiores a evaluar. Por defecto: 1%, 5%, 10% y 20%.
+
+Salida:
+
+Una tabla con:
+
+- `top_pct`: corte evaluado.
+- `n`: cantidad de filas priorizadas.
+- `positivos`: cantidad de reclamos observados dentro del grupo priorizado.
+- `precision`: proporcion de positivos dentro del grupo priorizado.
+- `capture_rate`: proporcion del total de positivos capturada por el grupo priorizado.
+- `lift`: precisión del grupo priorizado dividida por la prevalencia general.
+
+Fundamento:
+
+Esta función responde una pregunta operativa: si se atiende solo el grupo de mayor riesgo, cuantos reclamos se capturan frente a una selección al azar.
+
+### `lift_diario_top()`
+
+Calcula el lift y capture rate por día para distintos cortes de riesgo.
+
+Uso esperado:
+
+```{r}
+#| eval: false
+lift_diario_top(
+  dt,
+  score_col = "pred_prob",
+  y_col = "target",
+  cortes = c(0.01, 0.05, 0.10, 0.20)
+)
+```
+
+Argumentos:
+
+- `dt`: `data.table` con predicciones, target observado y columna `dia`.
+- `score_col`: columna con score o probabilidad predicha.
+- `y_col`: columna con target binario observado.
+- `cortes`: proporciones superiores a evaluar por día.
+
+Salida:
+
+Una tabla por `dia` y `top_pct` con:
+
+- total de filas del día;
+- positivos del día;
+- prevalencia diaria;
+- cantidad priorizada;
+- positivos capturados;
+- precisión;
+- capture rate;
+- lift;
+- capture rate esperado por azar.
+
+Fundamento:
+
+El lift global puede ocultar variabilidad diaria. Esta función permite evaluar si el modelo mantiene utilidad operativa día a día.
+
+## Funciones de calibración
+
+### `calibracion_deciles()`
+
+Agrupa las predicciones en deciles de riesgo y compara probabilidad predicha contra frecuencia observada.
+
+Uso esperado:
+
+```{r}
+#| eval: false
+calibracion_deciles(
+  dt,
+  score_col = "pred_prob",
+  y_col = "target"
+)
+```
+
+Argumentos:
+
+- `dt`: `data.table` con predicciones y target observado.
+- `score_col`: columna con probabilidad predicha.
+- `y_col`: columna con target binario observado.
+
+Salida:
+
+Una tabla por decil con:
+
+- `decil`: decil de riesgo, ordenado de mayor a menor score.
+- `n`: cantidad de observaciones.
+- `pred_media`: probabilidad promedio predicha.
+- `obs_rate`: tasa observada de reclamos.
+- `positivos`: cantidad de casos positivos.
+
+Fundamento:
+
+Permite revisar si las probabilidades del modelo están calibradas. Un modelo puede ordenar bien pero asignar probabilidades demasiado altas o demasiado bajas.
+
+## Funciones de gráficos
+
+### `graficar_capture_diario()`
+
+Genera un histograma del capture rate diario por corte de riesgo.
+
+Uso esperado:
+
+```{r}
+#| eval: false
+graficar_capture_diario(
+  lift_diario,
+  path_png
+)
+```
+
+Argumentos:
+
+- `lift_diario`: salida de `lift_diario_top()`.
+- `path_png`: ruta donde guardar el gráfico en formato PNG.
+
+Salida:
+
+- Guarda un archivo `.png`.
+- Devuelve `TRUE` invisiblemente si pudo generarlo.
+- Devuelve `FALSE` invisiblemente si `ggplot2` no está instalado.
+
+Fundamento:
+
+El gráfico muestra la distribución diaria del capture rate. La linea roja representa el capture rate esperado si se seleccionara al azar el mismo porcentaje de clusters/día.
+
+## Funciones de preparacion
+
+### `preparar_matriz()`
+
+Prepara una matriz numerica para entrenamiento o predicción.
+
+Uso esperado:
+
+```{r}
+#| eval: false
+mat_train <- preparar_matriz(train, features_modelo)
+mat_valid <- preparar_matriz(valid, features_modelo, prep = mat_train$prep)
+```
+
+Argumentos:
+
+- `dt`: `data.table` con las columnas predictoras.
+- `features`: vector de nombres de columnas a usar como predictores.
+- `prep`: objeto de preparacion aprendido previamente. Si es `NULL`, se calcula desde `dt`.
+- `no_agregar_na_features`: vector opcional con nombres de columnas para las que no se deben crear indicadores `_na` automaticos.
+
+Salida:
+
+Una lista con:
+
+- `x`: matriz numerica lista para usar en un modelo.
+- `prep`: parámetros de preparacion aprendidos.
+
+Transformaciones:
+
+- Convierte columnas logicas a `0/1`.
+- Convierte columnas enteras a numericas.
+- Calcula mediana para imputar faltantes.
+- Crea indicadores `_na` para columnas que tienen faltantes en entrenamiento.
+- Omite esos indicadores para las columnas listadas en `no_agregar_na_features`.
+- Estandariza cada predictor usando media y desvio del conjunto de entrenamiento.
+
+Nota de modelado:
+
+Los indicadores `_na` son útiles cuando el faltante tiene significado operativo claro. Cuando el faltante mezcla situaciones distintas, conviene crear variables explicitas antes de llamar a `preparar_matriz()`.
+
+Ejemplo:
+
+- `dias_desde_ultimo_reclamo` queda en `NA` cuando no hay reclamo previo observado.
+- Ese `NA` puede ocurrir por borde temporal al inicio de la serie o porque el cluster lleva muchos días observado sin reclamos.
+- Por eso el modelo logístico usa variables explicitas: `sin_reclamo_previo_observado`, `dias_historia_observada_cluster` y `dias_desde_ultimo_reclamo_o_inicio`.
+- Para las variables predictivas de levante y ratios, el modelo logístico usa `no_agregar_na_features` para imputar faltantes sin crear indicadores `_na`, porque esos faltantes estaban concentrados al inicio del historial disponible.
+
+Regla importante:
+
+El objeto `prep` debe aprenderse solo con entrenamiento y reutilizarse en validación o predicción. Esto evita leakage desde los datos de validación hacia el entrenamiento.
+
+Fundamento:
+
+Centralizar esta preparacion permite que distintos modelos usen exactamente las mismas reglas de imputacion y transformacion, haciendo comparables las métricas entre algoritmos.
+
+## Uso dentro del modelo logístico
+
+El script:
+
+- `scripts/modelo_logistico_cluster_dia.R`
+
+carga estas funciones con:
+
+```{r}
+#| eval: false
+source("funciones/modelos_utils.R")
+```
+
+Luego usa:
+
+- `preparar_matriz()` para construir `x_train` y `x_valid`;
+- `auc_binaria()` y `logloss_binaria()` para métricas generales;
+- `lift_top()` para lift global de validación;
+- `lift_diario_top()` para lift diario;
+- `calibracion_deciles()` para calibración por decil;
+- `graficar_capture_diario()` para la figura de capture rate diario.
+
+## Criterio para futuros modelos
+
+Cuando se agregue un nuevo modelo, conviene mantener esta separacion:
+
+- El script del modelo define algoritmo, hiperparametros y salidas especificas.
+- `funciones/modelos_utils.R` contiene preparacion, métricas y evaluaciones compartidas.
+
+Esto evita duplicar logica y reduce el riesgo de que dos modelos sean comparados con reglas distintas.

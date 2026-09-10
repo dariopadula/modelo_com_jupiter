@@ -1,0 +1,611 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.3.433">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+
+<title>Analisis Zona Limpia</title>
+<style>
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+</style>
+
+
+<script src="README_files/libs/clipboard/clipboard.min.js"></script>
+<script src="README_files/libs/quarto-html/quarto.js"></script>
+<script src="README_files/libs/quarto-html/popper.min.js"></script>
+<script src="README_files/libs/quarto-html/tippy.umd.min.js"></script>
+<script src="README_files/libs/quarto-html/anchor.min.js"></script>
+<link href="README_files/libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="README_files/libs/quarto-html/quarto-syntax-highlighting.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="README_files/libs/bootstrap/bootstrap.min.js"></script>
+<link href="README_files/libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="README_files/libs/bootstrap/bootstrap.min.css" rel="stylesheet" id="quarto-bootstrap" data-mode="light">
+
+
+</head>
+
+<body>
+
+<div id="quarto-content" class="page-columns page-rows-contents page-layout-article">
+<div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+  <nav id="TOC" role="doc-toc" class="toc-active">
+    <h2 id="toc-title">Table of contents</h2>
+   
+  <ul>
+  <li><a href="#objetivo" id="toc-objetivo" class="nav-link active" data-scroll-target="#objetivo">Objetivo</a></li>
+  <li><a href="#contrato-de-datos" id="toc-contrato-de-datos" class="nav-link" data-scroll-target="#contrato-de-datos">Contrato De Datos</a></li>
+  <li><a href="#scripts" id="toc-scripts" class="nav-link" data-scroll-target="#scripts">Scripts</a></li>
+  <li><a href="#mapeo-de-etiquetas" id="toc-mapeo-de-etiquetas" class="nav-link" data-scroll-target="#mapeo-de-etiquetas">Mapeo De Etiquetas</a></li>
+  <li><a href="#periodo-valido-de-analisis" id="toc-periodo-valido-de-analisis" class="nav-link" data-scroll-target="#periodo-valido-de-analisis">Periodo Valido De Analisis</a></li>
+  <li><a href="#decision-actual" id="toc-decision-actual" class="nav-link" data-scroll-target="#decision-actual">Decision Actual</a></li>
+  <li><a href="#comparacion-com-vs-zona-limpia" id="toc-comparacion-com-vs-zona-limpia" class="nav-link" data-scroll-target="#comparacion-com-vs-zona-limpia">Comparacion COM vs Zona Limpia</a></li>
+  <li><a href="#scores-com-vs-zona-limpia" id="toc-scores-com-vs-zona-limpia" class="nav-link" data-scroll-target="#scores-com-vs-zona-limpia">Scores COM vs Zona Limpia</a></li>
+  <li><a href="#seleccion-zona-limpia-vs-modelo-a-igual-n-diario" id="toc-seleccion-zona-limpia-vs-modelo-a-igual-n-diario" class="nav-link" data-scroll-target="#seleccion-zona-limpia-vs-modelo-a-igual-n-diario">Seleccion Zona Limpia vs Modelo A Igual N Diario</a></li>
+  <li><a href="#modelo-de-problema-observado-zona-limpia" id="toc-modelo-de-problema-observado-zona-limpia" class="nav-link" data-scroll-target="#modelo-de-problema-observado-zona-limpia">Modelo De Problema Observado Zona Limpia</a></li>
+  <li><a href="#sesgo-territorial-y-cobertura-de-zona-limpia" id="toc-sesgo-territorial-y-cobertura-de-zona-limpia" class="nav-link" data-scroll-target="#sesgo-territorial-y-cobertura-de-zona-limpia">Sesgo Territorial Y Cobertura De Zona Limpia</a></li>
+  <li><a href="#diagnostico-de-criterio-de-levante" id="toc-diagnostico-de-criterio-de-levante" class="nav-link" data-scroll-target="#diagnostico-de-criterio-de-levante">Diagnostico De Criterio De Levante</a></li>
+  <li><a href="#reporte-de-sesgos-de-seleccion" id="toc-reporte-de-sesgos-de-seleccion" class="nav-link" data-scroll-target="#reporte-de-sesgos-de-seleccion">Reporte De Sesgos De Seleccion</a></li>
+  <li><a href="#correspondencia-com-y-problemas-observados" id="toc-correspondencia-com-y-problemas-observados" class="nav-link" data-scroll-target="#correspondencia-com-y-problemas-observados">Correspondencia COM Y Problemas Observados</a></li>
+  <li><a href="#ajuste-por-propension-de-visita-zona-limpia" id="toc-ajuste-por-propension-de-visita-zona-limpia" class="nav-link" data-scroll-target="#ajuste-por-propension-de-visita-zona-limpia">Ajuste Por Propension De Visita Zona Limpia</a></li>
+  </ul>
+</nav>
+</div>
+<main class="content" id="quarto-document-content">
+
+<header id="title-block-header" class="quarto-title-block default">
+<div class="quarto-title">
+<h1 class="title">Analisis Zona Limpia</h1>
+</div>
+
+
+
+<div class="quarto-title-meta">
+
+    
+  
+    
+  </div>
+  
+
+</header>
+
+<section id="objetivo" class="level2">
+<h2 class="anchored" data-anchor-id="objetivo">Objetivo</h2>
+<p>Este directorio contiene scripts y diagnosticos exploratorios para analizar registros COM cuyo incidente comienza con <code>Zona limpia</code>.</p>
+<p>El objetivo es auditar la seleccion de contenedores problematicos realizada por un privado, sin alterar el pipeline operativo del modelo ni la app.</p>
+</section>
+<section id="contrato-de-datos" class="level2">
+<h2 class="anchored" data-anchor-id="contrato-de-datos">Contrato De Datos</h2>
+<p>La salida actual del modelo se mantiene en:</p>
+<ul>
+<li><code>data/parquet/com/</code></li>
+</ul>
+<p>La base ampliada para analisis se genera en:</p>
+<ul>
+<li><code>data/parquet/com_completo/</code></li>
+</ul>
+<p><code>com_completo</code> incluye:</p>
+<ul>
+<li>incidentes usados por el modelo;</li>
+<li>incidentes que comienzan con <code>Zona limpia</code>;</li>
+<li>indicadores auxiliares para distinguir ambos grupos.</li>
+<li><code>incidente_zona_limpia_mapeado</code>, con la categoria canonica definida en <code>mapeo_incidentes_zona_limpia.csv</code>.</li>
+</ul>
+</section>
+<section id="scripts" class="level2">
+<h2 class="anchored" data-anchor-id="scripts">Scripts</h2>
+<ul>
+<li><code>01_generar_com_completo.R</code>: genera <code>data/parquet/com_completo/</code>. No escribe <code>data/parquet/com/</code>; esa salida sigue perteneciendo al pipeline global en <code>scripts/get_datos_COM.R</code>.</li>
+<li><code>02_diagnostico_etiquetas_zona_limpia.R</code>: genera tablas de frecuencias para revisar etiquetas originales y normalizadas.</li>
+<li><code>03_analisis_descriptivo_zona_limpia.R</code>: genera el primer descriptivo total y mensual de Zona Limpia.</li>
+<li><code>04_comparar_com_zona_limpia_cluster_dia.R</code>: asigna Zona Limpia a clusters y compara, por <code>cluster_id</code>/<code>dia</code>, reclamos COM contra resultados Zona Limpia.</li>
+<li><code>05_evaluar_scores_com_vs_zona_limpia.R</code>: cruza scores COM existentes con eventos Zona Limpia para evaluar si el modelo prioriza problemas observados en campo sin reclamo COM.</li>
+<li><code>06_comparar_seleccion_zl_vs_modelo_diario.R</code>: compara, por dia, la seleccion efectiva de Zona Limpia contra el top N sugerido por el modelo logistico reducido D-2, usando el mismo N diario de visitas efectivas.</li>
+<li><code>07_visualizar_seleccion_zl_vs_modelo.qmd</code>: reporte visual con tasas, diferencias diarias, comparacion mensual y solapamiento entre seleccion Zona Limpia y top N del modelo.</li>
+<li><code>08_modelo_problema_observado_zl_xgboost.R</code>: primer baseline XGBoost para problema observado en visitas efectivas de Zona Limpia, usando COM solo para definir el target y no como feature.</li>
+<li><code>09_diagnostico_criterio_levante_zl.R</code>: diagnostica si la seleccion de Zona Limpia se asocia con tiempo desde ultimo levante, periodo teorico, ratio tiempo/periodo y exceso <code>tiempo - periodo</code> truncado.</li>
+<li><code>10_sesgos_seleccion_zona_limpia.qmd</code>: reporte que consolida sesgos de seleccion territorial, correspondencia COM-Zona Limpia y patrones asociados al criterio de levante.</li>
+<li><code>11_diagnostico_correspondencia_com_zl_territorio.R</code>: diagnostica, por municipio, CCZ y barrio, que proporcion de problemas observados por Zona Limpia tiene reclamo COM asociado.</li>
+<li><code>12_modelo_propension_visita_zl_y_ajuste_correspondencia.R</code>: entrena un modelo exploratorio de propension de visita Zona Limpia y recalcula la correspondencia COM-ZL con pesos IPW.</li>
+</ul>
+</section>
+<section id="mapeo-de-etiquetas" class="level2">
+<h2 class="anchored" data-anchor-id="mapeo-de-etiquetas">Mapeo De Etiquetas</h2>
+<p>El archivo <code>mapeo_incidentes_zona_limpia.csv</code> contiene el mapeo acordado desde etiquetas normalizadas hacia categorias canonicas de Zona Limpia.</p>
+<p>Categorias canonicas actuales:</p>
+<ul>
+<li><code>Zona limpia - No visitado</code></li>
+<li><code>Zona limpia - Limpio - No intervenido</code></li>
+<li><code>Zona limpia - Basura fuera</code></li>
+<li><code>Zona limpia - No se encuentra</code></li>
+<li><code>Zona limpia - Contenedor desbordado</code></li>
+<li><code>Zona limpia - Voluminosos</code></li>
+<li><code>Zona limpia - No se pudo realizar</code></li>
+</ul>
+</section>
+<section id="periodo-valido-de-analisis" class="level2">
+<h2 class="anchored" data-anchor-id="periodo-valido-de-analisis">Periodo Valido De Analisis</h2>
+<p>Los analisis de Zona Limpia excluyen los meses <code>202601</code> y <code>202602</code>. En esos meses la cantidad de registros es anormalmente baja y se interpreta como un problema de registro/cobertura, no como una reduccion real de actividad o problemas.</p>
+<p>La exclusion se aplica en los scripts analiticos, pero no modifica la base ampliada <code>data/parquet/com_completo/</code>.</p>
+</section>
+<section id="decision-actual" class="level2">
+<h2 class="anchored" data-anchor-id="decision-actual">Decision Actual</h2>
+<p>La funcion <code>normalizar_incidente_zona_limpia()</code> corrige diferencias tipograficas basicas, como guiones distintos y espacios, y etiqueta casos obvios como <code>no_se_encuentra</code> y <code>limpio</code>.</p>
+<p>El mapeo fino inicial queda definido en <code>mapeo_incidentes_zona_limpia.csv</code>.</p>
+</section>
+<section id="comparacion-com-vs-zona-limpia" class="level2">
+<h2 class="anchored" data-anchor-id="comparacion-com-vs-zona-limpia">Comparacion COM vs Zona Limpia</h2>
+<p>La comparacion se realiza a nivel <code>cluster_id</code>/<code>dia</code>, usando la misma referencia de clusters del flujo principal. Las salidas reproducibles quedan en:</p>
+<ul>
+<li><code>data/processed/zona_limpia/asignaciones_zona_limpia/</code></li>
+<li><code>data/processed/zona_limpia/zona_limpia_cluster_dia/</code></li>
+<li><code>data/processed/zona_limpia/comparacion_com_zona_limpia_cluster_dia/</code></li>
+</ul>
+<p>Los resumenes livianos quedan en:</p>
+<ul>
+<li><code>zona_limpia/outputs/comparacion_com_zona_limpia_resumen_estado.csv</code></li>
+<li><code>zona_limpia/outputs/comparacion_com_zona_limpia_resumen_estado_universo_comparable.csv</code></li>
+<li><code>zona_limpia/outputs/comparacion_com_zona_limpia_resumen_mensual.csv</code></li>
+<li><code>zona_limpia/outputs/comparacion_com_zona_limpia_resumen_mensual_universo_comparable.csv</code></li>
+<li><code>zona_limpia/outputs/comparacion_com_zona_limpia_resumen_cluster.csv</code></li>
+</ul>
+<p>Para la comparacion estricta con COM, <code>Voluminosos</code> se mantiene separado y no cuenta como problema comparable. Los problemas comparables de Zona Limpia son:</p>
+<ul>
+<li><code>basura_fuera</code></li>
+<li><code>contenedor_desbordado</code></li>
+</ul>
+<p>La variable <code>estado_comparacion</code> distingue, entre otros casos:</p>
+<ul>
+<li>ambas fuentes reportan problema;</li>
+<li>solo Zona Limpia reporta problema comparable;</li>
+<li>solo COM reporta problema;</li>
+<li>Zona Limpia reporta limpio;</li>
+<li>Zona Limpia reporta voluminosos;</li>
+<li>Zona Limpia no permite validar porque no hubo visita efectiva.</li>
+</ul>
+<p>La tabla completa conserva casos sin visita efectiva para medir cobertura operativa, pero la comparacion de coincidencia entre COM y Zona Limpia debe hacerse con <code>universo_comparable_zl == TRUE</code>. Ese universo incluye cluster-dias donde Zona Limpia tuvo observacion efectiva: problema comparable, voluminosos o limpio. Los casos <code>no_visitado</code>, <code>no_se_encuentra</code> y <code>no_se_pudo_realizar</code> no deben interpretarse como acuerdo ni desacuerdo con COM.</p>
+</section>
+<section id="scores-com-vs-zona-limpia" class="level2">
+<h2 class="anchored" data-anchor-id="scores-com-vs-zona-limpia">Scores COM vs Zona Limpia</h2>
+<p>La evaluacion de scores COM frente a Zona Limpia queda en:</p>
+<ul>
+<li><code>data/processed/zona_limpia/scores_com_vs_zona_limpia_cluster_dia/</code></li>
+<li><code>zona_limpia/outputs/scores_com_vs_zona_limpia_resumen_modelo_periodo.csv</code></li>
+<li><code>zona_limpia/outputs/scores_com_vs_zona_limpia_resumen_estado.csv</code></li>
+<li><code>zona_limpia/outputs/scores_com_vs_zona_limpia_resumen_solo_zl_problema.csv</code></li>
+<li><code>zona_limpia/outputs/scores_com_vs_zona_limpia_captura_top_por_estado.csv</code></li>
+<li><code>zona_limpia/outputs/scores_com_vs_zona_limpia_decil_solo_zl_problema.csv</code></li>
+</ul>
+<p>La pregunta central es si los problemas observados por Zona Limpia sin reclamo COM (<code>solo_zona_limpia_problema</code>) aparecen en percentiles altos del score COM.</p>
+<p>Lectura inicial:</p>
+<ul>
+<li>el score COM concentra bien los casos donde tambien hay reclamo COM;</li>
+<li>los casos <code>solo_zona_limpia_problema</code> no quedan particularmente sobrerrepresentados en el top 10% diario;</li>
+<li>esto refuerza la conveniencia de explorar un modelo especifico de problema observado por Zona Limpia y un modelo de propension de visita.</li>
+</ul>
+</section>
+<section id="seleccion-zona-limpia-vs-modelo-a-igual-n-diario" class="level2">
+<h2 class="anchored" data-anchor-id="seleccion-zona-limpia-vs-modelo-a-igual-n-diario">Seleccion Zona Limpia vs Modelo A Igual N Diario</h2>
+<p>La comparacion diaria queda en:</p>
+<ul>
+<li><code>zona_limpia/outputs/seleccion_zl_vs_modelo_diario_logistico_reducido_d2.csv</code></li>
+<li><code>zona_limpia/outputs/seleccion_zl_vs_modelo_mensual_logistico_reducido_d2.csv</code></li>
+</ul>
+<p>Periodo analizado:</p>
+<ul>
+<li>marzo, abril y mayo de 2026, segun disponibilidad de features y scores.</li>
+</ul>
+<p>Modelo:</p>
+<ul>
+<li><code>logistico_reducido_d2</code>, aplicado desde el modelo entrenado guardado sin reentrenar.</li>
+</ul>
+<p>Regla de comparacion:</p>
+<ul>
+<li>para cada dia se calcula <code>n_visitas_zl</code> como la cantidad de clusters con visita efectiva de Zona Limpia;</li>
+<li>se seleccionan los <code>n_visitas_zl</code> clusters de mayor score del modelo ese mismo dia;</li>
+<li>el problema real observado se define como <code>hay_com OR hay_zl_problema_comparable</code>;</li>
+<li><code>Voluminosos</code> no cuenta como problema en esta metrica principal y queda reportado solo como columna auxiliar.</li>
+<li>tambien se reportan metricas COM-only, que evalúan estrictamente cuantos reclamos COM quedan dentro de la seleccion de Zona Limpia y dentro del top N del modelo.</li>
+</ul>
+<p>Esta comparacion es conservadora para el modelo, porque en clusters sugeridos por el modelo pero no visitados por Zona Limpia solo se observan problemas si hubo reclamo COM.</p>
+<p>El reporte visual para comunicar estos resultados esta en:</p>
+<ul>
+<li><code>zona_limpia/07_visualizar_seleccion_zl_vs_modelo.qmd</code></li>
+</ul>
+</section>
+<section id="modelo-de-problema-observado-zona-limpia" class="level2">
+<h2 class="anchored" data-anchor-id="modelo-de-problema-observado-zona-limpia">Modelo De Problema Observado Zona Limpia</h2>
+<p>El primer baseline queda en:</p>
+<ul>
+<li><code>zona_limpia/08_modelo_problema_observado_zl_xgboost.R</code></li>
+<li><code>data/processed/modelos/zona_limpia_problema_observado_xgboost/</code></li>
+<li><code>zona_limpia/outputs/modelo_zl_observado_resumen_base.csv</code></li>
+<li><code>zona_limpia/outputs/modelo_zl_observado_metricas.csv</code></li>
+<li><code>zona_limpia/outputs/modelo_zl_observado_lift.csv</code></li>
+<li><code>zona_limpia/outputs/modelo_zl_observado_importancia.csv</code></li>
+</ul>
+<p>Universo:</p>
+<ul>
+<li>visitas efectivas de Zona Limpia;</li>
+<li>meses <code>202510</code>, <code>202511</code>, <code>202512</code>, <code>202603</code>, <code>202604</code>, <code>202605</code>;</li>
+<li>se excluyen <code>202601</code> y <code>202602</code>;</li>
+<li>se excluyen registros con <code>Voluminosos</code>.</li>
+</ul>
+<p>Target:</p>
+<ul>
+<li><code>1</code> si hay reclamo COM o problema comparable observado por Zona Limpia;</li>
+<li><code>0</code> si no hay reclamo COM ni problema comparable observado;</li>
+<li>COM se usa solo para definir el target, no como feature predictiva.</li>
+</ul>
+<p>Features:</p>
+<ul>
+<li>variables operativas de levante y periodicidad con corte predictivo <code>_pred</code>;</li>
+<li>variables territoriales censales;</li>
+<li>municipio, CCZ y barrio asignados al cluster;</li>
+<li>variables calendario simples.</li>
+</ul>
+<p>Evaluaciones:</p>
+<ul>
+<li>temporal: train <code>202510-202512</code>, validacion <code>202603</code>, test <code>202604-202605</code>;</li>
+<li>random estratificada por mes y target.</li>
+</ul>
+<p>Lectura inicial:</p>
+<ul>
+<li>el split random muestra senal aprendible con AUC cercano a <code>0,67</code>;</li>
+<li>el split temporal baja a AUC cercano a <code>0,60</code> en validacion/test, consistente con posibles cambios de criterio o regimen entre fines de 2025 y 2026.</li>
+</ul>
+</section>
+<section id="sesgo-territorial-y-cobertura-de-zona-limpia" class="level2">
+<h2 class="anchored" data-anchor-id="sesgo-territorial-y-cobertura-de-zona-limpia">Sesgo Territorial Y Cobertura De Zona Limpia</h2>
+<p>La cobertura territorial de Zona Limpia no debe interpretarse automaticamente como criterio operativo real. En particular, los registros de Zona Limpia del Municipio B no aparecen en esta fuente de datos; existen en otra tabla pendiente de integracion. Por lo tanto, la baja cobertura observada para Municipio B en estos analisis refleja un faltante de fuente y no necesariamente una decision de no visitar ese territorio.</p>
+<p>Esto afecta:</p>
+<ul>
+<li>diagnosticos de cobertura territorial;</li>
+<li>comparaciones entre municipios, CCZ o barrios;</li>
+<li>modelos entrenados con visitas efectivas de Zona Limpia;</li>
+<li>evaluaciones contrafactuales que usen Zona Limpia como observacion de campo.</li>
+</ul>
+<p>Hasta integrar la fuente adicional del Municipio B, las lecturas territoriales deben marcar ese municipio como cobertura incompleta.</p>
+</section>
+<section id="diagnostico-de-criterio-de-levante" class="level2">
+<h2 class="anchored" data-anchor-id="diagnostico-de-criterio-de-levante">Diagnostico De Criterio De Levante</h2>
+<p>El diagnostico de variables de levante queda en:</p>
+<ul>
+<li><code>zona_limpia/09_diagnostico_criterio_levante_zl.R</code></li>
+<li><code>zona_limpia/outputs/diagnostico_levante_zl_resumen_variables.csv</code></li>
+<li><code>zona_limpia/outputs/diagnostico_levante_zl_bin_exceso_mean_trunc_7.csv</code></li>
+<li><code>zona_limpia/outputs/diagnostico_levante_zl_decil_exceso_mean_trunc_7.csv</code></li>
+<li><code>zona_limpia/outputs/diagnostico_levante_zl_municipio.csv</code></li>
+<li><code>zona_limpia/outputs/diagnostico_levante_zl_ccz.csv</code></li>
+</ul>
+<p>La variable exploratoria principal es:</p>
+<pre class="text"><code>exceso_mean_tiempo_periodo_pred_trunc_7 =
+  min(max(mean_tiempo_desde_ultimo_levante_pred - mean_levante_periodo, 0), 7)</code></pre>
+<p>Lectura inicial:</p>
+<ul>
+<li>los cluster-dias visitados por Zona Limpia tienen mayor tiempo desde ultimo levante y mayor ratio tiempo/periodo que los no visitados;</li>
+<li>la tasa de visita aumenta al pasar de exceso <code>0</code> a excesos positivos moderados;</li>
+<li>la tasa de problema observado en visitas tambien sube con excesos moderados;</li>
+<li>el patron no es lineal simple: en excesos altos hay menos casos y la tasa de visita cae;</li>
+<li>Municipio B debe interpretarse con cobertura incompleta por fuente faltante.</li>
+</ul>
+<p>Este resultado sugiere que una variable de exceso sobre periodo teorico puede ser relevante para explicar la seleccion de Zona Limpia y deberia probarse explicitamente en el modelo observado.</p>
+</section>
+<section id="reporte-de-sesgos-de-seleccion" class="level2">
+<h2 class="anchored" data-anchor-id="reporte-de-sesgos-de-seleccion">Reporte De Sesgos De Seleccion</h2>
+<p>El reporte consolidado queda en:</p>
+<ul>
+<li><code>zona_limpia/10_sesgos_seleccion_zona_limpia.qmd</code></li>
+</ul>
+<p>Incluye:</p>
+<ul>
+<li>advertencia de fuente faltante para Municipio B;</li>
+<li>cobertura por municipio y CCZ;</li>
+<li>correspondencia COM-Zona Limpia cruda y ajustada por propension de visita;</li>
+<li>diagnostico del exceso sobre periodo teorico de levante;</li>
+<li>comparacion de variables de levante entre cluster-dias visitados y no visitados.</li>
+</ul>
+</section>
+<section id="correspondencia-com-y-problemas-observados" class="level2">
+<h2 class="anchored" data-anchor-id="correspondencia-com-y-problemas-observados">Correspondencia COM Y Problemas Observados</h2>
+<p>El diagnostico territorial de correspondencia entre COM y problemas observados por Zona Limpia queda en:</p>
+<ul>
+<li><code>zona_limpia/11_diagnostico_correspondencia_com_zl_territorio.R</code></li>
+<li><code>zona_limpia/outputs/correspondencia_com_zl_territorio_global.csv</code></li>
+<li><code>zona_limpia/outputs/correspondencia_com_zl_territorio_municipio.csv</code></li>
+<li><code>zona_limpia/outputs/correspondencia_com_zl_territorio_ccz.csv</code></li>
+<li><code>zona_limpia/outputs/correspondencia_com_zl_territorio_barrio.csv</code></li>
+<li><code>zona_limpia/outputs/correspondencia_com_zl_territorio_mensual_municipio.csv</code></li>
+</ul>
+<p>Definicion principal:</p>
+<pre class="text"><code>tasa_com_dado_zl_problema = ambos / zl_problema</code></pre>
+<p>Es decir, entre los cluster-dias donde Zona Limpia observo un problema comparable, que proporcion tuvo tambien reclamo COM.</p>
+<p>Lectura inicial, excluyendo Municipio B por fuente incompleta:</p>
+<ul>
+<li>la correspondencia global es baja: aproximadamente <code>10,8%</code> de los problemas observados por Zona Limpia tienen COM asociado;</li>
+<li>existe variacion territorial fuerte entre municipios y CCZ;</li>
+<li>municipios como F, G, A y D muestran menor correspondencia COM dado problema ZL;</li>
+<li>CH, C y E muestran mayor correspondencia relativa, aunque aun con mayoria de problemas ZL sin COM.</li>
+</ul>
+<p>Este diagnostico es una primera aproximacion a diferencias territoriales en propension a reclamar o en captura COM de problemas observados en campo.</p>
+</section>
+<section id="ajuste-por-propension-de-visita-zona-limpia" class="level2">
+<h2 class="anchored" data-anchor-id="ajuste-por-propension-de-visita-zona-limpia">Ajuste Por Propension De Visita Zona Limpia</h2>
+<p>Para no generalizar mecanicamente desde puntos visitados por Zona Limpia a toda la ciudad, se agrega un ajuste exploratorio por propension de visita:</p>
+<ul>
+<li><code>zona_limpia/12_modelo_propension_visita_zl_y_ajuste_correspondencia.R</code></li>
+<li><code>zona_limpia/outputs/propension_visita_zl_metricas.csv</code></li>
+<li><code>zona_limpia/outputs/propension_visita_zl_importancia.csv</code></li>
+<li><code>zona_limpia/outputs/propension_visita_zl_diagnostico_pesos.csv</code></li>
+<li><code>zona_limpia/outputs/correspondencia_com_zl_ipw_global.csv</code></li>
+<li><code>zona_limpia/outputs/correspondencia_com_zl_ipw_municipio.csv</code></li>
+<li><code>zona_limpia/outputs/correspondencia_com_zl_ipw_ccz.csv</code></li>
+</ul>
+<p>El modelo estima:</p>
+<pre class="text"><code>P(visita efectiva Zona Limpia | features previas de levante, territorio y calendario)</code></pre>
+<p>Se excluye Municipio B por fuente incompleta. El baseline usa todas las visitas y una muestra de no visitados como controles; luego corrige las probabilidades por la prevalencia real de visita. Las visitas observadas se ponderan con pesos IPW estabilizados.</p>
+<p>Resultado inicial:</p>
+<ul>
+<li>AUC de validacion en muestra de controles: <code>0,706</code>;</li>
+<li>prevalencia real de visita no B: <code>9,6%</code>;</li>
+<li>ratio crudo <code>problemas ZL / COM</code>: <code>5,44</code>;</li>
+<li>ratio ajustado por propension <code>problemas ZL / COM</code>: <code>5,65</code>;</li>
+<li>ratio crudo <code>solo ZL problema / COM</code>: <code>4,86</code>;</li>
+<li>ratio ajustado por propension <code>solo ZL problema / COM</code>: <code>5,07</code>.</li>
+</ul>
+<p>La lectura ajustada no elimina la hipotesis de subreclamo; si algo, la mantiene o la refuerza levemente dentro de los supuestos del modelo de propension.</p>
+</section>
+
+</main>
+<!-- /main column -->
+<script id="quarto-html-after-body" type="application/javascript">
+window.document.addEventListener("DOMContentLoaded", function (event) {
+  const toggleBodyColorMode = (bsSheetEl) => {
+    const mode = bsSheetEl.getAttribute("data-mode");
+    const bodyEl = window.document.querySelector("body");
+    if (mode === "dark") {
+      bodyEl.classList.add("quarto-dark");
+      bodyEl.classList.remove("quarto-light");
+    } else {
+      bodyEl.classList.add("quarto-light");
+      bodyEl.classList.remove("quarto-dark");
+    }
+  }
+  const toggleBodyColorPrimary = () => {
+    const bsSheetEl = window.document.querySelector("link#quarto-bootstrap");
+    if (bsSheetEl) {
+      toggleBodyColorMode(bsSheetEl);
+    }
+  }
+  toggleBodyColorPrimary();  
+  const icon = "";
+  const anchorJS = new window.AnchorJS();
+  anchorJS.options = {
+    placement: 'right',
+    icon: icon
+  };
+  anchorJS.add('.anchored');
+  const isCodeAnnotation = (el) => {
+    for (const clz of el.classList) {
+      if (clz.startsWith('code-annotation-')) {                     
+        return true;
+      }
+    }
+    return false;
+  }
+  const clipboard = new window.ClipboardJS('.code-copy-button', {
+    text: function(trigger) {
+      const codeEl = trigger.previousElementSibling.cloneNode(true);
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+    }
+  });
+  clipboard.on('success', function(e) {
+    // button target
+    const button = e.trigger;
+    // don't keep focus
+    button.blur();
+    // flash "checked"
+    button.classList.add('code-copy-button-checked');
+    var currentTitle = button.getAttribute("title");
+    button.setAttribute("title", "Copied!");
+    let tooltip;
+    if (window.bootstrap) {
+      button.setAttribute("data-bs-toggle", "tooltip");
+      button.setAttribute("data-bs-placement", "left");
+      button.setAttribute("data-bs-title", "Copied!");
+      tooltip = new bootstrap.Tooltip(button, 
+        { trigger: "manual", 
+          customClass: "code-copy-button-tooltip",
+          offset: [0, -8]});
+      tooltip.show();    
+    }
+    setTimeout(function() {
+      if (tooltip) {
+        tooltip.hide();
+        button.removeAttribute("data-bs-title");
+        button.removeAttribute("data-bs-toggle");
+        button.removeAttribute("data-bs-placement");
+      }
+      button.setAttribute("title", currentTitle);
+      button.classList.remove('code-copy-button-checked');
+    }, 1000);
+    // clear code selection
+    e.clearSelection();
+  });
+  function tippyHover(el, contentFn) {
+    const config = {
+      allowHTML: true,
+      content: contentFn,
+      maxWidth: 500,
+      delay: 100,
+      arrow: false,
+      appendTo: function(el) {
+          return el.parentElement;
+      },
+      interactive: true,
+      interactiveBorder: 10,
+      theme: 'quarto',
+      placement: 'bottom-start'
+    };
+    window.tippy(el, config); 
+  }
+  const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+  for (var i=0; i<noterefs.length; i++) {
+    const ref = noterefs[i];
+    tippyHover(ref, function() {
+      // use id or data attribute instead here
+      let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+      try { href = new URL(href).hash; } catch {}
+      const id = href.replace(/^#\/?/, "");
+      const note = window.document.getElementById(id);
+      return note.innerHTML;
+    });
+  }
+      let selectedAnnoteEl;
+      const selectorForAnnotation = ( cell, annotation) => {
+        let cellAttr = 'data-code-cell="' + cell + '"';
+        let lineAttr = 'data-code-annotation="' +  annotation + '"';
+        const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+        return selector;
+      }
+      const selectCodeLines = (annoteEl) => {
+        const doc = window.document;
+        const targetCell = annoteEl.getAttribute("data-target-cell");
+        const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+        const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+        const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+        const lineIds = lines.map((line) => {
+          return targetCell + "-" + line;
+        })
+        let top = null;
+        let height = null;
+        let parent = null;
+        if (lineIds.length > 0) {
+            //compute the position of the single el (top and bottom and make a div)
+            const el = window.document.getElementById(lineIds[0]);
+            top = el.offsetTop;
+            height = el.offsetHeight;
+            parent = el.parentElement.parentElement;
+          if (lineIds.length > 1) {
+            const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+            const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+            height = bottom - top;
+          }
+          if (top !== null && height !== null && parent !== null) {
+            // cook up a div (if necessary) and position it 
+            let div = window.document.getElementById("code-annotation-line-highlight");
+            if (div === null) {
+              div = window.document.createElement("div");
+              div.setAttribute("id", "code-annotation-line-highlight");
+              div.style.position = 'absolute';
+              parent.appendChild(div);
+            }
+            div.style.top = top - 2 + "px";
+            div.style.height = height + 4 + "px";
+            let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+            if (gutterDiv === null) {
+              gutterDiv = window.document.createElement("div");
+              gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+              gutterDiv.style.position = 'absolute';
+              const codeCell = window.document.getElementById(targetCell);
+              const gutter = codeCell.querySelector('.code-annotation-gutter');
+              gutter.appendChild(gutterDiv);
+            }
+            gutterDiv.style.top = top - 2 + "px";
+            gutterDiv.style.height = height + 4 + "px";
+          }
+          selectedAnnoteEl = annoteEl;
+        }
+      };
+      const unselectCodeLines = () => {
+        const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+        elementsIds.forEach((elId) => {
+          const div = window.document.getElementById(elId);
+          if (div) {
+            div.remove();
+          }
+        });
+        selectedAnnoteEl = undefined;
+      };
+      // Attach click handler to the DT
+      const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+      for (const annoteDlNode of annoteDls) {
+        annoteDlNode.addEventListener('click', (event) => {
+          const clickedEl = event.target;
+          if (clickedEl !== selectedAnnoteEl) {
+            unselectCodeLines();
+            const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+            if (activeEl) {
+              activeEl.classList.remove('code-annotation-active');
+            }
+            selectCodeLines(clickedEl);
+            clickedEl.classList.add('code-annotation-active');
+          } else {
+            // Unselect the line
+            unselectCodeLines();
+            clickedEl.classList.remove('code-annotation-active');
+          }
+        });
+      }
+  const findCites = (el) => {
+    const parentEl = el.parentElement;
+    if (parentEl) {
+      const cites = parentEl.dataset.cites;
+      if (cites) {
+        return {
+          el,
+          cites: cites.split(' ')
+        };
+      } else {
+        return findCites(el.parentElement)
+      }
+    } else {
+      return undefined;
+    }
+  };
+  var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+  for (var i=0; i<bibliorefs.length; i++) {
+    const ref = bibliorefs[i];
+    const citeInfo = findCites(ref);
+    if (citeInfo) {
+      tippyHover(citeInfo.el, function() {
+        var popup = window.document.createElement('div');
+        citeInfo.cites.forEach(function(cite) {
+          var citeDiv = window.document.createElement('div');
+          citeDiv.classList.add('hanging-indent');
+          citeDiv.classList.add('csl-entry');
+          var biblioDiv = window.document.getElementById('ref-' + cite);
+          if (biblioDiv) {
+            citeDiv.innerHTML = biblioDiv.innerHTML;
+          }
+          popup.appendChild(citeDiv);
+        });
+        return popup.innerHTML;
+      });
+    }
+  }
+});
+</script>
+</div> <!-- /content -->
+
+
+
+</body></html>

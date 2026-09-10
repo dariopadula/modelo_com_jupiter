@@ -1,0 +1,1141 @@
+---
+title: "Modelos"
+format:
+  html:
+    theme: cosmo
+    toc: true
+    toc-depth: 3
+    number-sections: true
+    embed-resources: true
+execute:
+  echo: true
+  warning: false
+  message: false
+---
+
+## Objetivo
+
+Documentar los experimentos de modelado para predecir reclamos a nivel `cluster_id`/`dia`.
+
+## Tabla principal
+
+La tabla principal para modelar es:
+
+- `data/processed/modelo_cluster_dia/features_cluster_dia/`
+
+Contiene:
+
+- target `tuvo_reclamo`;
+- conteo `n_reclamos`;
+- features contemporaneas de levantes;
+- features históricas de reclamos;
+- ratios de tiempo desde último levante respecto a la periodicidad teórica.
+
+## Target inicial
+
+Target binario:
+
+- `tuvo_reclamo`
+
+Interpretación:
+
+- `TRUE`: el cluster tuvo al menos un reclamo COM asignado o en revisión ese día.
+- `FALSE`: no tuvo reclamos validos ese día.
+
+## Split temporal
+
+- Entrenamiento: primeros 12 meses disponibles.
+- Validación: siguientes 3 meses.
+- Test: meses restantes.
+
+En la corrida actual:
+
+- Entrenamiento: `202501` a `202512`.
+- Validación: `202601` a `202603`.
+- Test: `202604` a `202605`.
+
+## Modelo logístico baseline
+
+Script:
+
+- `scripts/modelo_logistico_cluster_dia.R`
+
+Salida:
+
+- `data/processed/modelos/logistico_cluster_dia/`
+
+Predictores:
+
+- historia de reclamos (`lag1`, 7 días, 30 días);
+- ausencia de reclamo previo observado y días de historia observada del cluster;
+- días desde último reclamo o, si no hubo reclamo previo observado, días desde el inicio de observacion del cluster;
+- días validos de existencia del cluster;
+- cantidad de contenedores activos;
+- diagnosticos de inferencia;
+- tiempo desde último levante;
+- periodicidad teórica `levante_periodo`;
+- ratios `tiempo_desde_ultimo_levante / levante_periodo`.
+
+Para evitar leakage operativo, el modelo usa las versiones predictivas con sufijo `_pred`, calculadas con corte diario a la 01:00.
+
+La corrida actual excluye los primeros días del historial disponible mediante:
+
+- `fecha_min_modelo = min(dia) + 7 dias`
+
+El objetivo es evitar que el modelo aprenda patrones de borde generados por el inicio del historial disponible de levantes.
+
+Para la historia de reclamos, el modelo usa:
+
+- `sin_reclamo_previo_observado`;
+- `dias_historia_observada_cluster`;
+- `dias_desde_ultimo_reclamo_o_inicio`.
+
+Estas variables reemplazan el uso directo de `dias_desde_ultimo_reclamo` como predictor. El objetivo es no depender del indicador automatico `dias_desde_ultimo_reclamo_na` creado por la preparacion de matriz, porque ese indicador mezclaba clusters sin historia suficiente al inicio de la serie con clusters que llevaban muchos días observados sin reclamos.
+
+También se desactivan los indicadores `_na` automaticos para las variables predictivas de levante y ratios:
+
+- `min_tiempo_desde_ultimo_levante_pred`
+- `mean_tiempo_desde_ultimo_levante_pred`
+- `median_tiempo_desde_ultimo_levante_pred`
+- `max_tiempo_desde_ultimo_levante_pred`
+- `min_ratio_tiempo_periodo_pred`
+- `mean_ratio_tiempo_periodo_pred`
+- `median_ratio_tiempo_periodo_pred`
+- `max_ratio_tiempo_periodo_pred`
+
+Los faltantes remanentes se imputan con la mediana de entrenamiento, pero no se crea una variable indicatriz para ellos. Esta decisión evita que el modelo use como senal un faltante concentrado en los primeros días del historial de levantes.
+
+Preprocesamiento:
+
+- Logicas a 0/1.
+- Imputacion de `NA` con mediana de entrenamiento.
+- Indicadores de faltante para columnas con `NA`, excepto variables predictivas de levante/ratio listadas como `no_agregar_na_features`.
+- Estandarizacion con media y desvio de entrenamiento.
+
+Resultados de la última corrida disponible:
+
+```{r}
+#| label: cargar-resultados-logistico
+#| echo: false
+library(arrow)
+library(data.table)
+library(knitr)
+library(kableExtra)
+library(ggplot2)
+
+path_modelo_logistico <- "../data/processed/modelos/logistico_cluster_dia"
+
+metricas_logistico <- as.data.table(as.data.frame(
+  arrow::open_dataset(file.path(path_modelo_logistico, "metricas"))
+))
+
+lift_logistico <- as.data.table(as.data.frame(
+  arrow::open_dataset(file.path(path_modelo_logistico, "lift_validacion"))
+))
+
+lift_diario_logistico <- as.data.table(as.data.frame(
+  arrow::open_dataset(file.path(path_modelo_logistico, "lift_diario_validacion"))
+))
+
+calibracion_logistico <- as.data.table(as.data.frame(
+  arrow::open_dataset(file.path(path_modelo_logistico, "calibracion_validacion"))
+))
+
+coeficientes_logistico <- as.data.table(as.data.frame(
+  arrow::open_dataset(file.path(path_modelo_logistico, "coeficientes"))
+))
+
+path_modelo_logistico_reducido <- "../data/processed/modelos/logistico_cluster_dia_reducido"
+
+metricas_logistico_reducido <- as.data.table(as.data.frame(
+  arrow::open_dataset(file.path(path_modelo_logistico_reducido, "metricas"))
+))
+
+lift_logistico_reducido <- as.data.table(as.data.frame(
+  arrow::open_dataset(file.path(path_modelo_logistico_reducido, "lift_validacion"))
+))
+
+coeficientes_logistico_reducido <- as.data.table(as.data.frame(
+  arrow::open_dataset(file.path(path_modelo_logistico_reducido, "coeficientes"))
+))
+
+metricas_temporal_reducido <- as.data.table(as.data.frame(
+  arrow::open_dataset(file.path(path_modelo_logistico_reducido, "validacion_temporal", "metricas_folds"))
+))
+
+metricas_temporal_resumen_reducido <- as.data.table(as.data.frame(
+  arrow::open_dataset(file.path(path_modelo_logistico_reducido, "validacion_temporal", "metricas_resumen"))
+))
+
+lift_temporal_resumen_reducido <- as.data.table(as.data.frame(
+  arrow::open_dataset(file.path(path_modelo_logistico_reducido, "validacion_temporal", "lift_resumen"))
+))
+
+path_modelo_rf <- "../data/processed/modelos/random_forest_cluster_dia"
+
+parametros_rf <- as.data.table(as.data.frame(
+  arrow::open_dataset(file.path(path_modelo_rf, "parametros"))
+))
+
+metricas_rf <- as.data.table(as.data.frame(
+  arrow::open_dataset(file.path(path_modelo_rf, "metricas"))
+))
+
+lift_rf <- as.data.table(as.data.frame(
+  arrow::open_dataset(file.path(path_modelo_rf, "lift_validacion"))
+))
+
+lift_diario_rf <- as.data.table(as.data.frame(
+  arrow::open_dataset(file.path(path_modelo_rf, "lift_diario_validacion"))
+))
+
+calibracion_rf <- as.data.table(as.data.frame(
+  arrow::open_dataset(file.path(path_modelo_rf, "calibracion_validacion"))
+))
+
+importancia_rf <- as.data.table(as.data.frame(
+  arrow::open_dataset(file.path(path_modelo_rf, "importancia_variables"))
+))
+
+path_modelo_xgb <- "../data/processed/modelos/xgboost_cluster_dia"
+
+parametros_xgb <- as.data.table(as.data.frame(
+  arrow::open_dataset(file.path(path_modelo_xgb, "parametros"))
+))
+
+metricas_xgb <- as.data.table(as.data.frame(
+  arrow::open_dataset(file.path(path_modelo_xgb, "metricas"))
+))
+
+lift_xgb <- as.data.table(as.data.frame(
+  arrow::open_dataset(file.path(path_modelo_xgb, "lift_validacion"))
+))
+
+lift_diario_xgb <- as.data.table(as.data.frame(
+  arrow::open_dataset(file.path(path_modelo_xgb, "lift_diario_validacion"))
+))
+
+calibracion_xgb <- as.data.table(as.data.frame(
+  arrow::open_dataset(file.path(path_modelo_xgb, "calibracion_validacion"))
+))
+
+importancia_xgb <- as.data.table(as.data.frame(
+  arrow::open_dataset(file.path(path_modelo_xgb, "importancia_variables"))
+))
+
+metricas_modelos <- rbindlist(list(
+  metricas_logistico[, modelo := "logistico_completo"][],
+  metricas_logistico_reducido[, modelo := "logistico_reducido"][],
+  metricas_rf[, modelo := "random_forest"][],
+  metricas_xgb[, modelo := "xgboost"][]
+), fill = TRUE)
+
+lift_modelos_validacion <- rbindlist(list(
+  lift_logistico[, modelo := "logistico_completo"][],
+  lift_logistico_reducido[, modelo := "logistico_reducido"][],
+  lift_rf[, modelo := "random_forest"][],
+  lift_xgb[, modelo := "xgboost"][]
+), fill = TRUE)
+```
+
+### Métricas generales
+
+```{r}
+#| echo: false
+metricas_logistico[
+  ,
+  .(
+    split,
+    n,
+    positivos,
+    prevalencia = round(prevalencia, 4),
+    auc = round(auc, 4),
+    logloss = round(logloss, 4),
+    version_cluster
+  )
+] |>
+  kable(
+    format = "html",
+    digits = 4,
+    caption = "Metricas generales del modelo logistico"
+  ) |>
+  kable_styling(
+    full_width = FALSE,
+    bootstrap_options = c("striped", "hover", "condensed")
+  )
+```
+
+### Lift en validación
+
+```{r}
+#| echo: false
+lift_logistico[
+  ,
+  .(
+    top_pct,
+    n,
+    positivos,
+    precision = round(precision, 4),
+    capture_rate = round(capture_rate, 4),
+    lift = round(lift, 4),
+    version_cluster
+  )
+] |>
+  kable(
+    format = "html",
+    digits = 4,
+    caption = "Lift y precision en validacion"
+  ) |>
+  kable_styling(
+    full_width = FALSE,
+    bootstrap_options = c("striped", "hover", "condensed")
+  )
+```
+
+### Calibración por decil
+
+```{r}
+#| echo: false
+calibracion_logistico[
+  order(decil),
+  .(
+    decil,
+    n,
+    pred_media = round(pred_media, 4),
+    obs_rate = round(obs_rate, 4),
+    positivos,
+    version_cluster
+  )
+] |>
+  kable(
+    format = "html",
+    digits = 4,
+    caption = "Calibracion por decil de riesgo"
+  ) |>
+  kable_styling(
+    full_width = FALSE,
+    bootstrap_options = c("striped", "hover", "condensed")
+  )
+```
+
+### Coeficientes principales
+
+```{r}
+#| echo: false
+coeficientes_logistico[
+  coeficiente_no_estimable == FALSE
+][
+  order(-abs_coeficiente)
+][
+  1:20,
+  .(
+    variable,
+    coeficiente = round(coeficiente, 4),
+    odds_ratio = round(odds_ratio, 4),
+    version_cluster
+  )
+] |>
+  kable(
+    format = "html",
+    digits = 4,
+    caption = "Coeficientes principales del modelo logistico"
+  ) |>
+  kable_styling(
+    full_width = FALSE,
+    bootstrap_options = c("striped", "hover", "condensed")
+  )
+```
+
+### Histograma de capture rate diario
+
+La siguiente tabla resume la distribución diaria del `capture_rate` en validación para cada corte de riesgo. El gráfico posterior muestra histogramas de esa distribución diaria; la linea roja marca el capture rate esperado por una selección al azar del mismo porcentaje de clusters/día.
+
+```{r}
+#| echo: false
+lift_diario_logistico[
+  ,
+  .(
+    dias = .N,
+    capture_rate_mediana = round(stats::median(capture_rate, na.rm = TRUE), 4),
+    capture_rate_p10 = round(as.numeric(stats::quantile(capture_rate, 0.1, na.rm = TRUE)), 4),
+    capture_rate_p90 = round(as.numeric(stats::quantile(capture_rate, 0.9, na.rm = TRUE)), 4),
+    lift_mediana = round(stats::median(lift, na.rm = TRUE), 4),
+    capture_rate_azar = unique(capture_rate_azar),
+    version_cluster = unique(version_cluster)
+  ),
+  by = top_pct
+][
+  order(top_pct)
+] |>
+  kable(
+    format = "html",
+    digits = 4,
+    caption = "Capture rate diario por corte de riesgo"
+  ) |>
+  kable_styling(
+    full_width = FALSE,
+    bootstrap_options = c("striped", "hover", "condensed")
+  )
+```
+
+```{r}
+#| echo: false
+#| out-width: "100%"
+
+knitr::include_graphics(here::here("data/processed/modelos/logistico_cluster_dia/figuras/capture_rate_diario.png"))
+```
+
+## Interpretación de lift
+
+La prevalencia de validación es la tasa observada de `tuvo_reclamo` en el mes usado para validar. Si se eligen clusters/día al azar, esa es la proporcion esperada con reclamo.
+
+El lift compara la precisión del grupo con mayor riesgo contra esa prevalencia.
+
+Ejemplo:
+
+- si la precisión de un grupo priorizado es mayor que la prevalencia general, el lift será mayor que 1;
+- cuanto mayor sea el lift, más concentra reclamos ese grupo respecto a una selección al azar.
+
+Por ejemplo, un lift de 4 indica que ese grupo concentra reclamos 4 veces más que una selección al azar.
+
+
+## Modelo logístico reducido
+
+Script:
+
+- `scripts/modelo_logistico_cluster_dia_reducido.R`
+
+Salida:
+
+- `data/processed/modelos/logistico_cluster_dia_reducido/`
+
+Este modelo usa un conjunto reducido de predictores seleccionado a partir del diagnóstico de colinealidad:
+
+- `n_reclamos_lag1`
+- `sin_reclamo_previo_observado`
+- `historia_observada_7_29`
+- `historia_observada_30_89`
+- `historia_observada_90_179`
+- `historia_observada_180_mas`
+- `dias_desde_ultimo_reclamo_o_inicio_trunc_90`
+- `n_reclamos_sum_7d`
+- `n_reclamos_sum_30d`
+- `dias_cluster_existente_30d`
+- `n_contenedores_activos`
+- `pct_contenedores_inferidos`
+- `mean_tiempo_desde_ultimo_levante_pred`
+- `mean_levante_periodo`
+- `mean_dias_total_tramo_inferido_estado`
+
+Se excluyen ratios tiempo/período y duplicados `min`/`median`/`max` para mejorar interpretabilidad.
+
+La historia observada del cluster entra como tramos, usando `0-6` días como referencia. La recencia desde último reclamo o inicio se trunca en 90 días para evitar extrapolacion lineal cuando el modelo se use con más historia acumulada.
+
+La corrida actual usa:
+
+- entrenamiento: primeros 12 meses disponibles;
+- validación: siguientes 3 meses;
+- test: meses restantes.
+
+### Comparación con modelo completo
+
+```{r}
+#| echo: false
+rbindlist(list(
+  metricas_logistico[, modelo := "completo"][],
+  metricas_logistico_reducido[, modelo := "reducido"][]
+))[
+  ,
+  .(
+    modelo,
+    split,
+    n,
+    positivos,
+    prevalencia = round(prevalencia, 4),
+    auc = round(auc, 4),
+    logloss = round(logloss, 4),
+    version_cluster
+  )
+] |>
+  kable(
+    format = "html",
+    digits = 4,
+    caption = "Metricas comparadas: modelo completo vs reducido"
+  ) |>
+  kable_styling(
+    full_width = FALSE,
+    bootstrap_options = c("striped", "hover", "condensed")
+  )
+```
+
+```{r}
+#| echo: false
+rbindlist(list(
+  lift_logistico[, modelo := "completo"][],
+  lift_logistico_reducido[, modelo := "reducido"][]
+))[
+  ,
+  .(
+    modelo,
+    top_pct,
+    n,
+    positivos,
+    precision = round(precision, 4),
+    capture_rate = round(capture_rate, 4),
+    lift = round(lift, 4),
+    version_cluster
+  )
+] |>
+  kable(
+    format = "html",
+    digits = 4,
+    caption = "Lift comparado en validacion"
+  ) |>
+  kable_styling(
+    full_width = FALSE,
+    bootstrap_options = c("striped", "hover", "condensed")
+  )
+```
+
+```{r, echo = F}
+knitr::include_graphics(here::here("data/processed/modelos/logistico_cluster_dia_reducido/figuras/capture_rate_diario.png"))
+```
+
+
+
+### Coeficientes del modelo reducido
+
+```{r}
+#| echo: false
+coeficientes_logistico_reducido[
+  coeficiente_no_estimable == FALSE
+][
+  order(-abs_coeficiente)
+][
+  ,
+  .(
+    variable,
+    coeficiente = round(coeficiente, 4),
+    odds_ratio = round(odds_ratio, 4),
+    version_cluster
+  )
+] |>
+  kable(
+    format = "html",
+    digits = 4,
+    caption = "Coeficientes del modelo logistico reducido"
+  ) |>
+  kable_styling(
+    full_width = FALSE,
+    bootstrap_options = c("striped", "hover", "condensed")
+  )
+```
+
+### Validación temporal
+
+La validación temporal usa folds mensuales con 12 meses de entrenamiento y un mes de validación, dejando fuera los meses de test.
+
+```{r}
+#| echo: false
+metricas_temporal_reducido[
+  ,
+  .(
+    fold,
+    mes_validacion,
+    n_train,
+    n_validacion,
+    positivos_validacion,
+    prevalencia_validacion = round(prevalencia_validacion, 4),
+    auc = round(auc, 4),
+    logloss = round(logloss, 4),
+    version_cluster
+  )
+] |>
+  kable(
+    format = "html",
+    digits = 4,
+    caption = "Metricas por fold de validacion temporal"
+  ) |>
+  kable_styling(
+    full_width = FALSE,
+    bootstrap_options = c("striped", "hover", "condensed")
+  )
+```
+
+```{r}
+#| echo: false
+metricas_temporal_resumen_reducido[
+  ,
+  .(
+    folds,
+    auc_media = round(auc_media, 4),
+    auc_min = round(auc_min, 4),
+    auc_max = round(auc_max, 4),
+    logloss_media = round(logloss_media, 4),
+    logloss_min = round(logloss_min, 4),
+    logloss_max = round(logloss_max, 4),
+    version_cluster
+  )
+] |>
+  kable(
+    format = "html",
+    digits = 4,
+    caption = "Resumen de validacion temporal"
+  ) |>
+  kable_styling(
+    full_width = FALSE,
+    bootstrap_options = c("striped", "hover", "condensed")
+  )
+```
+
+```{r}
+#| echo: false
+lift_temporal_resumen_reducido[
+  ,
+  .(
+    top_pct,
+    folds,
+    precision_media = round(precision_media, 4),
+    capture_rate_media = round(capture_rate_media, 4),
+    lift_media = round(lift_media, 4),
+    lift_min = round(lift_min, 4),
+    lift_max = round(lift_max, 4),
+    version_cluster
+  )
+] |>
+  kable(
+    format = "html",
+    digits = 4,
+    caption = "Lift promedio en validacion temporal"
+  ) |>
+  kable_styling(
+    full_width = FALSE,
+    bootstrap_options = c("striped", "hover", "condensed")
+  )
+```
+
+## Random Forest baseline
+
+Script:
+
+- `scripts/modelo_random_forest_cluster_dia.R`
+
+Salida:
+
+- `data/processed/modelos/random_forest_cluster_dia/`
+
+Este modelo usa las mismas variables del logístico reducido para que la comparación mida principalmente el cambio de algoritmo.
+
+### Parámetros
+
+```{r}
+#| echo: false
+parametros_rf[
+  ,
+  .(
+    version_cluster,
+    fecha_min_modelo,
+    meses_train,
+    meses_validacion,
+    meses_test,
+    num_trees,
+    mtry,
+    min_node_size,
+    num_threads,
+    minutos_entrenamiento = round(segundos_entrenamiento / 60, 2),
+    minutos_prediccion = round(segundos_prediccion / 60, 2)
+  )
+] |>
+  kable(
+    format = "html",
+    digits = 4,
+    caption = "Parametros del Random Forest"
+  ) |>
+  kable_styling(
+    full_width = FALSE,
+    bootstrap_options = c("striped", "hover", "condensed")
+  )
+```
+
+### Métricas comparadas
+
+```{r}
+#| echo: false
+rbindlist(list(
+  metricas_logistico_reducido[, modelo := "logistico_reducido"][],
+  metricas_rf[, modelo := "random_forest"][]
+), fill = TRUE)[
+  ,
+  .(
+    modelo,
+    split,
+    n,
+    positivos,
+    prevalencia = round(prevalencia, 4),
+    auc = round(auc, 4),
+    logloss = round(logloss, 4),
+    version_cluster
+  )
+] |>
+  kable(
+    format = "html",
+    digits = 4,
+    caption = "Metricas comparadas: logistico reducido vs Random Forest"
+  ) |>
+  kable_styling(
+    full_width = FALSE,
+    bootstrap_options = c("striped", "hover", "condensed")
+  )
+```
+
+### Lift en validación
+
+```{r}
+#| echo: false
+rbindlist(list(
+  lift_logistico_reducido[, modelo := "logistico_reducido"][],
+  lift_rf[, modelo := "random_forest"][]
+), fill = TRUE)[
+  ,
+  .(
+    modelo,
+    top_pct,
+    n,
+    positivos,
+    precision = round(precision, 4),
+    capture_rate = round(capture_rate, 4),
+    lift = round(lift, 4),
+    version_cluster
+  )
+] |>
+  kable(
+    format = "html",
+    digits = 4,
+    caption = "Lift comparado en validacion"
+  ) |>
+  kable_styling(
+    full_width = FALSE,
+    bootstrap_options = c("striped", "hover", "condensed")
+  )
+```
+
+### Calibración
+
+```{r}
+#| echo: false
+calibracion_rf[
+  order(decil),
+  .(
+    decil,
+    n,
+    pred_media = round(pred_media, 4),
+    obs_rate = round(obs_rate, 4),
+    positivos,
+    version_cluster
+  )
+] |>
+  kable(
+    format = "html",
+    digits = 4,
+    caption = "Calibracion por decil del Random Forest"
+  ) |>
+  kable_styling(
+    full_width = FALSE,
+    bootstrap_options = c("striped", "hover", "condensed")
+  )
+```
+
+### Importancia de variables
+
+```{r}
+#| echo: false
+importancia_rf[
+  order(-importancia),
+  .(
+    variable,
+    importancia = round(importancia, 2),
+    version_cluster
+  )
+] |>
+  kable(
+    format = "html",
+    digits = 2,
+    caption = "Importancia de variables del Random Forest"
+  ) |>
+  kable_styling(
+    full_width = FALSE,
+    bootstrap_options = c("striped", "hover", "condensed")
+  )
+```
+
+### Histograma de capture rate diario
+
+```{r}
+#| echo: false
+lift_diario_rf[
+  ,
+  .(
+    dias = .N,
+    capture_rate_mediana = round(stats::median(capture_rate, na.rm = TRUE), 4),
+    capture_rate_p10 = round(as.numeric(stats::quantile(capture_rate, 0.1, na.rm = TRUE)), 4),
+    capture_rate_p90 = round(as.numeric(stats::quantile(capture_rate, 0.9, na.rm = TRUE)), 4),
+    lift_mediana = round(stats::median(lift, na.rm = TRUE), 4),
+    capture_rate_azar = unique(capture_rate_azar),
+    version_cluster = unique(version_cluster)
+  ),
+  by = top_pct
+][
+  order(top_pct)
+] |>
+  kable(
+    format = "html",
+    digits = 4,
+    caption = "Capture rate diario del Random Forest"
+  ) |>
+  kable_styling(
+    full_width = FALSE,
+    bootstrap_options = c("striped", "hover", "condensed")
+  )
+```
+
+```{r}
+#| echo: false
+#| out-width: "100%"
+knitr::include_graphics("../data/processed/modelos/random_forest_cluster_dia/figuras/capture_rate_diario.png")
+```
+
+
+## XGBoost baseline
+
+Script:
+
+- `scripts/modelo_xgboost_cluster_dia.R`
+
+Salida:
+
+- `data/processed/modelos/xgboost_cluster_dia/`
+
+Este modelo usa las mismas variables del logístico reducido y del Random Forest. Es un baseline sin tuning, con parámetros conservadores para limitar costo computacional.
+
+### Parámetros
+
+```{r}
+#| echo: false
+parametros_xgb[
+  ,
+  .(
+    version_cluster,
+    fecha_min_modelo,
+    meses_train,
+    meses_validacion,
+    meses_test,
+    nrounds,
+    max_depth,
+    eta,
+    subsample,
+    colsample_bytree,
+    min_child_weight,
+    nthread,
+    minutos_entrenamiento = round(segundos_entrenamiento / 60, 2),
+    minutos_prediccion = round(segundos_prediccion / 60, 2)
+  )
+] |>
+  kable(
+    format = "html",
+    digits = 4,
+    caption = "Parametros del XGBoost"
+  ) |>
+  kable_styling(
+    full_width = FALSE,
+    bootstrap_options = c("striped", "hover", "condensed")
+  )
+```
+
+### Métricas comparadas
+
+```{r}
+#| echo: false
+rbindlist(list(
+  metricas_logistico_reducido[, modelo := "logistico_reducido"][],
+  metricas_rf[, modelo := "random_forest"][],
+  metricas_xgb[, modelo := "xgboost"][]
+), fill = TRUE)[
+  ,
+  .(
+    modelo,
+    split,
+    n,
+    positivos,
+    prevalencia = round(prevalencia, 4),
+    auc = round(auc, 4),
+    logloss = round(logloss, 4),
+    version_cluster
+  )
+] |>
+  kable(
+    format = "html",
+    digits = 4,
+    caption = "Metricas comparadas: modelos reducidos"
+  ) |>
+  kable_styling(
+    full_width = FALSE,
+    bootstrap_options = c("striped", "hover", "condensed")
+  )
+```
+
+### Lift en validación
+
+```{r}
+#| echo: false
+rbindlist(list(
+  lift_logistico_reducido[, modelo := "logistico_reducido"][],
+  lift_rf[, modelo := "random_forest"][],
+  lift_xgb[, modelo := "xgboost"][]
+), fill = TRUE)[
+  ,
+  .(
+    modelo,
+    top_pct,
+    n,
+    positivos,
+    precision = round(precision, 4),
+    capture_rate = round(capture_rate, 4),
+    lift = round(lift, 4),
+    version_cluster
+  )
+] |>
+  kable(
+    format = "html",
+    digits = 4,
+    caption = "Lift comparado en validacion"
+  ) |>
+  kable_styling(
+    full_width = FALSE,
+    bootstrap_options = c("striped", "hover", "condensed")
+  )
+```
+
+### Calibración
+
+```{r}
+#| echo: false
+calibracion_xgb[
+  order(decil),
+  .(
+    decil,
+    n,
+    pred_media = round(pred_media, 4),
+    obs_rate = round(obs_rate, 4),
+    positivos,
+    version_cluster
+  )
+] |>
+  kable(
+    format = "html",
+    digits = 4,
+    caption = "Calibracion por decil del XGBoost"
+  ) |>
+  kable_styling(
+    full_width = FALSE,
+    bootstrap_options = c("striped", "hover", "condensed")
+  )
+```
+
+### Importancia de variables
+
+```{r}
+#| echo: false
+importancia_xgb[
+  order(-Gain),
+  .(
+    Feature,
+    Gain = round(Gain, 4),
+    Cover = round(Cover, 4),
+    Frequency = round(Frequency, 4),
+    version_cluster
+  )
+] |>
+  kable(
+    format = "html",
+    digits = 4,
+    caption = "Importancia de variables del XGBoost"
+  ) |>
+  kable_styling(
+    full_width = FALSE,
+    bootstrap_options = c("striped", "hover", "condensed")
+  )
+```
+
+### Histograma de capture rate diario
+
+```{r}
+#| echo: false
+lift_diario_xgb[
+  ,
+  .(
+    dias = .N,
+    capture_rate_mediana = round(stats::median(capture_rate, na.rm = TRUE), 4),
+    capture_rate_p10 = round(as.numeric(stats::quantile(capture_rate, 0.1, na.rm = TRUE)), 4),
+    capture_rate_p90 = round(as.numeric(stats::quantile(capture_rate, 0.9, na.rm = TRUE)), 4),
+    lift_mediana = round(stats::median(lift, na.rm = TRUE), 4),
+    capture_rate_azar = unique(capture_rate_azar),
+    version_cluster = unique(version_cluster)
+  ),
+  by = top_pct
+][
+  order(top_pct)
+] |>
+  kable(
+    format = "html",
+    digits = 4,
+    caption = "Capture rate diario del XGBoost"
+  ) |>
+  kable_styling(
+    full_width = FALSE,
+    bootstrap_options = c("striped", "hover", "condensed")
+  )
+```
+
+```{r}
+#| echo: false
+#| out-width: "100%"
+knitr::include_graphics("../data/processed/modelos/xgboost_cluster_dia/figuras/capture_rate_diario.png")
+```
+
+## Experimento: exceso sobre período teórico
+
+Se evaluo agregar dos features derivadas de levante:
+
+- `exceso_mean_tiempo_periodo_pred_pos = max(mean_tiempo_desde_ultimo_levante_pred - mean_levante_periodo, 0)`;
+- `exceso_mean_tiempo_periodo_pred_trunc_7 = min(exceso_mean_tiempo_periodo_pred_pos, 7)`.
+
+Estas variables no introducen leakage porque usan columnas predictivas ya disponibles al momento de predicción. El soporte queda detras del flag `USAR_EXCESO_LEVANTE=1` en:
+
+- `scripts/modelo_logistico_cluster_dia_reducido.R`;
+- `scripts/modelo_xgboost_cluster_dia.R`;
+- `scripts/modelo_random_forest_cluster_dia.R`.
+
+Las salidas exploratorias quedan en:
+
+- `data/processed/modelos/experimentos_exceso_levante/`;
+- `outputs/experimentos_exceso_levante/`.
+
+Lectura inicial: el exceso aparece con importancia en XGBoost, pero el desempeno agregado cambia muy poco. En validación sube marginalmente el AUC de XGBoost y del logístico reducido; en test baja levemente en ambos. Por ahora no se promueve al baseline.
+
+
+## Comparación visual de modelos
+
+### AUC por split
+
+```{r}
+#| echo: false
+#| fig-width: 8
+#| fig-height: 4.8
+ggplot(
+  metricas_modelos,
+  aes(x = modelo, y = auc, fill = split)
+) +
+  geom_col(position = position_dodge(width = 0.75), width = 0.68) +
+  geom_text(
+    aes(label = round(auc, 3)),
+    position = position_dodge(width = 0.75),
+    vjust = -0.25,
+    size = 3
+  ) +
+  scale_fill_brewer(palette = "Set2") +
+  coord_cartesian(ylim = c(0.70, max(metricas_modelos$auc, na.rm = TRUE) + 0.02)) +
+  labs(
+    x = NULL,
+    y = "AUC",
+    fill = "Split",
+    title = "AUC por modelo y split"
+  ) +
+  theme_minimal(base_size = 11) +
+  theme(
+    axis.text.x = element_text(angle = 20, hjust = 1),
+    panel.grid.major.x = element_blank()
+  )
+```
+
+### Lift en validación
+
+```{r}
+#| echo: false
+#| fig-width: 8
+#| fig-height: 4.8
+ggplot(
+  lift_modelos_validacion,
+  aes(x = factor(top_pct), y = lift, color = modelo, group = modelo)
+) +
+  geom_line(linewidth = 0.9) +
+  geom_point(size = 2.2) +
+  scale_x_discrete(
+    labels = function(x) paste0(as.numeric(x) * 100, "%")
+  ) +
+  labs(
+    x = "Top priorizado",
+    y = "Lift",
+    color = "Modelo",
+    title = "Lift en validacion por corte de riesgo"
+  ) +
+  theme_minimal(base_size = 11) +
+  theme(
+    panel.grid.minor = element_blank()
+  )
+```
+
+### Capture rate en validación
+
+```{r}
+#| echo: false
+#| fig-width: 8
+#| fig-height: 4.8
+ggplot(
+  lift_modelos_validacion,
+  aes(x = factor(top_pct), y = capture_rate, color = modelo, group = modelo)
+) +
+  geom_line(linewidth = 0.9) +
+  geom_point(size = 2.2) +
+  scale_x_discrete(
+    labels = function(x) paste0(as.numeric(x) * 100, "%")
+  ) +
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
+  labs(
+    x = "Top priorizado",
+    y = "Capture rate",
+    color = "Modelo",
+    title = "Capture rate en validacion por corte de riesgo"
+  ) +
+  theme_minimal(base_size = 11) +
+  theme(
+    panel.grid.minor = element_blank()
+  )
+```
+
+
+## Modelo Zona Limpia: Problema Observado
+
+La documentación metodologica específica del baseline Zona Limpia queda separada en:
+
+- `zona_limpia/reportes/13_modelo_problema_observado_zl.qmd`
+
+Este QMD general mantiene solo la referencia para evitar duplicar documentación.
+El modelo usa como target:
+
+```text
+hay_zl_problema_comparable
+```
+
+COM no se usa como feature ni como target principal; queda solo como evaluación
+secundaria del score ZL.
+
+
+## Proximos pasos
+
+Opciones a evaluar:
+
+- Revisar si vale la pena hacer tuning acotado de Random Forest o XGBoost.
+- Comparar estabilidad diaria de los modelos en validación y test.
+- Evaluar modelos de conteo para `n_reclamos`.
+
+El baseline logístico sirve como referencia interpretable para comparar esos modelos.

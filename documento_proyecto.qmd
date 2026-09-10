@@ -1,0 +1,109 @@
+---
+title: "Modelo para la predicción de reclamos COM"
+subtitle: "Integración de datos - Ensamblado del Modelo"
+author: "Darío Padula"
+date: "`r Sys.Date()`"
+format:
+  html:
+    theme: cosmo
+    toc: true
+    toc-depth: 3
+    number-sections: true
+    code-fold: true
+    code-tools: true
+    df-print: paged
+    self-contained: true
+execute:
+  echo: true
+  warning: false
+  message: false
+---
+
+## Objetivo
+
+Entrenar un modelo para predecir futuros reclamos en la ciudad de montevideo debido a situaciones generadas por contenendores de residuos: `Contenedores desbordados` o `Basura fuera del contenedor`.
+
+## Datos disponibles
+
+Para este proyecto contamos con los siguientes tablas de datos:
+
+- **Levante de contenedores**: contiene la fecha y hora en la que se levantó el contenedor. La tabla está en `prod_limpieza.v_analitica_levante_de_contenedores` y se levanta desde jupyter mediante consulta *hive*. 
+
+- **COM**: contiene la fecha y hora de cada reclamos que se hizo en el COM. La tabla esta en `prod_limpieza.reclamos_com` y se levanta desde jupyter mediante consulta *hive*. 
+
+### Levante de contenedores
+
+Se usa el código `get_datos_levante.R` con el cual se leen los datos y se calculan:
+
+  - Fechas: las fechas se pasan a formato `POSIXct`. Se encontraron 2 fechas relevantes: **levante_fecha_levante** y **levante_fact**, ambas son muy similares y levante_fact tiene muchos menos NA.
+  - Usando **levante_fact**, se calcula el tiempo transcurrido desde el último levante.
+  - **levante_periodo**: indica el tiempo en días que debería pasar entre en levante y otro. Un valor de 1, significa que ese contenedor tiene que levantarse todos los días.
+  
+  Lo elevante de estos datos es capturar para cada contenedor, cuanto tiempo transcurre entre sucesivos levantes y compararlo con su periodicidad teórica.
+  
+#### Cosas a resolver
+
+- Si un contenedor tiene registro que fue lavanta do un cierto día y luego que fue levantado 3 días después, los días que faltan debería de rellenarse con algo para poder computar el tiempo entre levantes para los días intermedios. Esto es importante porque para entrenar el modelo es necesario tener el dato para cada día, por lo tanto hay que rellenar esos huecos.
+
+   - **Solución**: Se generó una tabla dia/contenedor_id y se utilizó la fecha del ultimo levante para imputar el tiempo entre levante de los dias que faltan. Si $d$, es la duración entre levante posterior a un día que no hay registro, el día anterior se imputa con $d - 1$, y si existe otro anterior se imputa $d - 2$, y se asigue así haste llegar al siguente dato.
+   
+- Otro detalle es la imputación del tiempo entre levantes de los contenedores que entre la fecha de consulta y el último levante, muchos contenedores no se levantan el día de la consulta, esto genera que queden datos faltantes entree el último levante y el día de la consulta.
+
+   - **Solución**: Se toma como referencia las horas entre la fecha del hultimo levante y el fin del día, y si agrega un día por cada día sin dato.
+   
+
+### Clusters de contenedores
+
+Con los datos de levante, tenemos las posiciones de los contendores que han sido levantados en el período.
+
+Aquí pasan varias cosas:
+
+1. Existen contenedores que están muy cerca entre si, por lo tanto vamos a querer medidas no tanto de cada contenedor, sinó de puntos especificos donde hay posisiones de contenedores cercanos.
+1. un mismo contenedor, puede moverse a lo largo del tiempo, por lo tanto puedo tener posiciones distintas para un mismo contenedor.
+
+Por estos motivos, la idea es generar grupos de posiciones, para homogeneizar esta casuística, generando un mismo grupo, tanto para contenedores que han sido movidos a lugares cercanos o grupos de contenedores que comparten lugar (muy cercanos).
+
+Para hacer la agrupación se toman las coordenadas X, Y de los contenedores (medidas en metros) y se aplica `dbscan` para agrupar con un `eta = 50` metros.
+
+Esto genera muchas grupos de 1 contenedor y con mayor cantidad. 
+La idea es que estos grupos se entrenen una vez y queden formados. Luego, se aparece coordenadas nuevas, se asignarán al grupo del contenedor más cercano.
+
+
+### COM
+
+Se usa el código `get_datos_COM.R` con el cual se leen los datos y se calculan:
+
+  - Fechas: las fechas se pasan a formato `POSIXct`. Se encontraron 2 fechas relevantes: **fecha_de_reclamo** y **fecha_de_resuelto**.
+  - Nos quedamos con los datos que tienen en la columna `incidente` las opciones: *Contenedor desbordado* y *Basura fuera del contenedor*.
+  - Excluimos las filas que en la variables `repetido == true`.
+  
+La idea es asociar estos reclamos a un contenedor especifico el cuál pertenecera a un determinado cluster. De esta forma para cada día, se asignará reclamos a los contenedores más cercanos.
+
+Por este motivo es importante agrupar los contenedores, porque cada problema se asocia a un solo contenedor, cuando el problema puede estar asociado al conjunto de contenedores.
+  
+
+
+## Integración
+
+### Puntos de referencia de contenedores
+
+Dado los grupos de coordendas ya entrenados, el punto de referencia será el baricentro de cada grupo.
+
+### Asignara reclamos a contenedores
+
+Cada reclamo se asigna a un solo contenedor, y será el contenedor más cercana usando distancia euclidea. Esta asignación se hará considerando los contenedores activos de cada día. De esta forma nos aseguramos que el contenedor encontrado estaba activo ese día y el problema esta bien asignado.
+
+### Agregación por grupos
+
+Luego de tener para cada contenedor la asignación de problemas, el tiempo desde el último levante. La idea es agregar esa información por grupo/cluster, en los datos agregados, cada fila tendrá informacion para cada grupo/dia:
+
+1. Máximo días desde el último levante
+1. Total de problemas asigandos al grupo de contenedores
+
+
+## Modelo
+
+### Modelo Base
+
+### Modelo Propuesto
+

@@ -1,0 +1,58 @@
+# Por defecto, no versionar elementos de la raiz.
+/*
+
+# Archivos sueltos acordados.
+!/.gitignore
+!/Renviron.example
+!/README.qmd
+!/TAREAS.md
+!/documento_proyecto.qmd
+
+# Codigo y documentacion del proyecto.
+!/app_operativa_v2/
+!/config/
+!/data/
+!/documentacion/
+!/funciones/
+!/knowledge/
+!/scripts/
+!/tareas/
+!/zona_limpia/
+
+
+/knowledge/.obsidian/*
+# Configuracion local, historial y archivos de RStudio.
+.Renviron
+.Rhistory
+.Rproj.user/
+*.Rproj
+
+# Archivos internos de asistentes locales.
+AGENTS.md
+.agents/
+.codex/
+skills/
+
+# Datos generales: conservar solo la descripcion de la estructura.
+/data/**
+!/data/README.md
+!/data/**/
+!/data/**/.gitkeep
+!/data/**/*.R
+
+# Datos de ejecucion de la app: conservar solo su contrato.
+/app_operativa_v2/data/**
+!/app_operativa_v2/data/README.md
+
+# Resultados generados de Zona Limpia.
+/zona_limpia/outputs/
+
+# Recursos generados al renderizar documentos.
+**/*_files/
+
+# Temporales y registros.
+*.log
+*.tmp
+*.temp
+*.bak
+~$*

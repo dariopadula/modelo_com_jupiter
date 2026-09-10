@@ -1,0 +1,728 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.3.433">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+
+<title>Flujo de datos</title>
+<style>
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+</style>
+
+
+<script src="flujo_datos_files/libs/clipboard/clipboard.min.js"></script>
+<script src="flujo_datos_files/libs/quarto-html/quarto.js"></script>
+<script src="flujo_datos_files/libs/quarto-html/popper.min.js"></script>
+<script src="flujo_datos_files/libs/quarto-html/tippy.umd.min.js"></script>
+<script src="flujo_datos_files/libs/quarto-html/anchor.min.js"></script>
+<link href="flujo_datos_files/libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="flujo_datos_files/libs/quarto-html/quarto-syntax-highlighting.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="flujo_datos_files/libs/bootstrap/bootstrap.min.js"></script>
+<link href="flujo_datos_files/libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="flujo_datos_files/libs/bootstrap/bootstrap.min.css" rel="stylesheet" id="quarto-bootstrap" data-mode="light">
+
+
+</head>
+
+<body>
+
+<div id="quarto-content" class="page-columns page-rows-contents page-layout-article">
+<div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+  <nav id="TOC" role="doc-toc" class="toc-active">
+    <h2 id="toc-title">Table of contents</h2>
+   
+  <ul>
+  <li><a href="#objetivo" id="toc-objetivo" class="nav-link active" data-scroll-target="#objetivo"><span class="header-section-number">1</span> Objetivo</a></li>
+  <li><a href="#orden-de-ejecucion" id="toc-orden-de-ejecucion" class="nav-link" data-scroll-target="#orden-de-ejecucion"><span class="header-section-number">2</span> Orden de ejecucion</a></li>
+  <li><a href="#levantes" id="toc-levantes" class="nav-link" data-scroll-target="#levantes"><span class="header-section-number">3</span> Levantes</a>
+  <ul class="collapse">
+  <li><a href="#elegibilidad-para-asignacion-y-modelo" id="toc-elegibilidad-para-asignacion-y-modelo" class="nav-link" data-scroll-target="#elegibilidad-para-asignacion-y-modelo"><span class="header-section-number">3.1</span> Elegibilidad para asignacion y modelo</a></li>
+  <li><a href="#alternativa-pendiente-actividad-basada-en-levantes-recientes" id="toc-alternativa-pendiente-actividad-basada-en-levantes-recientes" class="nav-link" data-scroll-target="#alternativa-pendiente-actividad-basada-en-levantes-recientes"><span class="header-section-number">3.2</span> Alternativa pendiente: actividad basada en levantes recientes</a></li>
+  <li><a href="#tiempo-desde-ultimo-levante-predictivo" id="toc-tiempo-desde-ultimo-levante-predictivo" class="nav-link" data-scroll-target="#tiempo-desde-ultimo-levante-predictivo"><span class="header-section-number">3.3</span> Tiempo desde ultimo levante predictivo</a></li>
+  <li><a href="#diagnostico-de-tiempos-negativos" id="toc-diagnostico-de-tiempos-negativos" class="nav-link" data-scroll-target="#diagnostico-de-tiempos-negativos"><span class="header-section-number">3.4</span> Diagnostico de tiempos negativos</a></li>
+  </ul></li>
+  <li><a href="#com" id="toc-com" class="nav-link" data-scroll-target="#com"><span class="header-section-number">4</span> COM</a></li>
+  <li><a href="#clusters" id="toc-clusters" class="nav-link" data-scroll-target="#clusters"><span class="header-section-number">5</span> Clusters</a></li>
+  <li><a href="#territorio-por-cluster" id="toc-territorio-por-cluster" class="nav-link" data-scroll-target="#territorio-por-cluster"><span class="header-section-number">6</span> Territorio por cluster</a></li>
+  <li><a href="#com-a-clusters" id="toc-com-a-clusters" class="nav-link" data-scroll-target="#com-a-clusters"><span class="header-section-number">7</span> COM a clusters</a></li>
+  <li><a href="#base-cluster-dia" id="toc-base-cluster-dia" class="nav-link" data-scroll-target="#base-cluster-dia"><span class="header-section-number">8</span> Base cluster-dia</a></li>
+  <li><a href="#features-historicas" id="toc-features-historicas" class="nav-link" data-scroll-target="#features-historicas"><span class="header-section-number">9</span> Features historicas</a></li>
+  <li><a href="#interpretacion-de-_pred-e-inferencia-de-actividad" id="toc-interpretacion-de-_pred-e-inferencia-de-actividad" class="nav-link" data-scroll-target="#interpretacion-de-_pred-e-inferencia-de-actividad"><span class="header-section-number">10</span> Interpretacion de <code>_pred</code> e inferencia de actividad</a>
+  <ul class="collapse">
+  <li><a href="#variables-con-sufijo-_pred" id="toc-variables-con-sufijo-_pred" class="nav-link" data-scroll-target="#variables-con-sufijo-_pred"><span class="header-section-number">10.1</span> Variables con sufijo <code>_pred</code></a></li>
+  <li><a href="#actividad-observada-e-inferida" id="toc-actividad-observada-e-inferida" class="nav-link" data-scroll-target="#actividad-observada-e-inferida"><span class="header-section-number">10.2</span> Actividad observada e inferida</a></li>
+  </ul></li>
+  </ul>
+</nav>
+</div>
+<main class="content" id="quarto-document-content">
+
+<header id="title-block-header" class="quarto-title-block default">
+<div class="quarto-title">
+<h1 class="title">Flujo de datos</h1>
+</div>
+
+
+
+<div class="quarto-title-meta">
+
+    
+  
+    
+  </div>
+  
+
+</header>
+
+<section id="objetivo" class="level2" data-number="1">
+<h2 data-number="1" class="anchored" data-anchor-id="objetivo"><span class="header-section-number">1</span> Objetivo</h2>
+<p>Documentar el pipeline de integracion de datos hasta la construccion de la base <code>cluster_id</code>/<code>dia</code>.</p>
+</section>
+<section id="orden-de-ejecucion" class="level2" data-number="2">
+<h2 data-number="2" class="anchored" data-anchor-id="orden-de-ejecucion"><span class="header-section-number">2</span> Orden de ejecucion</h2>
+<ol type="1">
+<li><code>scripts/get_datos_levante.R</code></li>
+<li><code>scripts/get_datos_COM.R</code></li>
+<li><code>scripts/check_espacial_com_levante.R</code></li>
+<li><code>scripts/gen_cluster_referencia_unicos.R</code></li>
+<li><code>scripts/asignar_clusters_posiciones_nuevas.R</code></li>
+<li><code>scripts/construir_cluster_territorial_segmento_censal.R</code></li>
+<li><code>scripts/asignar_com_contenedores_clusters.R</code></li>
+<li><code>scripts/construir_base_cluster_dia.R</code></li>
+<li><code>scripts/construir_features_historicas_cluster_dia.R</code></li>
+</ol>
+</section>
+<section id="levantes" class="level2" data-number="3">
+<h2 data-number="3" class="anchored" data-anchor-id="levantes"><span class="header-section-number">3</span> Levantes</h2>
+<div class="callout callout-style-default callout-note callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+Tabla generada: <code>data/parquet/levante/</code>
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>Esta tabla representa la historia diaria de cada contenedor. Cada fila corresponde a un contenedor en un dia donde se considera activo o inferido como activo.</p>
+<p><strong>Objetivo:</strong> construir una base temporal que permita saber que contenedores estaban disponibles cada dia, cuanto tiempo paso desde el ultimo levante y que tan confiable es la informacion imputada.</p>
+<p><strong>Fundamento:</strong> los reclamos COM solo pueden asignarse razonablemente a contenedores que existian o estaban operativos en esa fecha. Por eso la tabla diaria de levantes es el eje del pipeline.</p>
+</div>
+</div>
+<p>Insumos:</p>
+<ul>
+<li>servidor o <code>data/paraprobar/datos_levante.parquet</code></li>
+</ul>
+<p>Salida:</p>
+<ul>
+<li><code>data/parquet/levante/</code></li>
+</ul>
+<p>Funciones principales:</p>
+<ul>
+<li><code>cargar_datos_levante()</code></li>
+<li><code>preparar_datos_levante()</code></li>
+<li><code>definir_intervalos_actividad_contenedor()</code></li>
+<li><code>meses_lectura_con_contexto()</code></li>
+</ul>
+<p>Decisiones principales:</p>
+<ul>
+<li><code>fecha_levante</code> representa el levante real.</li>
+<li><code>fecha_fact</code> representa el registro administrativo o cambio de estado.</li>
+<li>Los intervalos activos se construyen con <code>fecha_fact</code>, <code>levante_activo</code>, gaps largos y censura derecha.</li>
+<li>Los tiempos desde ultimo levante se calculan con <code>fecha_levante</code>.</li>
+<li>La grilla diaria se expande solo dentro de intervalos activos.</li>
+<li>Se agrega <code>contenedor_dia_elegible_modelo</code> como capa de elegibilidad para asignacion/modelado.</li>
+<li>Se agregan variables predictivas con corte <code>dia + 1 hora</code>, usando sufijo <code>_pred</code>.</li>
+</ul>
+<section id="elegibilidad-para-asignacion-y-modelo" class="level3" data-number="3.1">
+<h3 data-number="3.1" class="anchored" data-anchor-id="elegibilidad-para-asignacion-y-modelo"><span class="header-section-number">3.1</span> Elegibilidad para asignacion y modelo</h3>
+<p>La tabla diaria de levantes conserva la informacion activa e inferida, pero agrega una capa adicional:</p>
+<ul>
+<li><code>contenedor_dia_elegible_modelo</code></li>
+</ul>
+<p>Regla actual:</p>
+<ul>
+<li><code>contenedor_activo_dia == TRUE</code>; y</li>
+<li>actividad <code>observada</code>; o</li>
+<li>actividad <code>inferida</code>, <code>dias_desde_ultima_observacion_estado &lt;= 8</code> y <code>dias_total_tramo_inferido_estado &lt;= 15</code>.</li>
+</ul>
+<p>Esta regla evita usar contenedores con evidencia debil de actividad. Es especialmente importante antes de asignar reclamos COM, porque un contenedor inferido durante un hueco largo podria atraer reclamos y contaminar el target.</p>
+</section>
+<section id="alternativa-pendiente-actividad-basada-en-levantes-recientes" class="level3" data-number="3.2">
+<h3 data-number="3.2" class="anchored" data-anchor-id="alternativa-pendiente-actividad-basada-en-levantes-recientes"><span class="header-section-number">3.2</span> Alternativa pendiente: actividad basada en levantes recientes</h3>
+<p>Se identifico una alternativa mas rigida para definir si un contenedor debe considerarse operativo en un dia <code>D</code>.</p>
+<p>Regla candidata:</p>
+<pre class="text"><code>tuvo_levante_ultimos_7d =
+  existe al menos un levante entre D-7 y D 01:00</code></pre>
+<p>Bajo este criterio, un contenedor podria conservarse en la tabla diaria, pero solo seria elegible para asignacion de reclamos y construccion de features si tuvo evidencia de levante dentro de la ventana reciente.</p>
+<p>La propuesta inicial es crear un indicador:</p>
+<ul>
+<li><code>tuvo_levante_ultimos_7d</code></li>
+</ul>
+<p>Antes de reemplazar la regla actual se deberia comparar:</p>
+<ul>
+<li>cantidad de contenedores elegibles por dia;</li>
+<li>contenedores excluidos por cada criterio;</li>
+<li>reclamos COM que cambian de contenedor, cluster o quedan sin asignar;</li>
+<li>cantidad y composicion de clusters activos;</li>
+<li>distribucion de <code>mean_tiempo_desde_ultimo_levante_pred</code>;</li>
+<li>proporcion de casos con mas de 7 dias desde el ultimo levante;</li>
+<li>desempeño y estabilidad temporal de los modelos;</li>
+<li>impacto sobre la cobertura operativa del mapa.</li>
+</ul>
+<p>Este criterio no esta implementado actualmente. La regla vigente sigue usando estado activo observado o inferido, junto con los limites de 8 dias desde la ultima observacion y 15 dias de tramo inferido.</p>
+<p>El experimento deberia probar al menos tres variantes:</p>
+<ol type="1">
+<li>Mantener la elegibilidad actual y agregar <code>tuvo_levante_ultimos_7d</code> como feature.</li>
+<li>Excluir de la asignacion y del modelo los contenedores sin levantes en los ultimos 7 dias.</li>
+<li>Usar ventanas alternativas, por ejemplo 5, 7 y 10 dias, para comprobar la sensibilidad de la regla.</li>
+</ol>
+<p>La fecha de corte debe mantenerse en <code>D 01:00</code>. No deben incorporarse levantes posteriores dentro del mismo dia objetivo.</p>
+</section>
+<section id="tiempo-desde-ultimo-levante-predictivo" class="level3" data-number="3.3">
+<h3 data-number="3.3" class="anchored" data-anchor-id="tiempo-desde-ultimo-levante-predictivo"><span class="header-section-number">3.3</span> Tiempo desde ultimo levante predictivo</h3>
+<p>Para modelado operativo no alcanza con calcular el tiempo desde ultimo levante al cierre del dia. Si el modelo se corre al inicio del dia, no debe usar levantes que ocurren mas tarde ese mismo dia.</p>
+<p>Por eso se crean variables predictivas con sufijo <code>_pred</code>:</p>
+<ul>
+<li><code>fecha_corte_prediccion</code></li>
+<li><code>fecha_ultimo_levante_pred</code></li>
+<li><code>horas_desde_ultimo_levante_pred</code></li>
+<li><code>tiempo_desde_ultimo_levante_pred</code></li>
+<li><code>tiempo_desde_ultimo_levante_pred_v2</code></li>
+</ul>
+<p>Regla actual:</p>
+<pre class="text"><code>fecha_corte_prediccion = dia + 1 hora
+fecha_ultimo_levante_pred = ultimo levante con fecha_levante &lt;= fecha_corte_prediccion</code></pre>
+<p>Ejemplo:</p>
+<pre class="text"><code>dia objetivo: D
+hora de prediccion: D 01:00
+levante anterior: D-3 05:00
+levante del mismo dia: D 15:00</code></pre>
+<p>Para predecir en <code>D 01:00</code>, el levante de <code>D 15:00</code> no existe todavia desde el punto de vista del modelo. La feature predictiva usa <code>D-3 05:00</code>.</p>
+<p>Esta decision evita leakage temporal.</p>
+</section>
+<section id="diagnostico-de-tiempos-negativos" class="level3" data-number="3.4">
+<h3 data-number="3.4" class="anchored" data-anchor-id="diagnostico-de-tiempos-negativos"><span class="header-section-number">3.4</span> Diagnostico de tiempos negativos</h3>
+<p>Se observaron tiempos negativos en las variables historicas originales:</p>
+<ul>
+<li>filas con tiempo negativo: 71818</li>
+<li>porcentaje aproximado: 4.916%</li>
+<li>minimo: aproximadamente -3 horas</li>
+<li>concentrados en levantes del mismo dia entre las 21:00 y 23:00</li>
+</ul>
+<p>Esto es compatible con un desfase horario de hasta 3 horas y refuerza la necesidad de usar variables <code>_pred</code> para modelado.</p>
+</section>
+</section>
+<section id="com" class="level2" data-number="4">
+<h2 data-number="4" class="anchored" data-anchor-id="com"><span class="header-section-number">4</span> COM</h2>
+<div class="callout callout-style-default callout-note callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+Tabla generada: <code>data/parquet/com/</code>
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>Esta tabla contiene reclamos COM preparados para integrarse espacialmente con levantes.</p>
+<p><strong>Objetivo:</strong> filtrar incidentes relevantes, excluir repetidos y transformar coordenadas a un sistema metrico comun.</p>
+<p><strong>Fundamento:</strong> antes de asignar reclamos a contenedores o clusters, los puntos COM deben estar limpios y en el mismo CRS que los levantes.</p>
+</div>
+</div>
+<p>Insumos:</p>
+<ul>
+<li>servidor o <code>data/paraprobar/datos_com.parquet</code></li>
+</ul>
+<p>Salida:</p>
+<ul>
+<li><code>data/parquet/com/</code></li>
+</ul>
+<p>Funciones principales:</p>
+<ul>
+<li><code>cargar_datos_com()</code></li>
+<li><code>preparar_datos_com()</code></li>
+</ul>
+<p>Decisiones principales:</p>
+<ul>
+<li>Se conservan incidentes objetivo.</li>
+<li>Se excluyen repetidos.</li>
+<li>Las coordenadas se transforman a EPSG:32721.</li>
+</ul>
+</section>
+<section id="clusters" class="level2" data-number="5">
+<h2 data-number="5" class="anchored" data-anchor-id="clusters"><span class="header-section-number">5</span> Clusters</h2>
+<div class="callout callout-style-default callout-note callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+Tablas generadas: <code>data/reference/clusters/</code>
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>Estas tablas guardan una referencia espacial estable de posiciones de contenedores agrupadas en clusters.</p>
+<p><strong>Objetivo:</strong> definir unidades espaciales consistentes en el tiempo.</p>
+<p><strong>Fundamento:</strong> si los clusters se recalculan en cada corrida sin referencia fija, los IDs pueden cambiar y romper comparaciones historicas. Por eso se entrena una referencia versionada y luego las posiciones nuevas se asignan contra esa referencia.</p>
+</div>
+</div>
+<p>Salida de referencia:</p>
+<ul>
+<li><code>data/reference/clusters/</code></li>
+</ul>
+<p>Salida de actualizacion:</p>
+<ul>
+<li><code>data/processed/cluster_update_check/</code></li>
+</ul>
+<p>Funciones principales:</p>
+<ul>
+<li><code>entrenar_clusters_referencia()</code></li>
+<li><code>asignar_posiciones_levante_a_clusters()</code></li>
+<li><code>asignar_puntos_a_clusters_referencia()</code></li>
+</ul>
+<p>Decisiones principales:</p>
+<ul>
+<li>DBSCAN entrena una referencia espacial estable.</li>
+<li>Los puntos ruido reciben cluster propio.</li>
+<li>Las posiciones nuevas se asignan contra la referencia sin modificarla.</li>
+</ul>
+</section>
+<section id="territorio-por-cluster" class="level2" data-number="6">
+<h2 data-number="6" class="anchored" data-anchor-id="territorio-por-cluster"><span class="header-section-number">6</span> Territorio por cluster</h2>
+<div class="callout callout-style-default callout-note callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+Tabla generada: <code>data/processed/cluster_territorial/cluster_segmento_censal/</code>
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>Esta tabla asigna variables territoriales y demograficas fijas a cada <code>cluster_id</code> para una version de clusters.</p>
+<p><strong>Objetivo:</strong> disponer de atributos estables por cluster para modelos COM, modelos Zona Limpia, analisis de sesgo de reclamo, propension de visita y mapas.</p>
+<p><strong>Fundamento:</strong> las variables territoriales no dependen del dia. Conviene calcularlas una vez por <code>version_cluster</code> y reutilizarlas, en lugar de recalcularlas dentro de cada tabla diaria.</p>
+</div>
+</div>
+<p>Insumos:</p>
+<ul>
+<li><code>data/processed/cluster_update_check/contenedor_posicion_cluster_actual/</code></li>
+<li><code>shp/Marco2011_SEG_Montevideo_Total/Marco2011_SEG_Montevideo_Total.shp</code></li>
+</ul>
+<p>Salida:</p>
+<ul>
+<li><code>data/processed/cluster_territorial/cluster_segmento_censal/</code></li>
+<li><code>data/processed/cluster_territorial/resumen/</code></li>
+</ul>
+<p>Funcion principal:</p>
+<ul>
+<li><code>scripts/construir_cluster_territorial_segmento_censal.R</code></li>
+</ul>
+<p>Decisiones principales:</p>
+<ul>
+<li>El segmento censal de referencia del cluster se asigna usando el centroide operativo del cluster, calculado como promedio de sus posiciones.</li>
+<li>Se guardan variables de poblacion, hogares, viviendas, porcentaje de hogares con NBI y densidades por km2.</li>
+<li>Se calcula tambien el segmento principal por cantidad de posiciones del cluster.</li>
+<li>Los clusters que tienen posiciones en mas de un segmento quedan marcados con <code>cluster_multisegmento</code>.</li>
+<li>La salida queda particionada por <code>version_cluster</code>.</li>
+</ul>
+</section>
+<section id="com-a-clusters" class="level2" data-number="7">
+<h2 data-number="7" class="anchored" data-anchor-id="com-a-clusters"><span class="header-section-number">7</span> COM a clusters</h2>
+<div class="callout callout-style-default callout-note callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+Tabla generada: <code>data/processed/com_contenedor_cluster/asignaciones_com/</code>
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>Esta tabla asigna cada reclamo COM al contenedor activo/elegible mas cercano en el mismo dia y recupera el <code>cluster_id</code> asociado.</p>
+<p><strong>Objetivo:</strong> convertir reclamos puntuales en eventos asociados a una unidad espacial estable.</p>
+<p><strong>Fundamento:</strong> la asignacion a contenedor es un paso tecnico. Para modelar se usa el cluster, porque en zonas con varios contenedores cercanos un reclamo puede reflejar un problema compartido por la zona y no solo por el contenedor mas cercano.</p>
+</div>
+</div>
+<p>Salida:</p>
+<ul>
+<li><code>data/processed/com_contenedor_cluster/</code></li>
+</ul>
+<p>Funcion principal:</p>
+<ul>
+<li><code>asignar_com_a_contenedores_activos()</code></li>
+</ul>
+<p>Reglas:</p>
+<ul>
+<li>COM se asigna al contenedor activo/elegible mas cercano del mismo dia.</li>
+<li><code>asignado</code>: distancia &lt;= 50 m.</li>
+<li><code>revision</code>: 50 m &lt; distancia &lt;= 100 m.</li>
+<li><code>pendiente</code>: distancia &gt; 100 m.</li>
+<li>Para targets de modelo se conservan <code>asignado</code> y <code>revision</code>; <code>pendiente</code> queda fuera.</li>
+</ul>
+</section>
+<section id="base-cluster-dia" class="level2" data-number="8">
+<h2 data-number="8" class="anchored" data-anchor-id="base-cluster-dia"><span class="header-section-number">8</span> Base cluster-dia</h2>
+<div class="callout callout-style-default callout-note callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+Tabla generada: <code>data/processed/modelo_cluster_dia/base_cluster_dia/</code>
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>Esta tabla contiene una fila por <code>cluster_id</code> y <code>dia</code>, con targets COM y features contemporaneas de levantes.</p>
+<p><strong>Objetivo:</strong> construir la unidad base de entrenamiento.</p>
+<p><strong>Fundamento:</strong> el modelo debe predecir riesgo por zona/cluster. Agregar a cluster reduce ruido de asignacion puntual y evita crear falsos ceros en contenedores vecinos.</p>
+<p>Para tiempos desde ultimo levante se conservan agregados historicos y agregados predictivos. Para modelado operativo deben priorizarse las columnas con sufijo <code>_pred</code>, por ejemplo:</p>
+<ul>
+<li><code>mean_tiempo_desde_ultimo_levante_pred</code></li>
+<li><code>max_tiempo_desde_ultimo_levante_pred</code></li>
+<li><code>mean_ratio_tiempo_periodo_pred</code></li>
+<li><code>max_ratio_tiempo_periodo_pred</code></li>
+</ul>
+</div>
+</div>
+<p>Salida:</p>
+<ul>
+<li><code>data/processed/modelo_cluster_dia/base_cluster_dia/</code></li>
+<li><code>data/processed/modelo_cluster_dia/com_cluster_dia/</code></li>
+<li><code>data/processed/modelo_cluster_dia/resumen/</code></li>
+</ul>
+<p>Funcion principal:</p>
+<ul>
+<li><code>construir_base_cluster_dia()</code></li>
+</ul>
+<p>Decisiones principales:</p>
+<ul>
+<li>La unidad de entrenamiento pasa a ser <code>cluster_id</code>/<code>dia</code>.</li>
+<li>La base se limita al rango temporal con cobertura COM.</li>
+<li>Los reclamos se agregan por cluster/dia.</li>
+<li>Las features de levante se agregan desde contenedores activos/elegibles del cluster.</li>
+</ul>
+</section>
+<section id="features-historicas" class="level2" data-number="9">
+<h2 data-number="9" class="anchored" data-anchor-id="features-historicas"><span class="header-section-number">9</span> Features historicas</h2>
+<div class="callout callout-style-default callout-note callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+Tabla generada: <code>data/processed/modelo_cluster_dia/features_cluster_dia/</code>
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>Esta es la tabla principal para modelado. Extiende <code>base_cluster_dia</code> con features historicas de reclamos.</p>
+<p><strong>Objetivo:</strong> incorporar memoria temporal del cluster sin usar informacion del dia objetivo.</p>
+<p><strong>Fundamento:</strong> los reclamos tienden a tener persistencia espacial y temporal. Las ventanas historicas capturan esa persistencia, pero excluyen el dia actual para evitar leakage.</p>
+</div>
+</div>
+<p>Salida:</p>
+<ul>
+<li><code>data/processed/modelo_cluster_dia/features_cluster_dia/</code></li>
+<li><code>data/processed/modelo_cluster_dia/resumen_features/</code></li>
+</ul>
+<p>Funcion principal:</p>
+<ul>
+<li><code>construir_features_historicas_cluster_dia()</code></li>
+</ul>
+<p>Features creadas:</p>
+<ul>
+<li><code>n_reclamos_lag1</code></li>
+<li><code>tuvo_reclamo_lag1</code></li>
+<li>ventanas de 7 y 30 dias.</li>
+<li>dias validos de existencia del cluster por ventana.</li>
+<li><code>dias_desde_ultimo_reclamo</code></li>
+<li><code>sin_reclamo_previo_observado</code></li>
+<li><code>dias_historia_observada_cluster</code></li>
+<li><code>dias_desde_ultimo_reclamo_o_inicio</code></li>
+</ul>
+<p>Reglas:</p>
+<ul>
+<li>Todas las ventanas excluyen el dia objetivo.</li>
+<li>La existencia del cluster se define como <code>n_contenedores_activos &gt;= 1</code>.</li>
+<li><code>dias_historia_observada_cluster</code> cuenta dias previos donde el cluster existia.</li>
+<li><code>sin_reclamo_previo_observado</code> indica que no hay reclamos previos observados para ese cluster.</li>
+<li><code>dias_desde_ultimo_reclamo_o_inicio</code> usa <code>dias_desde_ultimo_reclamo</code> cuando existe reclamo previo; si no existe, usa <code>dias_historia_observada_cluster</code>.</li>
+</ul>
+<p>Esta separacion evita que el modelo trate igual a un cluster sin reclamo previo en su primer dia observado y a un cluster sin reclamo previo luego de muchos dias de historia.</p>
+</section>
+<section id="interpretacion-de-_pred-e-inferencia-de-actividad" class="level2" data-number="10">
+<h2 data-number="10" class="anchored" data-anchor-id="interpretacion-de-_pred-e-inferencia-de-actividad"><span class="header-section-number">10</span> Interpretacion de <code>_pred</code> e inferencia de actividad</h2>
+<p>Las variables con sufijo <code>_pred</code> y las variables de inferencia describen dos aspectos distintos de la construccion de features de levantes.</p>
+<section id="variables-con-sufijo-_pred" class="level3" data-number="10.1">
+<h3 data-number="10.1" class="anchored" data-anchor-id="variables-con-sufijo-_pred"><span class="header-section-number">10.1</span> Variables con sufijo <code>_pred</code></h3>
+<p>El sufijo <code>_pred</code> no indica que el valor haya sido estimado por el modelo. Indica que la variable fue calculada usando solo la informacion disponible al corte operativo de prediccion, actualmente <code>D 01:00</code>.</p>
+<p>Por ejemplo, para predecir el dia <code>D</code>, <code>fecha_ultimo_levante_pred</code> conserva el ultimo levante ocurrido hasta <code>D 01:00</code>. Si existe un levante posterior durante el mismo dia, no se incorpora porque todavia no era conocido al momento de predecir. A partir de ese corte se calculan los tiempos desde el ultimo levante y los ratios respecto al periodo teorico, que luego se agregan a nivel <code>cluster_id</code>/<code>dia</code> mediante minimo, media, mediana y maximo.</p>
+<p>Las versiones sin <code>_pred</code> pueden ser utiles para analisis retrospectivos, pero no deben usarse como features de un modelo operativo ejecutado al comienzo del dia. La finalidad de las versiones <code>_pred</code> es evitar leakage temporal.</p>
+</section>
+<section id="actividad-observada-e-inferida" class="level3" data-number="10.2">
+<h3 data-number="10.2" class="anchored" data-anchor-id="actividad-observada-e-inferida"><span class="header-section-number">10.2</span> Actividad observada e inferida</h3>
+<p>La inferencia de actividad no estima la fecha de un levante. Indica si el estado activo del contenedor fue observado explicitamente ese dia o si fue completado dentro de un intervalo considerado activo:</p>
+<ul>
+<li><code>observada</code>: existe un registro administrativo de estado para el contenedor ese dia;</li>
+<li><code>inferida</code>: el dia pertenece a un intervalo activo, pero no existe una observacion explicita de estado ese dia.</li>
+</ul>
+<p>La confiabilidad de esa inferencia se representa mediante variables como <code>dias_desde_ultima_observacion_estado</code>, <code>dias_hasta_siguiente_observacion_estado</code>, <code>dias_total_tramo_inferido_estado</code> y <code>actividad_inferida_lejana</code>. Estas variables no forman una probabilidad ni un score formal de confianza: son indicadores de la distancia y extension de la imputacion. En general, una actividad observada tiene evidencia mas fuerte que una actividad inferida, y una inferencia se considera mas debil cuanto mas lejos queda de la ultima observacion o cuanto mas largo es el tramo inferido.</p>
+<p>La regla vigente refleja esta diferencia mediante <code>contenedor_dia_elegible_modelo</code>: se admite un contenedor activo con estado observado, o con estado inferido cuando han pasado como maximo 8 dias desde la ultima observacion y el tramo inferido total no supera 15 dias. A nivel cluster, esta calidad de informacion tambien se resume en variables como <code>n_contenedores_observados</code>, <code>n_contenedores_inferidos</code>, <code>n_contenedores_inferencia_lejana</code>, <code>mean_dias_total_tramo_inferido_estado</code> y <code>max_dias_total_tramo_inferido_estado</code>.</p>
+<p>En sintesis, <code>_pred</code> controla <strong>que informacion temporal podia conocer el modelo</strong>, mientras que la inferencia de actividad describe <strong>si el estado del contenedor fue observado o imputado y cuan extensa es esa imputacion</strong>. Las variables <code>_pred</code> se construyen a partir de <code>fecha_levante</code>; la inferencia de actividad se construye principalmente a partir de los registros de estado y <code>fecha_fact</code>.</p>
+</section>
+</section>
+
+</main>
+<!-- /main column -->
+<script id="quarto-html-after-body" type="application/javascript">
+window.document.addEventListener("DOMContentLoaded", function (event) {
+  const toggleBodyColorMode = (bsSheetEl) => {
+    const mode = bsSheetEl.getAttribute("data-mode");
+    const bodyEl = window.document.querySelector("body");
+    if (mode === "dark") {
+      bodyEl.classList.add("quarto-dark");
+      bodyEl.classList.remove("quarto-light");
+    } else {
+      bodyEl.classList.add("quarto-light");
+      bodyEl.classList.remove("quarto-dark");
+    }
+  }
+  const toggleBodyColorPrimary = () => {
+    const bsSheetEl = window.document.querySelector("link#quarto-bootstrap");
+    if (bsSheetEl) {
+      toggleBodyColorMode(bsSheetEl);
+    }
+  }
+  toggleBodyColorPrimary();  
+  const icon = "";
+  const anchorJS = new window.AnchorJS();
+  anchorJS.options = {
+    placement: 'right',
+    icon: icon
+  };
+  anchorJS.add('.anchored');
+  const isCodeAnnotation = (el) => {
+    for (const clz of el.classList) {
+      if (clz.startsWith('code-annotation-')) {                     
+        return true;
+      }
+    }
+    return false;
+  }
+  const clipboard = new window.ClipboardJS('.code-copy-button', {
+    text: function(trigger) {
+      const codeEl = trigger.previousElementSibling.cloneNode(true);
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+    }
+  });
+  clipboard.on('success', function(e) {
+    // button target
+    const button = e.trigger;
+    // don't keep focus
+    button.blur();
+    // flash "checked"
+    button.classList.add('code-copy-button-checked');
+    var currentTitle = button.getAttribute("title");
+    button.setAttribute("title", "Copied!");
+    let tooltip;
+    if (window.bootstrap) {
+      button.setAttribute("data-bs-toggle", "tooltip");
+      button.setAttribute("data-bs-placement", "left");
+      button.setAttribute("data-bs-title", "Copied!");
+      tooltip = new bootstrap.Tooltip(button, 
+        { trigger: "manual", 
+          customClass: "code-copy-button-tooltip",
+          offset: [0, -8]});
+      tooltip.show();    
+    }
+    setTimeout(function() {
+      if (tooltip) {
+        tooltip.hide();
+        button.removeAttribute("data-bs-title");
+        button.removeAttribute("data-bs-toggle");
+        button.removeAttribute("data-bs-placement");
+      }
+      button.setAttribute("title", currentTitle);
+      button.classList.remove('code-copy-button-checked');
+    }, 1000);
+    // clear code selection
+    e.clearSelection();
+  });
+  function tippyHover(el, contentFn) {
+    const config = {
+      allowHTML: true,
+      content: contentFn,
+      maxWidth: 500,
+      delay: 100,
+      arrow: false,
+      appendTo: function(el) {
+          return el.parentElement;
+      },
+      interactive: true,
+      interactiveBorder: 10,
+      theme: 'quarto',
+      placement: 'bottom-start'
+    };
+    window.tippy(el, config); 
+  }
+  const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+  for (var i=0; i<noterefs.length; i++) {
+    const ref = noterefs[i];
+    tippyHover(ref, function() {
+      // use id or data attribute instead here
+      let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+      try { href = new URL(href).hash; } catch {}
+      const id = href.replace(/^#\/?/, "");
+      const note = window.document.getElementById(id);
+      return note.innerHTML;
+    });
+  }
+      let selectedAnnoteEl;
+      const selectorForAnnotation = ( cell, annotation) => {
+        let cellAttr = 'data-code-cell="' + cell + '"';
+        let lineAttr = 'data-code-annotation="' +  annotation + '"';
+        const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+        return selector;
+      }
+      const selectCodeLines = (annoteEl) => {
+        const doc = window.document;
+        const targetCell = annoteEl.getAttribute("data-target-cell");
+        const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+        const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+        const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+        const lineIds = lines.map((line) => {
+          return targetCell + "-" + line;
+        })
+        let top = null;
+        let height = null;
+        let parent = null;
+        if (lineIds.length > 0) {
+            //compute the position of the single el (top and bottom and make a div)
+            const el = window.document.getElementById(lineIds[0]);
+            top = el.offsetTop;
+            height = el.offsetHeight;
+            parent = el.parentElement.parentElement;
+          if (lineIds.length > 1) {
+            const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+            const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+            height = bottom - top;
+          }
+          if (top !== null && height !== null && parent !== null) {
+            // cook up a div (if necessary) and position it 
+            let div = window.document.getElementById("code-annotation-line-highlight");
+            if (div === null) {
+              div = window.document.createElement("div");
+              div.setAttribute("id", "code-annotation-line-highlight");
+              div.style.position = 'absolute';
+              parent.appendChild(div);
+            }
+            div.style.top = top - 2 + "px";
+            div.style.height = height + 4 + "px";
+            let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+            if (gutterDiv === null) {
+              gutterDiv = window.document.createElement("div");
+              gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+              gutterDiv.style.position = 'absolute';
+              const codeCell = window.document.getElementById(targetCell);
+              const gutter = codeCell.querySelector('.code-annotation-gutter');
+              gutter.appendChild(gutterDiv);
+            }
+            gutterDiv.style.top = top - 2 + "px";
+            gutterDiv.style.height = height + 4 + "px";
+          }
+          selectedAnnoteEl = annoteEl;
+        }
+      };
+      const unselectCodeLines = () => {
+        const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+        elementsIds.forEach((elId) => {
+          const div = window.document.getElementById(elId);
+          if (div) {
+            div.remove();
+          }
+        });
+        selectedAnnoteEl = undefined;
+      };
+      // Attach click handler to the DT
+      const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+      for (const annoteDlNode of annoteDls) {
+        annoteDlNode.addEventListener('click', (event) => {
+          const clickedEl = event.target;
+          if (clickedEl !== selectedAnnoteEl) {
+            unselectCodeLines();
+            const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+            if (activeEl) {
+              activeEl.classList.remove('code-annotation-active');
+            }
+            selectCodeLines(clickedEl);
+            clickedEl.classList.add('code-annotation-active');
+          } else {
+            // Unselect the line
+            unselectCodeLines();
+            clickedEl.classList.remove('code-annotation-active');
+          }
+        });
+      }
+  const findCites = (el) => {
+    const parentEl = el.parentElement;
+    if (parentEl) {
+      const cites = parentEl.dataset.cites;
+      if (cites) {
+        return {
+          el,
+          cites: cites.split(' ')
+        };
+      } else {
+        return findCites(el.parentElement)
+      }
+    } else {
+      return undefined;
+    }
+  };
+  var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+  for (var i=0; i<bibliorefs.length; i++) {
+    const ref = bibliorefs[i];
+    const citeInfo = findCites(ref);
+    if (citeInfo) {
+      tippyHover(citeInfo.el, function() {
+        var popup = window.document.createElement('div');
+        citeInfo.cites.forEach(function(cite) {
+          var citeDiv = window.document.createElement('div');
+          citeDiv.classList.add('hanging-indent');
+          citeDiv.classList.add('csl-entry');
+          var biblioDiv = window.document.getElementById('ref-' + cite);
+          if (biblioDiv) {
+            citeDiv.innerHTML = biblioDiv.innerHTML;
+          }
+          popup.appendChild(citeDiv);
+        });
+        return popup.innerHTML;
+      });
+    }
+  }
+});
+</script>
+</div> <!-- /content -->
+
+
+
+</body></html>

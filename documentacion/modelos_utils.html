@@ -1,0 +1,636 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.3.433">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+
+<title>Funciones utilitarias de modelos</title>
+<style>
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+/* CSS for syntax highlighting */
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+  }
+pre.numberSource { margin-left: 3em;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+</style>
+
+
+<script src="modelos_utils_files/libs/clipboard/clipboard.min.js"></script>
+<script src="modelos_utils_files/libs/quarto-html/quarto.js"></script>
+<script src="modelos_utils_files/libs/quarto-html/popper.min.js"></script>
+<script src="modelos_utils_files/libs/quarto-html/tippy.umd.min.js"></script>
+<script src="modelos_utils_files/libs/quarto-html/anchor.min.js"></script>
+<link href="modelos_utils_files/libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="modelos_utils_files/libs/quarto-html/quarto-syntax-highlighting.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="modelos_utils_files/libs/bootstrap/bootstrap.min.js"></script>
+<link href="modelos_utils_files/libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="modelos_utils_files/libs/bootstrap/bootstrap.min.css" rel="stylesheet" id="quarto-bootstrap" data-mode="light">
+
+
+</head>
+
+<body>
+
+<div id="quarto-content" class="page-columns page-rows-contents page-layout-article">
+<div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+  <nav id="TOC" role="doc-toc" class="toc-active">
+    <h2 id="toc-title">Table of contents</h2>
+   
+  <ul>
+  <li><a href="#objetivo" id="toc-objetivo" class="nav-link active" data-scroll-target="#objetivo"><span class="header-section-number">1</span> Objetivo</a></li>
+  <li><a href="#funciones-de-métricas" id="toc-funciones-de-métricas" class="nav-link" data-scroll-target="#funciones-de-métricas"><span class="header-section-number">2</span> Funciones de métricas</a>
+  <ul class="collapse">
+  <li><a href="#auc_binaria" id="toc-auc_binaria" class="nav-link" data-scroll-target="#auc_binaria"><span class="header-section-number">2.1</span> <code>auc_binaria()</code></a></li>
+  <li><a href="#logloss_binaria" id="toc-logloss_binaria" class="nav-link" data-scroll-target="#logloss_binaria"><span class="header-section-number">2.2</span> <code>logloss_binaria()</code></a></li>
+  </ul></li>
+  <li><a href="#funciones-de-priorizacion" id="toc-funciones-de-priorizacion" class="nav-link" data-scroll-target="#funciones-de-priorizacion"><span class="header-section-number">3</span> Funciones de priorizacion</a>
+  <ul class="collapse">
+  <li><a href="#lift_top" id="toc-lift_top" class="nav-link" data-scroll-target="#lift_top"><span class="header-section-number">3.1</span> <code>lift_top()</code></a></li>
+  <li><a href="#lift_diario_top" id="toc-lift_diario_top" class="nav-link" data-scroll-target="#lift_diario_top"><span class="header-section-number">3.2</span> <code>lift_diario_top()</code></a></li>
+  </ul></li>
+  <li><a href="#funciones-de-calibración" id="toc-funciones-de-calibración" class="nav-link" data-scroll-target="#funciones-de-calibración"><span class="header-section-number">4</span> Funciones de calibración</a>
+  <ul class="collapse">
+  <li><a href="#calibracion_deciles" id="toc-calibracion_deciles" class="nav-link" data-scroll-target="#calibracion_deciles"><span class="header-section-number">4.1</span> <code>calibracion_deciles()</code></a></li>
+  </ul></li>
+  <li><a href="#funciones-de-gráficos" id="toc-funciones-de-gráficos" class="nav-link" data-scroll-target="#funciones-de-gráficos"><span class="header-section-number">5</span> Funciones de gráficos</a>
+  <ul class="collapse">
+  <li><a href="#graficar_capture_diario" id="toc-graficar_capture_diario" class="nav-link" data-scroll-target="#graficar_capture_diario"><span class="header-section-number">5.1</span> <code>graficar_capture_diario()</code></a></li>
+  </ul></li>
+  <li><a href="#funciones-de-preparacion" id="toc-funciones-de-preparacion" class="nav-link" data-scroll-target="#funciones-de-preparacion"><span class="header-section-number">6</span> Funciones de preparacion</a>
+  <ul class="collapse">
+  <li><a href="#preparar_matriz" id="toc-preparar_matriz" class="nav-link" data-scroll-target="#preparar_matriz"><span class="header-section-number">6.1</span> <code>preparar_matriz()</code></a></li>
+  </ul></li>
+  <li><a href="#uso-dentro-del-modelo-logístico" id="toc-uso-dentro-del-modelo-logístico" class="nav-link" data-scroll-target="#uso-dentro-del-modelo-logístico"><span class="header-section-number">7</span> Uso dentro del modelo logístico</a></li>
+  <li><a href="#criterio-para-futuros-modelos" id="toc-criterio-para-futuros-modelos" class="nav-link" data-scroll-target="#criterio-para-futuros-modelos"><span class="header-section-number">8</span> Criterio para futuros modelos</a></li>
+  </ul>
+</nav>
+</div>
+<main class="content" id="quarto-document-content">
+
+<header id="title-block-header" class="quarto-title-block default">
+<div class="quarto-title">
+<h1 class="title">Funciones utilitarias de modelos</h1>
+</div>
+
+
+
+<div class="quarto-title-meta">
+
+    
+  
+    
+  </div>
+  
+
+</header>
+
+<section id="objetivo" class="level2" data-number="1">
+<h2 data-number="1" class="anchored" data-anchor-id="objetivo"><span class="header-section-number">1</span> Objetivo</h2>
+<p>Documentar las funciones compartidas de modelado definidas en:</p>
+<ul>
+<li><code>funciones/modelos_utils.R</code></li>
+</ul>
+<p>Estas funciones separan la logica general de preparacion, evaluación y visualizacion de modelos del código específico de cada algoritmo.</p>
+<p>El objetivo es que modelos como regresion logística, Random Forest o XGBoost puedan usar las mismas reglas de preparacion y las mismas métricas, haciendo comparables los resultados.</p>
+</section>
+<section id="funciones-de-métricas" class="level2" data-number="2">
+<h2 data-number="2" class="anchored" data-anchor-id="funciones-de-métricas"><span class="header-section-number">2</span> Funciones de métricas</h2>
+<section id="auc_binaria" class="level3" data-number="2.1">
+<h3 data-number="2.1" class="anchored" data-anchor-id="auc_binaria"><span class="header-section-number">2.1</span> <code>auc_binaria()</code></h3>
+<p>Calcula el AUC para un problema de clasificación binaria.</p>
+<p>Uso esperado:</p>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb1"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="fu">auc_binaria</span>(y, score)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+<p>Argumentos:</p>
+<ul>
+<li><code>y</code>: vector binario con valores <code>0/1</code>, <code>FALSE/TRUE</code> o equivalentes.</li>
+<li><code>score</code>: vector numerico con el puntaje o probabilidad predicha por el modelo.</li>
+</ul>
+<p>Salida:</p>
+<ul>
+<li>Un número entre 0 y 1.</li>
+<li><code>NA_real_</code> si no hay casos positivos o no hay casos negativos.</li>
+</ul>
+<p>Interpretación:</p>
+<ul>
+<li><code>0.5</code>: ordenamiento similar al azar.</li>
+<li>Mayor que <code>0.5</code>: el modelo tiende a asignar mayor score a los casos positivos.</li>
+<li><code>1</code>: separacion perfecta entre positivos y negativos.</li>
+</ul>
+<p>Fundamento:</p>
+<p>El AUC mide la capacidad del modelo para ordenar correctamente los casos según riesgo. Es útil cuando interesa priorizar clusters con mayor probabilidad de reclamo.</p>
+</section>
+<section id="logloss_binaria" class="level3" data-number="2.2">
+<h3 data-number="2.2" class="anchored" data-anchor-id="logloss_binaria"><span class="header-section-number">2.2</span> <code>logloss_binaria()</code></h3>
+<p>Calcula la logloss para clasificación binaria.</p>
+<p>Uso esperado:</p>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb2"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="fu">logloss_binaria</span>(y, p)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+<p>Argumentos:</p>
+<ul>
+<li><code>y</code>: vector binario con el target observado.</li>
+<li><code>p</code>: vector numerico con probabilidades predichas.</li>
+</ul>
+<p>Salida:</p>
+<ul>
+<li>Un valor numerico de logloss.</li>
+</ul>
+<p>Interpretación:</p>
+<ul>
+<li>Valores menores indican mejores probabilidades.</li>
+<li>Penaliza con fuerza predicciones muy seguras pero equivocadas.</li>
+</ul>
+<p>Fundamento:</p>
+<p>La logloss evalua la calidad probabilistica del modelo, no solo su capacidad de ranking. Esto es importante si las probabilidades se usan para calibrar umbrales operativos.</p>
+</section>
+</section>
+<section id="funciones-de-priorizacion" class="level2" data-number="3">
+<h2 data-number="3" class="anchored" data-anchor-id="funciones-de-priorizacion"><span class="header-section-number">3</span> Funciones de priorizacion</h2>
+<section id="lift_top" class="level3" data-number="3.1">
+<h3 data-number="3.1" class="anchored" data-anchor-id="lift_top"><span class="header-section-number">3.1</span> <code>lift_top()</code></h3>
+<p>Calcula precisión, capture rate y lift para los clusters/día con mayor score.</p>
+<p>Uso esperado:</p>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb3"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="fu">lift_top</span>(</span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>  dt,</span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">score_col =</span> <span class="st">"pred_prob"</span>,</span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">y_col =</span> <span class="st">"target"</span>,</span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">cortes =</span> <span class="fu">c</span>(<span class="fl">0.01</span>, <span class="fl">0.05</span>, <span class="fl">0.10</span>, <span class="fl">0.20</span>)</span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+<p>Argumentos:</p>
+<ul>
+<li><code>dt</code>: <code>data.table</code> con predicciones y target observado.</li>
+<li><code>score_col</code>: nombre de la columna con el score o probabilidad predicha.</li>
+<li><code>y_col</code>: nombre de la columna con el target binario observado.</li>
+<li><code>cortes</code>: proporciones superiores a evaluar. Por defecto: 1%, 5%, 10% y 20%.</li>
+</ul>
+<p>Salida:</p>
+<p>Una tabla con:</p>
+<ul>
+<li><code>top_pct</code>: corte evaluado.</li>
+<li><code>n</code>: cantidad de filas priorizadas.</li>
+<li><code>positivos</code>: cantidad de reclamos observados dentro del grupo priorizado.</li>
+<li><code>precision</code>: proporcion de positivos dentro del grupo priorizado.</li>
+<li><code>capture_rate</code>: proporcion del total de positivos capturada por el grupo priorizado.</li>
+<li><code>lift</code>: precisión del grupo priorizado dividida por la prevalencia general.</li>
+</ul>
+<p>Fundamento:</p>
+<p>Esta función responde una pregunta operativa: si se atiende solo el grupo de mayor riesgo, cuantos reclamos se capturan frente a una selección al azar.</p>
+</section>
+<section id="lift_diario_top" class="level3" data-number="3.2">
+<h3 data-number="3.2" class="anchored" data-anchor-id="lift_diario_top"><span class="header-section-number">3.2</span> <code>lift_diario_top()</code></h3>
+<p>Calcula el lift y capture rate por día para distintos cortes de riesgo.</p>
+<p>Uso esperado:</p>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb4"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="fu">lift_diario_top</span>(</span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>  dt,</span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">score_col =</span> <span class="st">"pred_prob"</span>,</span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">y_col =</span> <span class="st">"target"</span>,</span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">cortes =</span> <span class="fu">c</span>(<span class="fl">0.01</span>, <span class="fl">0.05</span>, <span class="fl">0.10</span>, <span class="fl">0.20</span>)</span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+<p>Argumentos:</p>
+<ul>
+<li><code>dt</code>: <code>data.table</code> con predicciones, target observado y columna <code>dia</code>.</li>
+<li><code>score_col</code>: columna con score o probabilidad predicha.</li>
+<li><code>y_col</code>: columna con target binario observado.</li>
+<li><code>cortes</code>: proporciones superiores a evaluar por día.</li>
+</ul>
+<p>Salida:</p>
+<p>Una tabla por <code>dia</code> y <code>top_pct</code> con:</p>
+<ul>
+<li>total de filas del día;</li>
+<li>positivos del día;</li>
+<li>prevalencia diaria;</li>
+<li>cantidad priorizada;</li>
+<li>positivos capturados;</li>
+<li>precisión;</li>
+<li>capture rate;</li>
+<li>lift;</li>
+<li>capture rate esperado por azar.</li>
+</ul>
+<p>Fundamento:</p>
+<p>El lift global puede ocultar variabilidad diaria. Esta función permite evaluar si el modelo mantiene utilidad operativa día a día.</p>
+</section>
+</section>
+<section id="funciones-de-calibración" class="level2" data-number="4">
+<h2 data-number="4" class="anchored" data-anchor-id="funciones-de-calibración"><span class="header-section-number">4</span> Funciones de calibración</h2>
+<section id="calibracion_deciles" class="level3" data-number="4.1">
+<h3 data-number="4.1" class="anchored" data-anchor-id="calibracion_deciles"><span class="header-section-number">4.1</span> <code>calibracion_deciles()</code></h3>
+<p>Agrupa las predicciones en deciles de riesgo y compara probabilidad predicha contra frecuencia observada.</p>
+<p>Uso esperado:</p>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb5"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="fu">calibracion_deciles</span>(</span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>  dt,</span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">score_col =</span> <span class="st">"pred_prob"</span>,</span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">y_col =</span> <span class="st">"target"</span></span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+<p>Argumentos:</p>
+<ul>
+<li><code>dt</code>: <code>data.table</code> con predicciones y target observado.</li>
+<li><code>score_col</code>: columna con probabilidad predicha.</li>
+<li><code>y_col</code>: columna con target binario observado.</li>
+</ul>
+<p>Salida:</p>
+<p>Una tabla por decil con:</p>
+<ul>
+<li><code>decil</code>: decil de riesgo, ordenado de mayor a menor score.</li>
+<li><code>n</code>: cantidad de observaciones.</li>
+<li><code>pred_media</code>: probabilidad promedio predicha.</li>
+<li><code>obs_rate</code>: tasa observada de reclamos.</li>
+<li><code>positivos</code>: cantidad de casos positivos.</li>
+</ul>
+<p>Fundamento:</p>
+<p>Permite revisar si las probabilidades del modelo están calibradas. Un modelo puede ordenar bien pero asignar probabilidades demasiado altas o demasiado bajas.</p>
+</section>
+</section>
+<section id="funciones-de-gráficos" class="level2" data-number="5">
+<h2 data-number="5" class="anchored" data-anchor-id="funciones-de-gráficos"><span class="header-section-number">5</span> Funciones de gráficos</h2>
+<section id="graficar_capture_diario" class="level3" data-number="5.1">
+<h3 data-number="5.1" class="anchored" data-anchor-id="graficar_capture_diario"><span class="header-section-number">5.1</span> <code>graficar_capture_diario()</code></h3>
+<p>Genera un histograma del capture rate diario por corte de riesgo.</p>
+<p>Uso esperado:</p>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb6"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="fu">graficar_capture_diario</span>(</span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>  lift_diario,</span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>  path_png</span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+<p>Argumentos:</p>
+<ul>
+<li><code>lift_diario</code>: salida de <code>lift_diario_top()</code>.</li>
+<li><code>path_png</code>: ruta donde guardar el gráfico en formato PNG.</li>
+</ul>
+<p>Salida:</p>
+<ul>
+<li>Guarda un archivo <code>.png</code>.</li>
+<li>Devuelve <code>TRUE</code> invisiblemente si pudo generarlo.</li>
+<li>Devuelve <code>FALSE</code> invisiblemente si <code>ggplot2</code> no está instalado.</li>
+</ul>
+<p>Fundamento:</p>
+<p>El gráfico muestra la distribución diaria del capture rate. La linea roja representa el capture rate esperado si se seleccionara al azar el mismo porcentaje de clusters/día.</p>
+</section>
+</section>
+<section id="funciones-de-preparacion" class="level2" data-number="6">
+<h2 data-number="6" class="anchored" data-anchor-id="funciones-de-preparacion"><span class="header-section-number">6</span> Funciones de preparacion</h2>
+<section id="preparar_matriz" class="level3" data-number="6.1">
+<h3 data-number="6.1" class="anchored" data-anchor-id="preparar_matriz"><span class="header-section-number">6.1</span> <code>preparar_matriz()</code></h3>
+<p>Prepara una matriz numerica para entrenamiento o predicción.</p>
+<p>Uso esperado:</p>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb7"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a>mat_train <span class="ot">&lt;-</span> <span class="fu">preparar_matriz</span>(train, features_modelo)</span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>mat_valid <span class="ot">&lt;-</span> <span class="fu">preparar_matriz</span>(valid, features_modelo, <span class="at">prep =</span> mat_train<span class="sc">$</span>prep)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+<p>Argumentos:</p>
+<ul>
+<li><code>dt</code>: <code>data.table</code> con las columnas predictoras.</li>
+<li><code>features</code>: vector de nombres de columnas a usar como predictores.</li>
+<li><code>prep</code>: objeto de preparacion aprendido previamente. Si es <code>NULL</code>, se calcula desde <code>dt</code>.</li>
+<li><code>no_agregar_na_features</code>: vector opcional con nombres de columnas para las que no se deben crear indicadores <code>_na</code> automaticos.</li>
+</ul>
+<p>Salida:</p>
+<p>Una lista con:</p>
+<ul>
+<li><code>x</code>: matriz numerica lista para usar en un modelo.</li>
+<li><code>prep</code>: parámetros de preparacion aprendidos.</li>
+</ul>
+<p>Transformaciones:</p>
+<ul>
+<li>Convierte columnas logicas a <code>0/1</code>.</li>
+<li>Convierte columnas enteras a numericas.</li>
+<li>Calcula mediana para imputar faltantes.</li>
+<li>Crea indicadores <code>_na</code> para columnas que tienen faltantes en entrenamiento.</li>
+<li>Omite esos indicadores para las columnas listadas en <code>no_agregar_na_features</code>.</li>
+<li>Estandariza cada predictor usando media y desvio del conjunto de entrenamiento.</li>
+</ul>
+<p>Nota de modelado:</p>
+<p>Los indicadores <code>_na</code> son útiles cuando el faltante tiene significado operativo claro. Cuando el faltante mezcla situaciones distintas, conviene crear variables explicitas antes de llamar a <code>preparar_matriz()</code>.</p>
+<p>Ejemplo:</p>
+<ul>
+<li><code>dias_desde_ultimo_reclamo</code> queda en <code>NA</code> cuando no hay reclamo previo observado.</li>
+<li>Ese <code>NA</code> puede ocurrir por borde temporal al inicio de la serie o porque el cluster lleva muchos días observado sin reclamos.</li>
+<li>Por eso el modelo logístico usa variables explicitas: <code>sin_reclamo_previo_observado</code>, <code>dias_historia_observada_cluster</code> y <code>dias_desde_ultimo_reclamo_o_inicio</code>.</li>
+<li>Para las variables predictivas de levante y ratios, el modelo logístico usa <code>no_agregar_na_features</code> para imputar faltantes sin crear indicadores <code>_na</code>, porque esos faltantes estaban concentrados al inicio del historial disponible.</li>
+</ul>
+<p>Regla importante:</p>
+<p>El objeto <code>prep</code> debe aprenderse solo con entrenamiento y reutilizarse en validación o predicción. Esto evita leakage desde los datos de validación hacia el entrenamiento.</p>
+<p>Fundamento:</p>
+<p>Centralizar esta preparacion permite que distintos modelos usen exactamente las mismas reglas de imputacion y transformacion, haciendo comparables las métricas entre algoritmos.</p>
+</section>
+</section>
+<section id="uso-dentro-del-modelo-logístico" class="level2" data-number="7">
+<h2 data-number="7" class="anchored" data-anchor-id="uso-dentro-del-modelo-logístico"><span class="header-section-number">7</span> Uso dentro del modelo logístico</h2>
+<p>El script:</p>
+<ul>
+<li><code>scripts/modelo_logistico_cluster_dia.R</code></li>
+</ul>
+<p>carga estas funciones con:</p>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb8"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="fu">source</span>(<span class="st">"funciones/modelos_utils.R"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+<p>Luego usa:</p>
+<ul>
+<li><code>preparar_matriz()</code> para construir <code>x_train</code> y <code>x_valid</code>;</li>
+<li><code>auc_binaria()</code> y <code>logloss_binaria()</code> para métricas generales;</li>
+<li><code>lift_top()</code> para lift global de validación;</li>
+<li><code>lift_diario_top()</code> para lift diario;</li>
+<li><code>calibracion_deciles()</code> para calibración por decil;</li>
+<li><code>graficar_capture_diario()</code> para la figura de capture rate diario.</li>
+</ul>
+</section>
+<section id="criterio-para-futuros-modelos" class="level2" data-number="8">
+<h2 data-number="8" class="anchored" data-anchor-id="criterio-para-futuros-modelos"><span class="header-section-number">8</span> Criterio para futuros modelos</h2>
+<p>Cuando se agregue un nuevo modelo, conviene mantener esta separacion:</p>
+<ul>
+<li>El script del modelo define algoritmo, hiperparametros y salidas especificas.</li>
+<li><code>funciones/modelos_utils.R</code> contiene preparacion, métricas y evaluaciones compartidas.</li>
+</ul>
+<p>Esto evita duplicar logica y reduce el riesgo de que dos modelos sean comparados con reglas distintas.</p>
+</section>
+
+</main>
+<!-- /main column -->
+<script id="quarto-html-after-body" type="application/javascript">
+window.document.addEventListener("DOMContentLoaded", function (event) {
+  const toggleBodyColorMode = (bsSheetEl) => {
+    const mode = bsSheetEl.getAttribute("data-mode");
+    const bodyEl = window.document.querySelector("body");
+    if (mode === "dark") {
+      bodyEl.classList.add("quarto-dark");
+      bodyEl.classList.remove("quarto-light");
+    } else {
+      bodyEl.classList.add("quarto-light");
+      bodyEl.classList.remove("quarto-dark");
+    }
+  }
+  const toggleBodyColorPrimary = () => {
+    const bsSheetEl = window.document.querySelector("link#quarto-bootstrap");
+    if (bsSheetEl) {
+      toggleBodyColorMode(bsSheetEl);
+    }
+  }
+  toggleBodyColorPrimary();  
+  const icon = "";
+  const anchorJS = new window.AnchorJS();
+  anchorJS.options = {
+    placement: 'right',
+    icon: icon
+  };
+  anchorJS.add('.anchored');
+  const isCodeAnnotation = (el) => {
+    for (const clz of el.classList) {
+      if (clz.startsWith('code-annotation-')) {                     
+        return true;
+      }
+    }
+    return false;
+  }
+  const clipboard = new window.ClipboardJS('.code-copy-button', {
+    text: function(trigger) {
+      const codeEl = trigger.previousElementSibling.cloneNode(true);
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+    }
+  });
+  clipboard.on('success', function(e) {
+    // button target
+    const button = e.trigger;
+    // don't keep focus
+    button.blur();
+    // flash "checked"
+    button.classList.add('code-copy-button-checked');
+    var currentTitle = button.getAttribute("title");
+    button.setAttribute("title", "Copied!");
+    let tooltip;
+    if (window.bootstrap) {
+      button.setAttribute("data-bs-toggle", "tooltip");
+      button.setAttribute("data-bs-placement", "left");
+      button.setAttribute("data-bs-title", "Copied!");
+      tooltip = new bootstrap.Tooltip(button, 
+        { trigger: "manual", 
+          customClass: "code-copy-button-tooltip",
+          offset: [0, -8]});
+      tooltip.show();    
+    }
+    setTimeout(function() {
+      if (tooltip) {
+        tooltip.hide();
+        button.removeAttribute("data-bs-title");
+        button.removeAttribute("data-bs-toggle");
+        button.removeAttribute("data-bs-placement");
+      }
+      button.setAttribute("title", currentTitle);
+      button.classList.remove('code-copy-button-checked');
+    }, 1000);
+    // clear code selection
+    e.clearSelection();
+  });
+  function tippyHover(el, contentFn) {
+    const config = {
+      allowHTML: true,
+      content: contentFn,
+      maxWidth: 500,
+      delay: 100,
+      arrow: false,
+      appendTo: function(el) {
+          return el.parentElement;
+      },
+      interactive: true,
+      interactiveBorder: 10,
+      theme: 'quarto',
+      placement: 'bottom-start'
+    };
+    window.tippy(el, config); 
+  }
+  const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+  for (var i=0; i<noterefs.length; i++) {
+    const ref = noterefs[i];
+    tippyHover(ref, function() {
+      // use id or data attribute instead here
+      let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+      try { href = new URL(href).hash; } catch {}
+      const id = href.replace(/^#\/?/, "");
+      const note = window.document.getElementById(id);
+      return note.innerHTML;
+    });
+  }
+      let selectedAnnoteEl;
+      const selectorForAnnotation = ( cell, annotation) => {
+        let cellAttr = 'data-code-cell="' + cell + '"';
+        let lineAttr = 'data-code-annotation="' +  annotation + '"';
+        const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+        return selector;
+      }
+      const selectCodeLines = (annoteEl) => {
+        const doc = window.document;
+        const targetCell = annoteEl.getAttribute("data-target-cell");
+        const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+        const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+        const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+        const lineIds = lines.map((line) => {
+          return targetCell + "-" + line;
+        })
+        let top = null;
+        let height = null;
+        let parent = null;
+        if (lineIds.length > 0) {
+            //compute the position of the single el (top and bottom and make a div)
+            const el = window.document.getElementById(lineIds[0]);
+            top = el.offsetTop;
+            height = el.offsetHeight;
+            parent = el.parentElement.parentElement;
+          if (lineIds.length > 1) {
+            const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+            const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+            height = bottom - top;
+          }
+          if (top !== null && height !== null && parent !== null) {
+            // cook up a div (if necessary) and position it 
+            let div = window.document.getElementById("code-annotation-line-highlight");
+            if (div === null) {
+              div = window.document.createElement("div");
+              div.setAttribute("id", "code-annotation-line-highlight");
+              div.style.position = 'absolute';
+              parent.appendChild(div);
+            }
+            div.style.top = top - 2 + "px";
+            div.style.height = height + 4 + "px";
+            let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+            if (gutterDiv === null) {
+              gutterDiv = window.document.createElement("div");
+              gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+              gutterDiv.style.position = 'absolute';
+              const codeCell = window.document.getElementById(targetCell);
+              const gutter = codeCell.querySelector('.code-annotation-gutter');
+              gutter.appendChild(gutterDiv);
+            }
+            gutterDiv.style.top = top - 2 + "px";
+            gutterDiv.style.height = height + 4 + "px";
+          }
+          selectedAnnoteEl = annoteEl;
+        }
+      };
+      const unselectCodeLines = () => {
+        const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+        elementsIds.forEach((elId) => {
+          const div = window.document.getElementById(elId);
+          if (div) {
+            div.remove();
+          }
+        });
+        selectedAnnoteEl = undefined;
+      };
+      // Attach click handler to the DT
+      const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+      for (const annoteDlNode of annoteDls) {
+        annoteDlNode.addEventListener('click', (event) => {
+          const clickedEl = event.target;
+          if (clickedEl !== selectedAnnoteEl) {
+            unselectCodeLines();
+            const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+            if (activeEl) {
+              activeEl.classList.remove('code-annotation-active');
+            }
+            selectCodeLines(clickedEl);
+            clickedEl.classList.add('code-annotation-active');
+          } else {
+            // Unselect the line
+            unselectCodeLines();
+            clickedEl.classList.remove('code-annotation-active');
+          }
+        });
+      }
+  const findCites = (el) => {
+    const parentEl = el.parentElement;
+    if (parentEl) {
+      const cites = parentEl.dataset.cites;
+      if (cites) {
+        return {
+          el,
+          cites: cites.split(' ')
+        };
+      } else {
+        return findCites(el.parentElement)
+      }
+    } else {
+      return undefined;
+    }
+  };
+  var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+  for (var i=0; i<bibliorefs.length; i++) {
+    const ref = bibliorefs[i];
+    const citeInfo = findCites(ref);
+    if (citeInfo) {
+      tippyHover(citeInfo.el, function() {
+        var popup = window.document.createElement('div');
+        citeInfo.cites.forEach(function(cite) {
+          var citeDiv = window.document.createElement('div');
+          citeDiv.classList.add('hanging-indent');
+          citeDiv.classList.add('csl-entry');
+          var biblioDiv = window.document.getElementById('ref-' + cite);
+          if (biblioDiv) {
+            citeDiv.innerHTML = biblioDiv.innerHTML;
+          }
+          popup.appendChild(citeDiv);
+        });
+        return popup.innerHTML;
+      });
+    }
+  }
+});
+</script>
+</div> <!-- /content -->
+
+
+
+</body></html>

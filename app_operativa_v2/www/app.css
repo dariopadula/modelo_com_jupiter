@@ -1,0 +1,321 @@
+:root {
+  --ink: #17212b;
+  --muted: #687681;
+  --border: #dce2e7;
+  --surface: #ffffff;
+  --accent: #087f8c;
+  --com: #1769aa;
+  --zl: #d95f02;
+}
+
+body {
+  background: #f4f6f8;
+  color: var(--ink);
+}
+
+.navbar {
+  min-height: 44px;
+  border-bottom: 1px solid var(--border);
+}
+
+.operation-page {
+  height: calc(100vh - 50px);
+  padding: 8px 12px 10px;
+}
+
+.operation-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 42px;
+  margin-bottom: 6px;
+}
+
+.operation-header h2 {
+  display: inline;
+  margin: 0 10px 0 0;
+  font-size: 1.15rem;
+  font-weight: 700;
+}
+
+.operation-header span,
+.operation-date span {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.operation-date {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  text-align: right;
+}
+
+.day-summary-v2 {
+  margin-bottom: 6px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.day-summary-v2 summary {
+  padding: 7px 11px;
+  color: #31575c;
+  cursor: pointer;
+  font-size: 0.78rem;
+  font-weight: 700;
+  list-style: none;
+  text-transform: uppercase;
+}
+
+.day-summary-v2 summary::after {
+  content: "⌄";
+  float: right;
+  color: var(--accent);
+}
+
+.day-summary-v2[open] summary::after {
+  content: "⌃";
+}
+
+.summary-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(125px, 1fr));
+  gap: 1px;
+  padding-top: 1px;
+  background: var(--border);
+}
+
+.summary-card {
+  display: flex;
+  flex-direction: column;
+  min-height: 62px;
+  padding: 8px 12px;
+  background: var(--surface);
+}
+
+.summary-card span {
+  color: var(--muted);
+  font-size: 0.66rem;
+  text-transform: uppercase;
+}
+
+.summary-card strong {
+  margin-top: 2px;
+  font-size: 1.12rem;
+}
+
+.summary-com strong { color: var(--com); }
+.summary-zl strong { color: var(--zl); }
+.summary-expected { background: #e8f4f5; }
+.summary-expected strong { color: #0b5962; }
+
+.operation-tabs {
+  height: calc(100% - 82px);
+  border: 0;
+  box-shadow: none;
+}
+
+.operation-tabs > .card > .card-header {
+  min-height: 38px;
+  padding-top: 2px;
+  padding-bottom: 0;
+}
+
+.operation-tabs > .card > .card-body {
+  min-height: 0;
+  padding: 0;
+}
+
+.operation-layout {
+  height: 100%;
+}
+
+.operation-layout > .sidebar {
+  padding: 10px;
+  border-right: 1px solid var(--border);
+}
+
+.selection-details {
+  margin-bottom: 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.selection-details summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 9px 10px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.selection-title {
+  font-size: 0.84rem;
+  font-weight: 750;
+}
+
+.selection-com .selection-title { color: var(--com); }
+.selection-zl .selection-title { color: var(--zl); }
+
+.selection-summary {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 0.68rem;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.selection-controls {
+  padding: 2px 10px 9px;
+  border-top: 1px solid var(--border);
+}
+
+.selection-controls .form-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.map-stage,
+.map-stage .leaflet {
+  min-height: 680px;
+  height: 76vh;
+}
+
+.map-stage {
+  position: relative;
+}
+
+.map-layer-control {
+  z-index: 800;
+  width: 150px;
+  padding: 7px 9px 3px;
+  background: rgb(255 255 255 / 92%);
+  border: 1px solid rgb(0 0 0 / 15%);
+  border-radius: 5px;
+  box-shadow: 0 1px 4px rgb(0 0 0 / 20%);
+  font-size: 0.72rem;
+}
+
+.map-layer-control .form-group,
+.map-layer-control .checkbox {
+  margin: 0 0 3px;
+}
+
+.map-layer-control label {
+  line-height: 1.15;
+}
+
+.list-card {
+  height: 100%;
+  border: 0;
+  box-shadow: none;
+}
+
+.list-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-weight: 700;
+}
+
+.list-header .form-group {
+  margin: 0;
+}
+
+.dataTables_wrapper {
+  font-size: 0.84rem;
+}
+
+.scores-page {
+  padding: 10px 12px;
+}
+
+.scores-toolbar {
+  display: flex;
+  align-items: end;
+  gap: 18px;
+  min-height: 58px;
+  margin-bottom: 8px;
+  padding: 6px 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.scores-toolbar .form-group {
+  margin-bottom: 0;
+}
+
+.threshold-context {
+  padding-bottom: 7px;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.score-card .card-header {
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+
+@media (max-width: 900px) {
+  .operation-header span {
+    display: none;
+  }
+
+  .summary-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .map-stage,
+  .map-stage .leaflet {
+    min-height: 580px;
+    height: 72vh;
+  }
+}
+.evolution-page { padding: 12px; overflow-y: auto; }
+.evolution-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; }
+.evolution-toolbar span { color: var(--muted); font-size: 0.85rem; }
+.evolution-page > .card { margin-bottom: 12px; flex-shrink: 0; }
+.evolution-metrics small { display: block; font-weight: normal; color: var(--muted); }
+.evolution-metrics td { font-variant-numeric: tabular-nums; }
+.evolution-chart-note { margin: 6px 12px 0; color: var(--muted); font-size: 0.8rem; }
+.day-com-page { padding: 12px; overflow-y: auto; }
+.day-com-page > .card { margin-top: 12px; flex-shrink: 0; }
+.day-zl-page { padding: 12px; overflow-y: auto; }
+.day-zl-page > .card { margin-top: 12px; flex-shrink: 0; }
+.zl-map-legend {
+  padding: 8px 10px;
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.16);
+  color: var(--fg);
+  font-size: 0.78rem;
+  line-height: 1.8;
+}
+.zl-map-legend div { white-space: nowrap; }
+.zl-symbol {
+  position: relative;
+  display: inline-block;
+  width: 13px;
+  height: 13px;
+  margin-right: 7px;
+  border: 2px solid #087f8c;
+  border-radius: 50%;
+  vertical-align: -2px;
+}
+.zl-symbol.selected { border-color: rgba(141, 150, 157, 0.55); }
+.zl-symbol.problem i {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 5px;
+  height: 5px;
+  background: #d14900;
+  border-radius: 50%;
+}

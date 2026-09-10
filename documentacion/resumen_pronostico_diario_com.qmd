@@ -1,0 +1,402 @@
+---
+title: "Pron\u00f3stico diario de clusters con reclamo COM"
+subtitle: "Resumen de modelos y resultados"
+lang: es
+format:
+  html:
+    theme: cosmo
+    toc: true
+    toc-depth: 2
+    embed-resources: false
+    html-math-method: plain
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+```{r}
+library(data.table)
+library(ggplot2)
+library(knitr)
+
+project_root <- normalizePath("..", winslash = "/", mustWork = TRUE)
+
+path_base_modelos <- file.path(
+  project_root, "outputs", "comparacion_modelos_segmento_barrio_scores_com",
+  "predicciones_diarias.csv"
+)
+path_base_segmento <- file.path(
+  project_root, "outputs", "benchmark_modelo_segmento_barrio_com",
+  "base_segmento_dia.csv"
+)
+path_base_xgb <- file.path(
+  project_root, "outputs", "comparacion_ventanas_propension_xgboost_com",
+  "base_segmento_dia_ventanas.csv"
+)
+path_poda <- file.path(project_root, "outputs", "comparacion_poda_xgboost_com")
+
+pred_base <- fread(path_base_modelos)[escenario == "A0_jerarquia"]
+pred_base[, dia_objetivo := as.IDate(dia_objetivo)]
+
+pred_compacto <- fread(file.path(path_poda, "predicciones_diarias.csv"))[
+  escenario == "P3_compacto"
+]
+pred_compacto[, dia_objetivo := as.IDate(dia_objetivo)]
+
+base_completa <- fread(path_base_segmento)
+base_completa[, dia_objetivo := as.IDate(dia_objetivo)]
+cobertura_completa <- base_completa[, .(
+  n_clusters_completo = sum(n_clusters)
+), by = dia_objetivo]
+
+base_xgb <- fread(path_base_xgb)
+base_xgb[, dia_objetivo := as.IDate(dia_objetivo)]
+cobertura_xgb <- base_xgb[, .(
+  n_clusters_xgb = sum(n_clusters)
+), by = dia_objetivo]
+cobertura_xgb[cobertura_completa, on = "dia_objetivo", `:=`(
+  n_clusters_completo = i.n_clusters_completo
+)]
+cobertura_xgb[, factor_cobertura := n_clusters_completo / n_clusters_xgb]
+
+pred_compacto[cobertura_xgb, on = "dia_objetivo", `:=`(
+  factor_cobertura = i.factor_cobertura
+)]
+pred_compacto[, predicho_comparable := predicho * factor_cobertura]
+
+serie_base <- pred_base[
+  split_modelo %in% c("validacion", "test"),
+  .(
+    dia_objetivo,
+    periodo = split_modelo,
+    observado,
+    `Suma de scores` = suma_scores,
+    `A0 estructural` = predicho
+  )
+]
+serie_base[pred_compacto, on = "dia_objetivo", `:=`(
+  `XGBoost compacto` = i.predicho_comparable
+)]
+
+serie_larga <- melt(
+  serie_base,
+  id.vars = c("dia_objetivo", "periodo", "observado"),
+  variable.name = "modelo",
+  value.name = "predicho"
+)
+
+env_feriados <- new.env(parent = baseenv())
+sys.source(
+  file.path(project_root, "data", "reference", "feriados", "feriados.R"),
+  envir = env_feriados
+)
+feriados <- as.IDate(env_feriados$diasDesc)
+observados <- unique(serie_base[, .(dia_objetivo, periodo, observado)])
+observados[, es_feriado := dia_objetivo %in% feriados]
+
+calcular_metricas <- function(dt) {
+  dt[, {
+    error <- predicho - observado
+    sse <- sum(error^2)
+    sst <- sum((observado - mean(observado))^2)
+    .(
+      dias = .N,
+      sesgo = mean(error),
+      MAE = mean(abs(error)),
+      RMSE = sqrt(mean(error^2)),
+      correlacion = cor(observado, predicho),
+      r2 = 1 - sse / sst,
+      razon_sd = sd(predicho) / sd(observado)
+    )
+  }, by = .(modelo, periodo)]
+}
+
+metricas_periodo <- calcular_metricas(serie_larga)
+metricas_combinadas <- calcular_metricas(
+  copy(serie_larga)[, periodo := "validacion + test"]
+)
+metricas <- rbindlist(list(metricas_periodo, metricas_combinadas))
+
+colores_modelos <- c(
+  "Observado" = "#333333",
+  "Suma de scores" = "#8c8c8c",
+  "A0 estructural" = "#2f6fbd",
+  "XGBoost compacto" = "#c44e52"
+)
+```
+
+## Objetivo
+
+El objetivo es anticipar cu&aacute;ntos clusters tendr&aacute;n al menos un reclamo COM en
+cada d&iacute;a. Este indicador representa la extensi&oacute;n territorial esperada del
+problema; no debe confundirse con la cantidad total de reclamos, que tambi&eacute;n
+incluye repeticiones dentro de un mismo cluster.
+
+Durante el desarrollo se probaron m&uacute;ltiples estrategias: suma de probabilidades
+por cluster, modelos agregados por barrio y CCZ, jerarqu&iacute;as barrio/segmento,
+variables de atraso y severidad, colas extremas, propensiones hist&oacute;ricas,
+ventanas temporales, feriados y correcciones con XGBoost. Tambi&eacute;n se evaluaron
+variantes barriales, se&ntilde;ales globales y distintas podas de variables.
+
+Este documento presenta &uacute;nicamente los tres modelos necesarios para entender
+la decisi&oacute;n final. El detalle de experimentos, especificaciones descartadas y
+resultados intermedios est&aacute; en el [informe t&eacute;cnico completo](pronostico_diario_clusters_reclamo_com.qmd).
+
+## Per&iacute;odos de evaluaci&oacute;n
+
+- **Entrenamiento:** a&ntilde;o 2025.
+- **Validaci&oacute;n:** enero a marzo de 2026.
+- **Test:** abril y mayo de 2026.
+
+La evaluaci&oacute;n es temporal. Para cada d&iacute;a objetivo `D`, la historia de reclamos
+se cierra en `D-2` y las variables de levante respetan la informaci&oacute;n disponible
+al inicio del d&iacute;a operativo.
+
+## Modelos comparados
+
+### 1. Suma de scores
+
+Es el baseline natural. Para cada d&iacute;a suma las probabilidades producidas por el
+modelo COM de cada cluster:
+
+$$
+\widehat Y_d=\sum_i \widehat p_{i,d}.
+$$
+
+Si las probabilidades estuvieran perfectamente calibradas y los errores se
+compensaran, la suma aproximar&iacute;a la cantidad de clusters con reclamo. Es una
+referencia directa, pero reproduce poca variaci&oacute;n diaria y depende del modelo
+de probabilidad por cluster.
+
+### 2. Modelo estructural A0
+
+A0 trabaja a nivel segmento censal/d&iacute;a con respuesta binomial. Incluye:
+
+- d&iacute;a de la semana;
+- intercepto penalizado de barrio;
+- intercepto penalizado de segmento censal.
+
+El modelo captura el patr&oacute;n semanal y las diferencias territoriales persistentes.
+Los interceptos penalizados aplican *partial pooling*: permiten que barrios y
+segmentos tengan niveles propios, pero reducen estimaciones extremas cuando hay
+poca informaci&oacute;n. A0 no incorpora shocks operativos ni historia reciente.
+
+### 3. A0 m&aacute;s correcci&oacute;n din&aacute;mica con XGBoost
+
+El modelo seleccionado conserva A0 como expectativa basal y usa un XGBoost
+compacto para corregir su *logit*. La parte din&aacute;mica tiene cinco variables:
+
+1. `media_tiempo_levante`: tiempo medio desde el &uacute;ltimo levante en el segmento;
+2. `rms_q_7`: intensidad y dispersi&oacute;n de la propensi&oacute;n hist&oacute;rica reciente de
+   los clusters, estimada con las &uacute;ltimas siete observaciones y cerrada en `D-2`;
+3. `rms_w_7`: carga que combina propensi&oacute;n reciente y severidad actual del
+   atraso, donde $w=q_7h$;
+4. `q7 - q60`: cambio entre la propensi&oacute;n reciente y el nivel habitual;
+5. `es_feriado`: indicador del calendario de feriados del proyecto.
+
+La severidad del atraso se define como:
+
+$$
+h=\min\{\max(\mathrm{ratio}-1,0),3\}.
+$$
+
+La correcci&oacute;n intenta modelar apartamientos respecto de la estructura: cambios
+operativos de levante, territorios m&aacute;s sensibles al atraso, aumentos o descensos
+recientes de la propensi&oacute;n y d&iacute;as feriados. No utiliza los scores del modelo de
+probabilidad por cluster.
+
+La versi&oacute;n compacta fue elegida frente a una variante de trece entradas porque
+reduce la correcci&oacute;n din&aacute;mica a cinco variables, mejora test y mantiene un
+desempe&ntilde;o combinado muy similar.
+
+## Resultados
+
+```{r}
+tabla_metricas <- metricas[, .(
+  modelo_tabla = modelo,
+  periodo_tabla = fifelse(
+    periodo == "validacion", "Validaci\u00f3n",
+    fifelse(periodo == "test", "Test", "Validaci\u00f3n + test")
+  ),
+  sesgo_tabla = round(sesgo, 1),
+  mae_tabla = round(MAE, 1),
+  rmse_tabla = round(RMSE, 1),
+  correlacion_tabla = round(correlacion, 3),
+  r2_pct = round(100 * r2, 1),
+  variabilidad_pct = round(100 * razon_sd, 1)
+)]
+setnames(tabla_metricas, c(
+  "Modelo", "Per\u00edodo", "Sesgo", "MAE", "RMSE", "Correlaci\u00f3n",
+  "R\u00b2 (%)", "Variabilidad reproducida (%)"
+))
+
+kable(
+  tabla_metricas[order(factor(
+    get("Per\u00edodo"),
+    levels = c("Validaci\u00f3n", "Test", "Validaci\u00f3n + test")
+  ), get("RMSE"))],
+  caption = "Desempe\u00f1o diario de los modelos"
+)
+```
+
+La correlaci&oacute;n mide cu&aacute;nto acompa&ntilde;a cada modelo los movimientos diarios. El
+R&sup2; mide la reducci&oacute;n del error cuadr&aacute;tico frente a predecir siempre la media
+observada. La variabilidad reproducida compara el desv&iacute;o est&aacute;ndar de la
+predicci&oacute;n con el observado; 100 % indica igual amplitud, no necesariamente
+predicciones perfectas.
+
+## Serie completa de evaluaci&oacute;n
+
+```{r}
+#| fig-width: 12
+#| fig-height: 5
+paneles_periodo <- data.table(
+  xmin = c(min(observados[periodo == "validacion", dia_objetivo]),
+           min(observados[periodo == "test", dia_objetivo])),
+  xmax = c(max(observados[periodo == "validacion", dia_objetivo]),
+           max(observados[periodo == "test", dia_objetivo])),
+  periodo = c("validacion", "test")
+)
+
+ggplot() +
+  geom_rect(
+    data = paneles_periodo,
+    aes(xmin = xmin, xmax = xmax, ymin = -Inf, ymax = Inf, fill = periodo),
+    alpha = 0.10
+  ) +
+  geom_line(
+    data = observados,
+    aes(dia_objetivo, observado, color = "Observado"),
+    linewidth = 0.75
+  ) +
+  geom_line(
+    data = serie_larga,
+    aes(dia_objetivo, predicho, color = modelo),
+    linewidth = 0.65
+  ) +
+  scale_color_manual(values = colores_modelos) +
+  scale_fill_manual(
+    values = c("validacion" = "#4c78a8", "test" = "#f58518"),
+    labels = c("validacion" = "Validaci\u00f3n", "test" = "Test")
+  ) +
+  labs(
+    x = NULL,
+    y = "Clusters con reclamo",
+    color = "Modelo",
+    fill = "Per\u00edodo",
+    title = "Serie completa de validaci\u00f3n y test"
+  ) +
+  theme_minimal(base_size = 11) +
+  theme(legend.position = "top", panel.grid.minor = element_blank())
+```
+
+## Comparaci&oacute;n visual por per&iacute;odo
+
+```{r}
+graficar_periodo <- function(periodo_objetivo, titulo) {
+  datos_modelos <- serie_larga[periodo == periodo_objetivo]
+  datos_obs <- observados[periodo == periodo_objetivo]
+
+  ggplot() +
+    geom_line(
+      data = datos_obs,
+      aes(dia_objetivo, observado, color = "Observado"),
+      linewidth = 0.9
+    ) +
+    geom_line(
+      data = datos_modelos,
+      aes(dia_objetivo, predicho, color = modelo),
+      linewidth = 0.75
+    ) +
+    geom_point(
+      data = datos_obs[es_feriado == TRUE],
+      aes(dia_objetivo, observado),
+      shape = 21,
+      size = 2.8,
+      stroke = 0.7,
+      color = "#7a4e00",
+      fill = "#f2c14e"
+    ) +
+    scale_color_manual(values = colores_modelos) +
+    labs(
+      x = NULL,
+      y = "Clusters con reclamo",
+      color = NULL,
+      title = titulo,
+      subtitle = "Los puntos amarillos identifican feriados"
+    ) +
+    theme_minimal(base_size = 11) +
+    theme(legend.position = "top", panel.grid.minor = element_blank())
+}
+
+graficar_periodo("validacion", "Validaci\u00f3n: enero a marzo de 2026")
+```
+
+```{r}
+#| fig-width: 12
+#| fig-height: 5
+graficar_periodo("test", "Test: abril y mayo de 2026")
+```
+
+## Desempe&ntilde;o por barrio
+
+Las predicciones del modelo compacto se agregaron por barrio/d&iacute;a. El siguiente
+gr&aacute;fico muestra los quince barrios con mayor RMSE absoluto en validaci&oacute;n y test.
+El color indica si el barrio queda, en promedio, sobreestimado o subestimado.
+
+```{r}
+#| fig-width: 10
+#| fig-height: 6
+metricas_barrio <- fread(file.path(path_poda, "metricas_barrio.csv"))[
+  escenario == "P3_compacto"
+]
+metricas_barrio[, direccion := fifelse(
+  sesgo >= 0, "sobre", "sub"
+)]
+peores_barrios <- metricas_barrio[order(-rmse)][1:15]
+peores_barrios[, barrio := factor(barrio, levels = rev(barrio))]
+
+ggplot(peores_barrios, aes(rmse, barrio, fill = direccion)) +
+  geom_col(width = 0.72) +
+  geom_text(
+    aes(label = sprintf("%.1f", rmse)),
+    hjust = -0.12,
+    size = 3.2
+  ) +
+  scale_fill_manual(values = c(
+    "sobre" = "#e78ac3",
+    "sub" = "#66c2a5"
+  ), labels = c(
+    "sobre" = "Sobreestimaci\u00f3n",
+    "sub" = "Subestimaci\u00f3n"
+  )) +
+  scale_x_continuous(expand = expansion(mult = c(0, 0.12))) +
+  labs(
+    x = "RMSE diario",
+    y = NULL,
+    fill = NULL,
+    title = "Barrios con mayor error absoluto",
+    subtitle = "Modelo A0 + XGBoost compacto; validaci\u00f3n y test"
+  ) +
+  theme_minimal(base_size = 11) +
+  theme(legend.position = "top", panel.grid.minor = element_blank())
+```
+
+Los errores absolutos m&aacute;s altos tienden a concentrarse en barrios con mayor
+volumen de reclamos. Para comparar barrios de tama&ntilde;os muy distintos tambi&eacute;n
+deben revisarse el RMSE relativo, el sesgo y la correlaci&oacute;n disponibles en
+`outputs/comparacion_poda_xgboost_com/metricas_barrio.csv`.
+
+## Conclusi&oacute;n
+
+La suma de scores es una referencia &uacute;til, pero reproduce poca din&aacute;mica diaria.
+A0 incorpora una estructura semanal y territorial estable. El XGBoost compacto
+agrega una correcci&oacute;n din&aacute;mica con cinco variables y mantiene independencia
+respecto del modelo de scores por cluster.
+
+La especificaci&oacute;n seleccionada para cerrar esta etapa es **A0 m&aacute;s XGBoost
+compacto**. La selecci&oacute;n prioriza desempe&ntilde;o fuera de muestra, simplicidad y
+coherencia operativa. Su eventual incorporaci&oacute;n al scoring o a la app requiere
+definir todav&iacute;a el contrato operativo, los intervalos predictivos y el criterio
+de monitoreo.

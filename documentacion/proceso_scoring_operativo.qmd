@@ -1,0 +1,1405 @@
+---
+title: "Proceso de scoring operativo"
+format:
+  html:
+    theme: cosmo
+    toc: true
+    toc-depth: 3
+    number-sections: true
+    embed-resources: true
+execute:
+  echo: true
+  warning: false
+  message: false
+---
+
+## Objetivo
+
+Definir el proceso que genera las predicciones que va a consumir la app operativa.
+
+La app no deberia calcular features ni aplicar modelos. La app deberia leer una tabla acumulada de predicciones ya generadas, con ranking diario, metadatos de frescura de datos y observados cuando el día ya este cerrado.
+
+## Diagrama general
+
+```{mermaid}
+flowchart TD
+  A[Fuentes crudas o intermedias] --> A1[Levantes]
+  A --> A2[Reclamos COM]
+  A --> A3[Clusters / contenedores]
+
+  A1 --> B{Levantes actualizados hasta D 01:00?}
+  A2 --> C{COM cerrado hasta D-2?}
+
+  B -- No --> Z[Registrar control: no_generada]
+  C -- No --> Z
+
+  B -- Si --> D[Construir ventana reciente]
+  C -- Si --> D
+  A3 --> D
+
+  H[Estado historico por cluster] --> E[Completar memoria historica]
+  D --> E
+
+  E --> F[Features operativas para dia D]
+  F --> G[Aplicar modelo]
+  G --> I[Predicciones congeladas]
+
+  I --> J[Ranking diario y flags top]
+  J --> K[Tabla acumulada para app]
+
+  A2 --> L[Completar observados cerrados]
+  L --> K
+  K --> M[Metricas historicas cerradas]
+
+  K --> N[App operativa]
+  M --> N
+  Z --> N
+```
+
+Lectura rapida:
+
+- si una fuente critica no está fresca, no se publica predicción;
+- la ventana reciente calcula variables moviles;
+- el estado histórico corrige memoria de largo plazo;
+- la predicción queda congelada;
+- los observados se agregan después, cuando COM está cerrado.
+
+## Regla temporal operativa
+
+Para predecir un día objetivo `D`:
+
+- levantes: usar información disponible hasta `D 01:00`;
+- reclamos históricos: usar reclamos cerrados hasta `D-2`;
+- reclamos de `D`: nunca entran como features;
+- reclamos observados de `D`: se agregan después, cuando la fuente COM ya este cerrada.
+
+La regla `D-2` para reclamos históricos responde a la frecuencia actual de actualizacion:
+
+- COM se actualiza una vez por día, alrededor de las 17:50;
+- levantes se actualiza una vez por día, alrededor de las 08:30.
+
+Con esta regla, el scoring matinal de `D` no depende de que los reclamos de `D-1` esten completos.
+
+La hora minima requerida para levantes debe ser parametrizable. En la implementacion inicial se usa:
+
+- `HORA_CORTE_LEVANTES = "01:00:00"`.
+
+Si `timestamp_max_levante < D 01:00`, no se genera la predicción. El proceso debe registrar el fallo en `control_scoring`, pero no debe publicar rankings incompletos para la app.
+
+## Ciclo diario de actualizacion
+
+El proceso operativo deberia correr por fuera de la app, idealmente una vez por día luego de que levantes este actualizado. Con la frecuencia actual de fuentes, una corrida matinal del día `D` deberia hacer dos tareas distintas:
+
+1. Generar predicciones nuevas para `D`.
+2. Completar observados históricos que ya puedan considerarse cerrados.
+
+La app solo consume la tabla resultante. No deberia recalcular features, correr modelos ni decidir si una fuente está fresca.
+
+### Predicción de `D`
+
+Para el día objetivo `D`, la predicción se genera con:
+
+- levantes hasta `D 01:00`;
+- reclamos históricos hasta `D-2`;
+- reclamos de `D-1` excluidos por no estar completos en una corrida matinal;
+- reclamos de `D` excluidos siempre para evitar leakage.
+
+La predicción de `D` se guarda con observacion pendiente:
+
+- `tuvo_reclamo_observado = NA`;
+- `n_reclamos_observado = NA`;
+- `estado_observacion = "pendiente"`.
+
+### Cierre de observados
+
+Como COM carga una vez por día alrededor de las 17:50, una corrida matinal no puede cerrar el día inmediatamente anterior.
+
+En una corrida matinal del día `D`:
+
+- se pueden cerrar observados hasta `D-2`;
+- `D-1` queda pendiente;
+- `D` queda pendiente.
+
+Ejemplo:
+
+| Día de corrida | Predicción nueva | Observados que puede cerrar |
+|---|---:|---:|
+| `D` | `D` | hasta `D-2` |
+| `D+1` | `D+1` | hasta `D-1` |
+| `D+2` | `D+2` | hasta `D` |
+
+Por lo tanto:
+
+- el observado de `D-1` se completa en la corrida de `D+1`;
+- el observado de `D` se completa en la corrida de `D+2`;
+- las predicciones históricas no se recalculan al completar observados.
+
+## Tabla final para la app
+
+La salida operativa acumulada deberia tener una fila por `cluster_id`, `dia_objetivo`, `modelo_id` y `version_modelo`.
+
+La salida histórica multi-modelo vigente para la app v2 se materializa en
+`app_operativa_v2/data/operacional/`. Actualmente contiene:
+
+- `com_reclamo`: score de probabilidad de reclamo COM;
+- `zl_problema`: score exploratorio de problema observado Zona Limpia.
+
+Columnas minimas:
+
+- `cluster_id`
+- `dia_objetivo`
+- `anio_mes`
+- `timestamp_corte_features`
+- `timestamp_ejecucion`
+- `modelo_id`
+- `version_modelo`
+- `version_cluster`
+- `pred_prob`
+- `ranking_dia`
+- `percentil_riesgo`
+- `top_1`
+- `top_5`
+- `top_10`
+- `top_20`
+- `tuvo_reclamo_observado`
+- `n_reclamos_observado`
+- `problema_zl_observado`, si la salida incluye score ZL
+- `n_zl_problema_comparable`, si la salida incluye score ZL
+- `hay_zl_visita_efectiva`, si la salida incluye score ZL
+- `target_app`
+- `target_app_label`
+- `fuente_observado_modelo`
+- `estado_observacion`
+- `estado_observacion_zl`, si la salida incluye score ZL
+- `estado_periodo_app`
+- `fecha_reclamos_usada_hasta`
+- `timestamp_max_com`
+- `timestamp_max_levante`
+- features resumidas para explicar el score, por ejemplo:
+  - `n_reclamos_lag1`
+  - `n_reclamos_sum_7d`
+  - `n_reclamos_sum_30d`
+  - `dias_desde_ultimo_reclamo_o_inicio_trunc_90`
+  - `mean_tiempo_desde_ultimo_levante_pred`
+  - `n_contenedores_activos`
+  - `pct_contenedores_inferidos`
+
+La predicción se congela. Los observados se completan después, sin recalcular la predicción histórica salvo reproceso explicito y versionado.
+
+En la app, las métricas históricas deben usar el observado correspondiente al `modelo_id` seleccionado. Para `zl_problema`, los cluster-días sin visita efectiva de Zona Limpia no deben interpretarse como ausencia observada de problema.
+
+## Estado histórico por cluster
+
+Para que la emulacion por ventana no pierda memoria histórica, se agrega una tabla liviana de estado acumulado por cluster.
+
+Script:
+
+- `scripts/construir_estado_historico_cluster.R`
+
+Salida:
+
+- `data/processed/app_emulacion/estado_historico_cluster/`
+- `data/processed/app_emulacion/resumen_estado_historico_cluster/`
+
+La tabla tiene una fila por `cluster_id` y `fecha_estado`. En la primera corrida se usa:
+
+- `FECHA_ESTADO = 2025-12-31`
+- `FECHA_RECLAMOS_CERRADA_HASTA = 2025-12-30`
+
+Columnas principales:
+
+- `cluster_id`
+- `version_cluster`
+- `fecha_estado`
+- `fecha_reclamos_cerrada_hasta`
+- `cluster_activo_fecha_estado`
+- `n_contenedores_activos_fecha_estado`
+- `fecha_inicio_observacion_cluster`
+- `dias_historia_observada_cluster`
+- `fecha_ultimo_reclamo_cerrado`
+- `sin_reclamo_previo_observado`
+- `dias_desde_ultimo_reclamo_o_inicio`
+- `dias_desde_ultimo_reclamo_o_inicio_trunc_90`
+- `n_reclamos_acumulados`
+- `dias_con_reclamo_acumulados`
+- categorías de historia observada.
+
+Esta tabla no reemplaza la ventana reciente. La ventana sigue sirviendo para calcular conteos 7/30 días y estado operativo reciente. El estado histórico corrige las variables que necesitan memoria antes del inicio de la ventana.
+
+Se separan dos fechas:
+
+- `fecha_estado`: hasta donde se conoce la existencia/estado del cluster;
+- `fecha_reclamos_cerrada_hasta`: hasta donde se pueden usar reclamos cerrados sin riesgo de carga incompleta.
+
+```{r}
+#| label: cargar-estado-historico
+#| echo: false
+library(arrow)
+library(data.table)
+library(knitr)
+library(kableExtra)
+
+estado_historico <- as.data.table(as.data.frame(
+  arrow::open_dataset("../data/processed/app_emulacion/estado_historico_cluster")
+))
+
+resumen_estado_historico <- as.data.table(as.data.frame(
+  arrow::open_dataset("../data/processed/app_emulacion/resumen_estado_historico_cluster")
+))
+```
+
+### Resumen del estado histórico
+
+```{r}
+#| echo: false
+resumen_estado_historico[
+  ,
+    .(
+    fecha_estado,
+    fecha_reclamos_cerrada_hasta,
+      version_cluster,
+    clusters,
+    clusters_activos_fecha_estado,
+    clusters_sin_reclamo_previo,
+    clusters_historia_0_6,
+    clusters_historia_7_29,
+    clusters_historia_30_89,
+    clusters_historia_90_179,
+    clusters_historia_180_mas,
+    reclamos_acumulados
+  )
+] |>
+  kable(
+    format = "html",
+    digits = 4,
+    caption = "Resumen de estado historico por cluster"
+  ) |>
+  kable_styling(
+    full_width = FALSE,
+    bootstrap_options = c("striped", "hover", "condensed")
+  )
+```
+
+### Ejemplo de filas
+
+```{r}
+#| echo: false
+estado_historico[
+  1:20,
+  .(
+      cluster_id,
+      fecha_estado,
+      fecha_reclamos_cerrada_hasta,
+      cluster_activo_fecha_estado,
+    fecha_inicio_observacion_cluster,
+    dias_historia_observada_cluster,
+    fecha_ultimo_reclamo_cerrado,
+    sin_reclamo_previo_observado,
+    dias_desde_ultimo_reclamo_o_inicio = round(dias_desde_ultimo_reclamo_o_inicio, 2),
+    n_reclamos_acumulados,
+    historia_observada_90_179,
+    historia_observada_180_mas
+  )
+] |>
+  kable(
+    format = "html",
+    digits = 4,
+    caption = "Primeras filas del estado historico"
+  ) |>
+  kable_styling(
+    full_width = FALSE,
+    bootstrap_options = c("striped", "hover", "condensed")
+  )
+```
+
+### Estados esperados
+
+La tabla deberia diferenciar estados de predicción y estados de observacion.
+
+Estados de predicción sugeridos:
+
+- `generada`: la predicción fue calculada y publicada;
+- `no_generada`: no se pudo calcular;
+- `advertencia_fuente`: se calculo, pero alguna fuente estaba fuera del umbral esperado.
+
+Estados de observacion sugeridos:
+
+- `pendiente`: el día todavía no puede evaluarse;
+- `cerrado`: COM ya cargo el día completo;
+- `parcial`: existe información, pero no se considera cerrada;
+- `no_disponible`: no se pudo leer la fuente de reclamos.
+
+## Regla de actualizacion de la tabla
+
+La tabla operativa es acumulada.
+
+En cada corrida:
+
+1. Se identifica el último día con predicción ya guardada.
+2. Se generan predicciones para los días faltantes hasta `fecha_actualizar_hasta`.
+3. Si una predicción ya existe, no se recalcula por defecto.
+4. Se actualizan observados para días que ya puedan cerrarse.
+5. Se guardan controles de frescura y resumen de la corrida.
+
+Si se necesita recalcular predicciones históricas, debe hacerse con un parámetro explicito, por ejemplo `forzar_reproceso = TRUE`, y guardando versión de corrida/modelo. No deberia sobrescribirse silenciosamente una predicción histórica.
+
+## Emulacion de actualizacion
+
+Para validar el proceso antes de construir la app, se propone emular una base acumulada:
+
+- `fecha_base_hasta`: último día ya cargado en la tabla operativa;
+- `fecha_actualizar_hasta`: día hasta el cual se quiere actualizar;
+- el proceso genera predicciones para los días faltantes;
+- si un día ya existe, no recalcula la predicción por defecto;
+- si faltan observados, los actualiza cuando corresponda;
+- si hay un salto de días, puede completar automaticamente los días intermedios.
+
+Esto permite probar escenarios históricos sin depender todavía de una corrida productiva diaria.
+
+### Escenarios de emulacion
+
+Los escenarios minimos a probar son:
+
+1. **Agregar el día siguiente**
+
+   - base operativa cargada hasta `B`;
+   - actualizar hasta `B+1`;
+   - se genera una predicción nueva;
+   - observados recientes quedan según regla de cierre.
+
+2. **Agregar varios días consecutivos**
+
+   - base operativa cargada hasta `B`;
+   - actualizar hasta `B+10`;
+   - se generan predicciones para todos los días intermedios;
+   - se completa observacion de los días que ya pueden considerarse cerrados.
+
+3. **Pedir un día que ya existe**
+
+   - si la predicción ya existe, no se recalcula;
+   - si faltan observados y ya corresponde cerrarlos, se actualizan.
+
+4. **Pedir un día con salto**
+
+   - si la base llega hasta `B` y se pide `B+10`, el proceso deberia completar `B+1` a `B+10`;
+   - esto evita agujeros en la tabla acumulada.
+
+5. **Fuente incompleta o atrasada**
+
+   - se genera un registro de control;
+   - no se genera predicción para ese día;
+   - los observados no se cierran si COM no llego al umbral requerido.
+
+### Salidas de la emulacion
+
+Para no mezclar produccion con pruebas, la emulacion deberia escribir en una ruta separada:
+
+- `data/processed/app_emulacion/predicciones_operativas_cluster_dia/`
+- `data/processed/app_emulacion/control_scoring/`
+- `data/processed/app_emulacion/metricas_diarias/`
+
+Cuando el flujo este validado, se puede crear la ruta productiva equivalente:
+
+- `data/processed/app/predicciones_operativas_cluster_dia/`
+- `data/processed/app/control_scoring/`
+- `data/processed/app/metricas_diarias/`
+
+## Pasos a implementar
+
+Script creado:
+
+- `scripts/emular_scoring_operativo_cluster_dia.R`
+
+Parámetros:
+
+- `FECHA_BASE_HASTA`
+- `FECHA_ACTUALIZAR_HASTA`
+- `HORA_CORTE_LEVANTES`
+- `REZAGO_RECLAMOS_DIAS`
+- `MODELO_ID`
+- `VERSION_MODELO`
+- `VERSION_CLUSTER`
+- `PATH_MODELO`
+- `OUT_BASE_APP`
+- `FORZAR_REPROCESO`
+- `FECHA_FUENTE_LEVANTE_HASTA`, para emular fuente de levantes disponible hasta cierto día;
+- `FECHA_COM_CERRADA_HASTA`, para emular COM cerrado hasta cierto día.
+
+Pasos implementados:
+
+1. Lee `features_cluster_dia`.
+2. Recalcula historia de reclamos con el rezago definido, inicialmente `D-2`.
+3. Agrega las variables del modelo logístico reducido.
+4. Valida frescura de levantes y COM.
+5. Aplica el modelo logístico reducido D-2.
+6. Guarda predicciones acumuladas para la app.
+7. Completa observados hasta la fecha cerrada por COM.
+8. Calcula métricas diarias para días cerrados.
+9. Guarda controles de scoring.
+
+Los proximos pasos de implementacion deberian ser:
+
+1. Probar más escenarios de emulacion:
+   - pedir un día ya existente sin `FORZAR_REPROCESO`;
+   - pedir un salto de varios días;
+   - simular levantes atrasados;
+   - simular COM sin cierre suficiente.
+2. Revisar si el calculo operativo debe reconstruir features desde fuentes crudas o puede apoyarse inicialmente en `features_cluster_dia`.
+3. Definir que columnas explicativas finales quiere consumir la app.
+4. Separar luego una versión productiva, usando `data/processed/app/` en vez de `data/processed/app_emulacion/`.
+
+## Corrida emulada inicial
+
+Se ejecuto una primera emulacion con:
+
+- `FECHA_BASE_HASTA = 2025-12-31`
+- `FECHA_ACTUALIZAR_HASTA = 2026-01-03`
+- `FECHA_FUENTE_LEVANTE_HASTA = 2026-01-03`
+- `FECHA_COM_CERRADA_HASTA = 2026-01-01`
+- `FORZAR_REPROCESO = TRUE`
+
+Interpretación esperada:
+
+- se generan predicciones para `2026-01-01`, `2026-01-02` y `2026-01-03`;
+- solo `2026-01-01` queda con observacion cerrada;
+- `2026-01-02` y `2026-01-03` quedan pendientes.
+
+```{r}
+#| label: cargar-emulacion-inicial
+#| echo: false
+library(arrow)
+library(data.table)
+library(knitr)
+library(kableExtra)
+library(ggplot2)
+
+path_app_emulacion <- "../data/processed/app_emulacion"
+
+predicciones_app <- as.data.table(as.data.frame(
+  arrow::open_dataset(file.path(path_app_emulacion, "predicciones_operativas_cluster_dia"))
+))
+
+control_app <- as.data.table(as.data.frame(
+  arrow::open_dataset(file.path(path_app_emulacion, "control_scoring"))
+))
+
+metricas_app <- as.data.table(as.data.frame(
+  arrow::open_dataset(file.path(path_app_emulacion, "metricas_diarias"))
+))
+```
+
+### Estados generados
+
+```{r}
+#| echo: false
+predicciones_app[
+  ,
+  .N,
+  by = .(dia_objetivo, estado_prediccion, estado_observacion)
+][
+  order(dia_objetivo)
+] |>
+  kable(
+    format = "html",
+    digits = 4,
+    caption = "Estados de prediccion y observacion en la emulacion inicial"
+  ) |>
+  kable_styling(
+    full_width = FALSE,
+    bootstrap_options = c("striped", "hover", "condensed")
+  )
+```
+
+### Control de scoring
+
+```{r}
+#| echo: false
+control_app[
+  ,
+  .(
+    dia_objetivo,
+    estado_prediccion,
+    motivo,
+    timestamp_minimo_levante,
+    timestamp_max_levante,
+    fecha_reclamos_usada_hasta,
+    fecha_com_cerrada_hasta,
+    estado_com_features,
+    n_predicciones
+  )
+][
+  order(dia_objetivo)
+] |>
+  kable(
+    format = "html",
+    digits = 4,
+    caption = "Control de frescura y generacion de predicciones"
+  ) |>
+  kable_styling(
+    full_width = FALSE,
+    bootstrap_options = c("striped", "hover", "condensed")
+  )
+```
+
+### Métricas disponibles
+
+Las métricas solo se calculan para días con observacion cerrada.
+
+```{r}
+#| echo: false
+metricas_app[
+  ,
+  .(
+    dia_objetivo,
+    top_pct,
+    n_dia,
+    positivos_dia,
+    prevalencia_dia = round(prevalencia_dia, 4),
+    positivos_top,
+    precision = round(precision, 4),
+    capture_rate = round(capture_rate, 4),
+    lift = round(lift, 4)
+  )
+] |>
+  kable(
+    format = "html",
+    digits = 4,
+    caption = "Metricas diarias de la emulacion inicial"
+  ) |>
+  kable_styling(
+    full_width = FALSE,
+    bootstrap_options = c("striped", "hover", "condensed")
+  )
+```
+
+## Prueba de fuente atrasada
+
+También se probo el caso en que levantes no llega al corte requerido para el día objetivo.
+
+Parámetros:
+
+- `FECHA_BASE_HASTA = 2026-01-03`
+- `FECHA_ACTUALIZAR_HASTA = 2026-01-04`
+- `FECHA_FUENTE_LEVANTE_HASTA = 2026-01-03`
+- `FECHA_COM_CERRADA_HASTA = 2026-01-02`
+
+Como el corte requerido para `2026-01-04` es `2026-01-04 01:00`, la fuente de levantes queda atrasada y no se generan predicciones.
+
+```{r}
+#| echo: false
+control_frescura <- as.data.table(as.data.frame(
+  arrow::open_dataset("../data/processed/app_emulacion_test_frescura/control_scoring")
+))
+
+control_frescura[
+  ,
+  .(
+    dia_objetivo,
+    estado_prediccion,
+    motivo,
+    timestamp_minimo_levante,
+    timestamp_max_levante,
+    estado_levante,
+    fecha_reclamos_usada_hasta,
+    fecha_com_cerrada_hasta,
+    estado_com_features,
+    n_predicciones
+  )
+] |>
+  kable(
+    format = "html",
+    digits = 4,
+    caption = "Control cuando levantes no llega al corte requerido"
+  ) |>
+  kable_styling(
+    full_width = FALSE,
+    bootstrap_options = c("striped", "hover", "condensed")
+  )
+```
+
+## Emulacion por ventana con estado histórico
+
+Se agrego una segunda emulacion en paralelo:
+
+- `scripts/emular_scoring_operativo_ventana_cluster_dia.R`
+
+A diferencia del primer emulador, este reconstruye features para cada día objetivo usando una ventana histórica configurable y la tabla de estado histórico por cluster. La salida sigue guardando solo los días objetivo, no la ventana completa.
+
+Parámetros principales:
+
+- `VENTANA_DIAS`, inicialmente `120`;
+- `FECHA_BASE_HASTA`;
+- `FECHA_ACTUALIZAR_HASTA`;
+- `REZAGO_RECLAMOS_DIAS`;
+- `HORA_CORTE_LEVANTES`;
+- `FECHA_FUENTE_LEVANTE_HASTA`;
+- `FECHA_COM_CERRADA_HASTA`.
+
+La primera prueba se corrio para:
+
+- `FECHA_BASE_HASTA = 2025-12-31`;
+- `FECHA_ACTUALIZAR_HASTA = 2026-01-01`;
+- `VENTANA_DIAS = 120`;
+- `FECHA_FUENTE_LEVANTE_HASTA = 2026-01-01`;
+- `FECHA_COM_CERRADA_HASTA = 2026-01-01`.
+
+El objetivo fue comparar las features reconstruidas por ventana contra `features_cluster_dia`, que usamos como referencia.
+
+```{r}
+#| echo: false
+path_app_ventana <- "../data/processed/app_emulacion_ventana_estado"
+
+control_ventana <- as.data.table(as.data.frame(
+  arrow::open_dataset(file.path(path_app_ventana, "control_scoring"))
+))
+
+comparacion_ventana <- as.data.table(as.data.frame(
+  arrow::open_dataset(file.path(path_app_ventana, "comparacion_features_referencia"))
+))
+
+metricas_ventana <- as.data.table(as.data.frame(
+  arrow::open_dataset(file.path(path_app_ventana, "metricas_diarias"))
+))
+```
+
+### Control de la corrida por ventana
+
+```{r}
+#| echo: false
+control_ventana[
+  ,
+  .(
+    dia_objetivo,
+    estado_prediccion,
+    motivo,
+    fecha_inicio_ventana,
+    ventana_dias,
+    n_predicciones,
+    n_referencia,
+    pred_prob_diff_abs_media_ref = round(pred_prob_diff_abs_media_ref, 4),
+    pred_prob_diff_abs_p95_ref = round(pred_prob_diff_abs_p95_ref, 4),
+    pred_prob_diff_abs_max_ref = round(pred_prob_diff_abs_max_ref, 4)
+  )
+] |>
+  kable(
+    format = "html",
+    digits = 4,
+    caption = "Control de emulacion por ventana"
+  ) |>
+  kable_styling(
+    full_width = FALSE,
+    bootstrap_options = c("striped", "hover", "condensed")
+  )
+```
+
+### Comparación de features
+
+```{r}
+#| echo: false
+comparacion_ventana[
+  order(-pct_distintos)
+][
+  ,
+  .(
+    dia_objetivo,
+    variable,
+    n_comparables,
+    n_distintos,
+    pct_distintos = round(pct_distintos, 4),
+    diff_abs_media = round(diff_abs_media, 4),
+    diff_abs_p95 = round(diff_abs_p95, 4),
+    diff_abs_max = round(diff_abs_max, 4)
+  )
+] |>
+  kable(
+    format = "html",
+    digits = 4,
+    caption = "Features reconstruidas por ventana vs referencia"
+  ) |>
+  kable_styling(
+    full_width = FALSE,
+    bootstrap_options = c("striped", "hover", "condensed")
+  )
+```
+
+### Lectura de la comparación
+
+La ventana de 120 días combinada con estado histórico reproduce casi exactamente las features de referencia.
+
+En la corrida corregida, las categorías de historia observada coinciden contra la referencia:
+
+- `historia_observada_7_29`;
+- `historia_observada_30_89`;
+- `historia_observada_90_179`;
+- `historia_observada_180_mas`.
+
+También coinciden las variables recientes y de levante:
+
+- `n_reclamos_lag1`;
+- `n_reclamos_sum_7d`;
+- `dias_cluster_existente_30d`;
+- `n_contenedores_activos`;
+- `mean_tiempo_desde_ultimo_levante_pred`;
+- `mean_levante_periodo`;
+- `pct_contenedores_inferidos`.
+
+La principal diferencia remanente observada es marginal y aparece en `n_reclamos_sum_30d` para muy pocos clusters. El impacto sobre la probabilidad predicha es practicamente nulo en promedio.
+
+Esto confirma que la versión productiva debe combinar:
+
+- ventana reciente para variables moviles;
+- tabla de estado acumulado por cluster para memoria histórica:
+
+- `fecha_inicio_observacion_cluster`;
+- `dias_historia_observada_cluster` acumulado;
+- último reclamo cerrado conocido hasta el corte permitido;
+- acumulados necesarios para reconstruir recencia sin perder historia.
+
+### Métricas de la corrida por ventana
+
+```{r}
+#| echo: false
+metricas_ventana[
+  ,
+  .(
+    dia_objetivo,
+    top_pct,
+    n_dia,
+    positivos_dia,
+    prevalencia_dia = round(prevalencia_dia, 4),
+    positivos_top,
+    precision = round(precision, 4),
+    capture_rate = round(capture_rate, 4),
+    lift = round(lift, 4)
+  )
+] |>
+  kable(
+    format = "html",
+    digits = 4,
+    caption = "Metricas diarias de la emulacion por ventana"
+  ) |>
+  kable_styling(
+    full_width = FALSE,
+    bootstrap_options = c("striped", "hover", "condensed")
+  )
+```
+
+## Estado incremental y actualizacion por bloque
+
+La versión operativa no necesita reconstruir toda la historia de cada cluster en
+cada corrida. Se implementaron dos piezas complementarias:
+
+- actualizacion incremental de la tabla de estado histórico;
+- construcción de una única ventana para todos los días faltantes.
+
+Scripts:
+
+- `scripts/validar_estado_historico_incremental.R`;
+- `scripts/emular_scoring_operativo_bloque_cluster_dia.R`.
+
+### Flujo del bloque
+
+```{mermaid}
+flowchart LR
+  A[Estado guardado hasta B] --> D[Recorrido B+1 a F]
+  B[Levantes desde B+1-120 hasta F] --> C[Construir base y features una vez]
+  R[Reclamos desde B+1-120 hasta F] --> C
+  M[Mapa de clusters] --> C
+  C --> D
+
+  D --> E[Aplicar estado vigente al dia]
+  E --> G[Generar prediccion y ranking]
+  G --> H[Guardar solo el dia objetivo]
+  H --> I[Actualizar estado incremental]
+  I --> D
+
+  D --> J[Estado final hasta F]
+  H --> K[Tabla acumulada para la app]
+```
+
+Para actualizar desde una base cerrada en `B` hasta una fecha final `F`:
+
+1. Se carga una sola vez el rango desde `B+1-VENTANA_DIAS` hasta `F`.
+2. Se construyen una sola vez la base cluster-día y las features recientes.
+3. Se recorren `B+1`, ..., `F`.
+4. Antes de cada scoring se combina la ventana con el estado histórico vigente.
+5. Después de cada día se actualiza el estado para usarlo en el siguiente.
+6. Se guardan las predicciones de los días objetivo y el estado final. La
+   ventana auxiliar no se persiste en la tabla de la app.
+
+El cierre de reclamos del estado nunca avanza más alla de
+`FECHA_COM_CERRADA_HASTA`. Esto permite avanzar la existencia de los clusters
+sin declarar como cerrados días de reclamos que la fuente todavía no completo.
+
+### Validación del estado incremental
+
+El estado del `2025-12-31`, con reclamos cerrados hasta `2025-12-30`, se
+actualizo día a día hasta `2026-01-10`. Luego se comparo contra una
+reconstruccion completa a la misma fecha.
+
+```{r}
+#| label: cargar-validacion-estado-incremental
+#| echo: false
+resumen_estado_incremental <- as.data.table(as.data.frame(
+  arrow::open_dataset(
+    "../data/processed/app_emulacion_estado_incremental/resumen"
+  )
+))
+
+comparacion_estado_incremental <- as.data.table(as.data.frame(
+  arrow::open_dataset(
+    "../data/processed/app_emulacion_estado_incremental/comparacion_estado"
+  )
+))
+```
+
+```{r}
+#| echo: false
+resumen_estado_incremental |>
+  kable(
+    format = "html",
+    digits = 4,
+    caption = "Estado incremental vs reconstruccion completa"
+  ) |>
+  kable_styling(
+    full_width = FALSE,
+    bootstrap_options = c("striped", "hover", "condensed")
+  )
+```
+
+La validación obtuvo cero diferencias en todas las columnas. La actualizacion
+incremental de diez días demoro aproximadamente cuatro segundos en total y
+produjo los mismos 9.023 clusters que la reconstruccion completa.
+
+### Pruebas del procesamiento por bloque
+
+Se probaron dos escenarios con una ventana de 120 días:
+
+- un día: `2026-01-01`;
+- diez días: `2026-01-01` a `2026-01-10`.
+
+```{r}
+#| label: cargar-resultados-bloque
+#| echo: false
+resumen_bloque_1d <- as.data.table(as.data.frame(
+  arrow::open_dataset(
+    "../data/processed/app_emulacion_bloque_1d/resumen_corrida"
+  )
+))
+
+resumen_bloque_10d <- as.data.table(as.data.frame(
+  arrow::open_dataset(
+    "../data/processed/app_emulacion_bloque_10d/resumen_corrida"
+  )
+))
+
+control_bloque_10d <- as.data.table(as.data.frame(
+  arrow::open_dataset(
+    "../data/processed/app_emulacion_bloque_10d/control_scoring"
+  )
+))
+
+comparacion_bloque_10d <- as.data.table(as.data.frame(
+  arrow::open_dataset(
+    "../data/processed/app_emulacion_bloque_10d/comparacion_features_referencia"
+  )
+))
+
+resumen_bloques <- rbindlist(list(
+  resumen_bloque_1d[, escenario := "1 dia"][],
+  resumen_bloque_10d[, escenario := "10 dias"][]
+), fill = TRUE)
+```
+
+```{r}
+#| echo: false
+resumen_bloques[
+  ,
+  .(
+    escenario,
+    dias_objetivo,
+    predicciones_nuevas,
+    segundos_construccion_features_bloque = round(
+      segundos_construccion_features_bloque,
+      2
+    ),
+    segundos_recorrido_dias = round(segundos_recorrido_dias, 2),
+    segundos_total = round(segundos_total, 2)
+  )
+] |>
+  kable(
+    format = "html",
+    digits = 2,
+    caption = "Costo de actualizar uno o diez dias"
+  ) |>
+  kable_styling(
+    full_width = FALSE,
+    bootstrap_options = c("striped", "hover", "condensed")
+  )
+```
+
+El costo dominante es construir la ventana, no recorrer los días. En esta
+prueba, pasar de uno a diez días agrego menos de medio minuto al tiempo total.
+Por lo tanto, un salto de varios días debe procesarse como un bloque único y no
+repitiendo todo el pipeline para cada fecha.
+
+### Comparación contra las features de referencia
+
+```{r}
+#| echo: false
+control_bloque_10d[
+  ,
+  .(
+    dia_objetivo,
+    estado_prediccion,
+    n_predicciones,
+    pred_prob_diff_abs_media_ref = round(
+      pred_prob_diff_abs_media_ref,
+      7
+    ),
+    pred_prob_diff_abs_p95_ref = round(
+      pred_prob_diff_abs_p95_ref,
+      7
+    ),
+    pred_prob_diff_abs_max_ref = round(
+      pred_prob_diff_abs_max_ref,
+      7
+    )
+  )
+][
+  order(dia_objetivo)
+] |>
+  kable(
+    format = "html",
+    digits = 7,
+    caption = "Predicciones del bloque vs referencia"
+  ) |>
+  kable_styling(
+    full_width = FALSE,
+    bootstrap_options = c("striped", "hover", "condensed")
+  )
+```
+
+Los diez días generaron 83.057 predicciones. El percentil 95 de la diferencia
+absoluta de probabilidad fue cero todos los días. Las diferencias remanentes se
+concentraron en muy pocos clusters de `n_reclamos_sum_30d` y, en los últimos
+días, `n_reclamos_sum_7d`.
+
+```{r}
+#| echo: false
+comparacion_bloque_10d[
+  n_distintos > 0,
+  .(
+    dias_con_diferencias = uniqueN(dia_objetivo),
+    max_filas_distintas = max(n_distintos),
+    max_pct_distintos = max(pct_distintos),
+    max_diff_abs = max(diff_abs_max)
+  ),
+  by = variable
+][
+  order(-max_pct_distintos)
+] |>
+  kable(
+    format = "html",
+    digits = 6,
+    caption = "Diferencias remanentes de features en el bloque"
+  ) |>
+  kable_styling(
+    full_width = FALSE,
+    bootstrap_options = c("striped", "hover", "condensed")
+  )
+```
+
+## Proceso operativo persistente
+
+La emulacion validada se encapsulo en:
+
+- `scripts/proceso_scoring_operativo_cluster_dia.R`;
+- `config/scoring_operativo.env.example`.
+
+El proceso operativo consume fuentes ya materializadas en Parquet. En el
+servidor, la extraccion desde Impala debe ejecutarse antes y por fuera del
+scoring. Está separacion permite distinguir claramente:
+
+1. ingesta y materializacion de levantes y COM;
+2. asignación de reclamos y actualizacion del mapa de clusters;
+3. validación de frescura;
+4. construcción de features y scoring;
+5. publicacion de tablas para la app.
+
+### Secuencia diaria
+
+```{mermaid}
+flowchart TD
+  A[Ingesta desde Impala] --> B[Parquet de levantes y COM]
+  B --> C[Asignaciones COM y mapa de clusters]
+  C --> D[Preflight operativo]
+  D --> E{Fuentes frescas?}
+  E -- No --> F[Registrar bloqueo y terminar]
+  E -- Si --> G[Leer fecha del estado persistente]
+  G --> H{Hay dias pendientes?}
+  H -- Si --> I[Procesar pendientes como un bloque]
+  H -- No --> J[No recalcular predicciones]
+  I --> K[Staging de predicciones, controles y estado]
+  J --> L[Completar observados disponibles]
+  K --> L
+  L --> M[Publicar con respaldo]
+  M --> N[Publicar estado al final como commit]
+  N --> O[App consume salida estable]
+```
+
+### Deteccion automatica
+
+La fecha base ya no se informa manualmente. Se lee de:
+
+- `OUT_BASE_APP/estado_historico_cluster`.
+
+Si la tabla llega hasta `B` y se solicita `F`, se procesan automaticamente
+`B+1` a `F`. Si `F <= B`, no se recalculan scores: solamente se revisan
+observados que ahora puedan cerrarse.
+
+### Controles de frescura
+
+Antes de construir features se verifica:
+
+- `timestamp_max_levante >= F 01:00`;
+- `fecha_com_cerrada_hasta >= F-2`;
+- presencia de las columnas requeridas;
+- existencia del modelo y del estado histórico;
+- consistencia de `version_cluster`.
+
+Si una fuente falla, no se construyen features, no se publican predicciones y
+se registra la corrida en `control_ejecuciones`.
+
+### Persistencia y recuperacion
+
+Cada corrida usa:
+
+- un lock en `.scoring_operativo.lock` para impedir ejecuciones simultaneas;
+- staging por corrida en `.staging/<run_id>`;
+- respaldos en `.backups/<run_id>`;
+- publicacion del estado histórico al final, como confirmacion de la corrida.
+
+Si el proceso se interrumpe después del calculo, puede reanudarse indicando:
+
+- `PATH_STAGING_REANUDAR`.
+
+El proceso valida que el estado del staging llegue a la fecha objetivo antes de
+publicarlo. Un lock más antiguo que `MAX_MINUTOS_LOCK` se considera abandonado y
+puede recuperarse.
+
+### Pruebas operativas
+
+Se validaron los siguientes escenarios:
+
+- deteccion de uno y diez días pendientes;
+- fecha ya procesada;
+- fuente de levantes atrasada;
+- COM sin cierre suficiente;
+- bloqueo de una segunda corrida concurrente;
+- recuperacion de un lock vencido;
+- publicacion transaccional con respaldo;
+- reanudacion desde staging después de un fallo;
+- cierre posterior de observados sin recalcular predicciones.
+
+```{r}
+#| label: cargar-prueba-operativa
+#| echo: false
+path_app_operativa_test <- "../data/processed/app_operativa_test_1d"
+
+predicciones_operativas_test <- as.data.table(as.data.frame(
+  arrow::open_dataset(
+    file.path(path_app_operativa_test, "predicciones_operativas_cluster_dia")
+  )
+))
+
+metricas_operativas_test <- as.data.table(as.data.frame(
+  arrow::open_dataset(
+    file.path(path_app_operativa_test, "metricas_diarias")
+  )
+))
+
+control_ejecuciones_test <- as.data.table(as.data.frame(
+  arrow::open_dataset(
+    file.path(path_app_operativa_test, "control_ejecuciones")
+  )
+))
+```
+
+```{r}
+#| echo: false
+predicciones_operativas_test[
+  ,
+  .(
+    filas = .N,
+    clusters = uniqueN(cluster_id),
+    observaciones_cerradas = sum(estado_observacion == "cerrado"),
+    reclamos_observados = sum(tuvo_reclamo_observado == 1L, na.rm = TRUE),
+    probabilidad_media = mean(pred_prob)
+  ),
+  by = dia_objetivo
+] |>
+  kable(
+    format = "html",
+    digits = 6,
+    caption = "Salida publicada por la corrida operativa de prueba"
+  ) |>
+  kable_styling(
+    full_width = FALSE,
+    bootstrap_options = c("striped", "hover", "condensed")
+  )
+```
+
+```{r}
+#| echo: false
+metricas_operativas_test[
+  ,
+  .(
+    dia_objetivo,
+    top_pct,
+    n_dia,
+    positivos_dia,
+    precision = round(precision, 4),
+    capture_rate = round(capture_rate, 4),
+    lift = round(lift, 4)
+  )
+] |>
+  kable(
+    format = "html",
+    digits = 4,
+    caption = "Metricas luego del cierre posterior de COM"
+  ) |>
+  kable_styling(
+    full_width = FALSE,
+    bootstrap_options = c("striped", "hover", "condensed")
+  )
+```
+
+```{r}
+#| echo: false
+control_ejecuciones_test[
+  order(timestamp_inicio),
+  .(
+    timestamp_inicio,
+    fecha_objetivo_hasta,
+    dias_pendientes,
+    estado_ejecucion,
+    mensaje,
+    fecha_estado_final
+  )
+] |>
+  kable(
+    format = "html",
+    digits = 4,
+    caption = "Historial de ejecuciones, fallo, reanudacion e idempotencia"
+  ) |>
+  kable_styling(
+    full_width = FALSE,
+    bootstrap_options = c("striped", "hover", "condensed")
+  )
+```
+
+## Primera app operativa
+
+La primera interfaz se implemento en:
+
+- `app_operativa/app.R`;
+- `app_operativa/R/datos_app.R`.
+
+La app es de solo lectura y consume las salidas publicadas por el scoring.
+Incluye cuatro vistas:
+
+- **Hoy**: resumen, distribución de scores, cobertura por umbral y tabla
+  priorizada;
+- **Mapa**: clusters individuales o agregación en hexagonos de 300, 500 o
+  750 metros;
+- **Histórico**: predicciones de días consolidados con reclamos observados,
+  precisión, cobertura y lift;
+- **Estado de datos**: ruta, modelo, período disponible y controles de scoring.
+
+Los filtros disponibles son `Top 1%`, `Top 5%`, `Top 10%`, `Top 20%`,
+umbral personalizado y todos los clusters. La capa hexagonal permite alternar
+entre suma de probabilidades, score medio, cantidad de clusters top 10% y
+cantidad total de clusters.
+
+La app no ejecuta DBSCAN en esta primera versión. La agregación hexagonal ofrece
+una referencia espacial estable para evaluar primero si las zonas agregadas
+ayudan a la decisión operativa.
+
+Ejecución desde la raiz del proyecto:
+
+```powershell
+$env:APP_DATA_PATH = "data/processed/app_emulacion_bloque_10d"
+$env:APP_PORT = "3838"
+& "C:\Program Files\R\R-4.5.1\bin\Rscript.exe" app_operativa/run_app.R
+```
+
+## Experimento D-2 en logística reducida
+
+Se entreno una variante del modelo logístico reducido usando la misma especificacion de variables, pero recalculando las variables históricas de reclamos con rezago `D-2`.
+
+Script:
+
+- `scripts/modelo_logistico_cluster_dia_reducido.R`
+
+Ejecución experimental:
+
+- `REZAGO_RECLAMOS_DIAS=2`
+- `OUT_BASE_MODELO=data/processed/modelos/logistico_cluster_dia_reducido_reclamos_d2`
+
+Salida:
+
+- `data/processed/modelos/logistico_cluster_dia_reducido_reclamos_d2/`
+
+```{r}
+#| label: cargar-resultados-d2
+#| echo: false
+library(arrow)
+library(data.table)
+library(knitr)
+library(kableExtra)
+library(ggplot2)
+
+path_reducido <- "../data/processed/modelos/logistico_cluster_dia_reducido"
+path_reducido_d2 <- "../data/processed/modelos/logistico_cluster_dia_reducido_reclamos_d2"
+
+metricas_reducido <- as.data.table(as.data.frame(
+  arrow::open_dataset(file.path(path_reducido, "metricas"))
+))
+
+metricas_reducido_d2 <- as.data.table(as.data.frame(
+  arrow::open_dataset(file.path(path_reducido_d2, "metricas"))
+))
+
+lift_reducido <- as.data.table(as.data.frame(
+  arrow::open_dataset(file.path(path_reducido, "lift_validacion"))
+))
+
+lift_reducido_d2 <- as.data.table(as.data.frame(
+  arrow::open_dataset(file.path(path_reducido_d2, "lift_validacion"))
+))
+
+coeficientes_reducido_d2 <- as.data.table(as.data.frame(
+  arrow::open_dataset(file.path(path_reducido_d2, "coeficientes"))
+))
+
+metricas_comp <- rbindlist(list(
+  metricas_reducido[, modelo := "reducido_d1"][],
+  metricas_reducido_d2[, modelo := "reducido_d2"][]  
+), fill = TRUE)
+
+lift_comp <- rbindlist(list(
+  lift_reducido[, modelo := "reducido_d1"][],
+  lift_reducido_d2[, modelo := "reducido_d2"][]  
+), fill = TRUE)
+```
+
+### Métricas comparadas
+
+```{r}
+#| echo: false
+metricas_comp[
+  ,
+  .(
+    modelo,
+    split,
+    n,
+    positivos,
+    prevalencia = round(prevalencia, 4),
+    auc = round(auc, 4),
+    logloss = round(logloss, 4),
+    version_cluster
+  )
+] |>
+  kable(
+    format = "html",
+    digits = 4,
+    caption = "Logistico reducido actual vs variante con reclamos D-2"
+  ) |>
+  kable_styling(
+    full_width = FALSE,
+    bootstrap_options = c("striped", "hover", "condensed")
+  )
+```
+
+### Lift en validación
+
+```{r}
+#| echo: false
+lift_comp[
+  ,
+  .(
+    modelo,
+    top_pct,
+    n,
+    positivos,
+    precision = round(precision, 4),
+    capture_rate = round(capture_rate, 4),
+    lift = round(lift, 4),
+    version_cluster
+  )
+] |>
+  kable(
+    format = "html",
+    digits = 4,
+    caption = "Lift en validacion: D-1 vs D-2"
+  ) |>
+  kable_styling(
+    full_width = FALSE,
+    bootstrap_options = c("striped", "hover", "condensed")
+  )
+```
+
+```{r}
+#| echo: false
+#| fig-width: 8
+#| fig-height: 4.8
+ggplot(
+  lift_comp,
+  aes(x = factor(top_pct), y = lift, color = modelo, group = modelo)
+) +
+  geom_line(linewidth = 0.9) +
+  geom_point(size = 2.2) +
+  scale_x_discrete(labels = function(x) paste0(as.numeric(x) * 100, "%")) +
+  labs(
+    x = "Top priorizado",
+    y = "Lift",
+    color = "Modelo",
+    title = "Impacto de usar reclamos historicos hasta D-2"
+  ) +
+  theme_minimal(base_size = 11)
+```
+
+### Coeficientes principales D-2
+
+```{r}
+#| echo: false
+coeficientes_reducido_d2[
+  coeficiente_no_estimable == FALSE
+][
+  order(-abs_coeficiente)
+][
+  ,
+  .(
+    variable,
+    coeficiente = round(coeficiente, 4),
+    odds_ratio = round(odds_ratio, 4),
+    version_cluster
+  )
+] |>
+  kable(
+    format = "html",
+    digits = 4,
+    caption = "Coeficientes del logistico reducido con reclamos D-2"
+  ) |>
+  kable_styling(
+    full_width = FALSE,
+    bootstrap_options = c("striped", "hover", "condensed")
+  )
+```
+
+## Lectura preliminar
+
+La variante D-2 pierde algo de capacidad predictiva respecto al reducido actual, especialmente porque debilita la senal más reciente de reclamos. De todas formas, la caida es moderada y puede ser aceptable si la prioridad es robustez operacional.
+
+Si se logra que COM actualice a las 00:00 con días cerrados, se podría mantener o recuperar la definicion D-1. Por ahora, D-2 es la regla más robusta para un scoring matinal.

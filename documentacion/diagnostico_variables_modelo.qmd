@@ -1,0 +1,201 @@
+---
+title: "Diagnóstico de variables del modelo"
+format:
+  html:
+    theme: cosmo
+    toc: true
+    toc-depth: 3
+    number-sections: true
+    embed-resources: true
+execute:
+  echo: true
+  warning: false
+  message: false
+---
+
+## Objetivo
+
+Documentar el diagnóstico de colinealidad y selección de variables para los modelos a nivel `cluster_id`/`dia`.
+
+El diagnóstico se genera con:
+
+- `scripts/diagnostico_variables_modelo_cluster_dia.R`
+
+Salidas:
+
+- `data/processed/modelos/diagnostico_variables/`
+
+## Carga de resultados
+
+```{r}
+#| label: cargar-diagnostico-variables
+#| echo: false
+library(arrow)
+library(data.table)
+library(knitr)
+library(kableExtra)
+
+path_diag <- "../data/processed/modelos/diagnostico_variables"
+
+resumen_variables <- as.data.table(as.data.frame(
+  arrow::open_dataset(file.path(path_diag, "resumen_variables"))
+))
+
+correlaciones_altas <- as.data.table(as.data.frame(
+  arrow::open_dataset(file.path(path_diag, "correlaciones_altas"))
+))
+
+vif_variables <- as.data.table(as.data.frame(
+  arrow::open_dataset(file.path(path_diag, "vif_variables"))
+))
+
+target_por_variable <- as.data.table(as.data.frame(
+  arrow::open_dataset(file.path(path_diag, "target_por_variable"))
+))
+```
+
+## Resumen general
+
+```{r}
+#| echo: false
+data.table(
+  variables_originales = uniqueN(resumen_variables$variable),
+  correlaciones_altas = nrow(correlaciones_altas),
+  variables_con_vif_infinito = vif_variables[is.infinite(vif), .N],
+  version_cluster = unique(resumen_variables$version_cluster),
+  fecha_min_modelo = unique(resumen_variables$fecha_min_modelo),
+  meses_train = unique(resumen_variables$meses_train),
+  meses_validacion = unique(resumen_variables$meses_validacion)
+) |>
+  kable(
+    format = "html",
+    caption = "Resumen del diagnostico de variables"
+  ) |>
+  kable_styling(
+    full_width = FALSE,
+    bootstrap_options = c("striped", "hover", "condensed")
+  )
+```
+
+## Faltantes y distribución
+
+```{r}
+#| echo: false
+resumen_variables[
+  order(-pct_na, variable),
+  .(
+    variable,
+    pct_na = round(pct_na, 4),
+    media = round(media, 4),
+    desvio = round(desvio, 4),
+    p05 = round(p05, 4),
+    mediana = round(mediana, 4),
+    p95 = round(p95, 4),
+    max = round(max, 4)
+  )
+] |>
+  kable(
+    format = "html",
+    digits = 4,
+    caption = "Resumen de predictores en entrenamiento"
+  ) |>
+  kable_styling(
+    full_width = FALSE,
+    bootstrap_options = c("striped", "hover", "condensed")
+  )
+```
+
+## Correlaciones altas
+
+Se listan pares de variables con correlacion absoluta alta en la matriz preparada para el modelo.
+
+```{r}
+#| echo: false
+correlaciones_altas[
+  order(-abs_correlacion)
+][
+  1:min(.N, 30),
+  .(
+    variable_1,
+    variable_2,
+    correlacion = round(correlacion, 4),
+    abs_correlacion = round(abs_correlacion, 4)
+  )
+] |>
+  kable(
+    format = "html",
+    digits = 4,
+    caption = "Principales correlaciones altas"
+  ) |>
+  kable_styling(
+    full_width = FALSE,
+    bootstrap_options = c("striped", "hover", "condensed")
+  )
+```
+
+```{r}
+#| echo: false
+#| out-width: "100%"
+knitr::include_graphics("../data/processed/modelos/diagnostico_variables/figuras/correlaciones_predictores.png")
+```
+
+## VIF
+
+El VIF resume cuanto puede explicarse cada predictor con los demas. Valores muy altos indican colinealidad fuerte.
+
+```{r}
+#| echo: false
+vif_variables[
+  order(-vif)
+][
+  1:min(.N, 30),
+  .(
+    variable,
+    r2_contra_otros_predictores = round(r2_contra_otros_predictores, 4),
+    vif = fifelse(is.infinite(vif), Inf, round(vif, 2))
+  )
+] |>
+  kable(
+    format = "html",
+    digits = 4,
+    caption = "Variables con mayor VIF"
+  ) |>
+  kable_styling(
+    full_width = FALSE,
+    bootstrap_options = c("striped", "hover", "condensed")
+  )
+```
+
+## Lectura del diagnóstico
+
+El diagnóstico muestra que varias familias de variables tienen información redundante:
+
+- `dias_cluster_existente_*` y `pct_dias_cluster_existente_*` son transformaciones lineales entre si.
+- `n_contenedores_activos`, `n_contenedores_observados` y `n_contenedores_inferidos` están ligados por construcción.
+- `min`, `mean`, `median` y `max` del tiempo desde último levante están muy correlacionados.
+- Lo mismo ocurre con los ratios tiempo/período.
+- `min`, `mean` y `max` de `levante_periodo` también son casi equivalentes.
+- `n_contenedores_inferencia_lejana` no varia en el entrenamiento actual.
+
+## Criterio para el modelo reducido
+
+Para el modelo logístico reducido se elige un representante por familia:
+
+- Historia inmediata: `n_reclamos_lag1`.
+- Historia acumulada: `n_reclamos_sum_7d` y `n_reclamos_sum_30d`.
+- Ausencia/historia observada: `sin_reclamo_previo_observado`, tramos de historia observada y `dias_desde_ultimo_reclamo_o_inicio_trunc_90`.
+- Existencia del cluster: `dias_cluster_existente_30d`.
+- Composicion del cluster: `n_contenedores_activos`, `pct_contenedores_inferidos`.
+- Levante: `mean_tiempo_desde_ultimo_levante_pred`.
+- Periodicidad: `mean_levante_periodo`.
+- Inferencia de actividad: `mean_dias_total_tramo_inferido_estado`.
+
+Los tramos de historia observada son:
+
+- `0-6` días como referencia;
+- `7-29`;
+- `30-89`;
+- `90-179`;
+- `180+`.
+
+Se excluyen los ratios tiempo/período del modelo reducido para evitar interpretar coeficientes condicionados por variables casi duplicadas.

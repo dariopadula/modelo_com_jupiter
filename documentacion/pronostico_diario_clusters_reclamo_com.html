@@ -1,0 +1,3067 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="es" xml:lang="es"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.3.433">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+
+<title>Pronóstico diario de clusters con reclamo COM</title>
+<style>
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+</style>
+
+
+<script src="pronostico_diario_clusters_reclamo_com_files/libs/clipboard/clipboard.min.js"></script>
+<script src="pronostico_diario_clusters_reclamo_com_files/libs/quarto-html/quarto.js"></script>
+<script src="pronostico_diario_clusters_reclamo_com_files/libs/quarto-html/popper.min.js"></script>
+<script src="pronostico_diario_clusters_reclamo_com_files/libs/quarto-html/tippy.umd.min.js"></script>
+<script src="pronostico_diario_clusters_reclamo_com_files/libs/quarto-html/anchor.min.js"></script>
+<link href="pronostico_diario_clusters_reclamo_com_files/libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="pronostico_diario_clusters_reclamo_com_files/libs/quarto-html/quarto-syntax-highlighting.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="pronostico_diario_clusters_reclamo_com_files/libs/bootstrap/bootstrap.min.js"></script>
+<link href="pronostico_diario_clusters_reclamo_com_files/libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="pronostico_diario_clusters_reclamo_com_files/libs/bootstrap/bootstrap.min.css" rel="stylesheet" id="quarto-bootstrap" data-mode="light">
+
+  <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml-full.js" type="text/javascript"></script>
+
+</head>
+
+<body>
+
+<div id="quarto-content" class="page-columns page-rows-contents page-layout-article">
+<div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+  <nav id="TOC" role="doc-toc" class="toc-active">
+    <h2 id="toc-title">Tabla de contenidos</h2>
+   
+  <ul>
+  <li><a href="#objetivo-y-alcance" id="toc-objetivo-y-alcance" class="nav-link active" data-scroll-target="#objetivo-y-alcance"><span class="header-section-number">1</span> Objetivo y alcance</a></li>
+  <li><a href="#serie-observada-completa" id="toc-serie-observada-completa" class="nav-link" data-scroll-target="#serie-observada-completa"><span class="header-section-number">2</span> Serie observada completa</a></li>
+  <li><a href="#contrato-de-datos-observado" id="toc-contrato-de-datos-observado" class="nav-link" data-scroll-target="#contrato-de-datos-observado"><span class="header-section-number">3</span> Contrato de datos observado</a></li>
+  <li><a href="#métricas-del-predictor-agregado" id="toc-métricas-del-predictor-agregado" class="nav-link" data-scroll-target="#métricas-del-predictor-agregado"><span class="header-section-number">4</span> Métricas del predictor agregado</a>
+  <ul class="collapse">
+  <li><a href="#hallazgos-preliminares-fuera-de-muestra" id="toc-hallazgos-preliminares-fuera-de-muestra" class="nav-link" data-scroll-target="#hallazgos-preliminares-fuera-de-muestra"><span class="header-section-number">4.1</span> Hallazgos preliminares fuera de muestra</a></li>
+  </ul></li>
+  <li><a href="#evolución-diaria" id="toc-evolución-diaria" class="nav-link" data-scroll-target="#evolución-diaria"><span class="header-section-number">5</span> Evolución diaria</a></li>
+  <li><a href="#capacidad-para-reproducir-fluctuaciones" id="toc-capacidad-para-reproducir-fluctuaciones" class="nav-link" data-scroll-target="#capacidad-para-reproducir-fluctuaciones"><span class="header-section-number">6</span> Capacidad para reproducir fluctuaciones</a></li>
+  <li><a href="#relación-entre-predicción-y-observado" id="toc-relación-entre-predicción-y-observado" class="nav-link" data-scroll-target="#relación-entre-predicción-y-observado"><span class="header-section-number">7</span> Relación entre predicción y observado</a></li>
+  <li><a href="#días-de-mayor-afectación-observada" id="toc-días-de-mayor-afectación-observada" class="nav-link" data-scroll-target="#días-de-mayor-afectación-observada"><span class="header-section-number">8</span> Días de mayor afectación observada</a></li>
+  <li><a href="#lectura-del-paso-1" id="toc-lectura-del-paso-1" class="nav-link" data-scroll-target="#lectura-del-paso-1"><span class="header-section-number">9</span> Lectura del paso 1</a></li>
+  <li><a href="#próximos-análisis" id="toc-próximos-análisis" class="nav-link" data-scroll-target="#próximos-análisis"><span class="header-section-number">10</span> Próximos análisis</a></li>
+  <li><a href="#línea-de-modelado-territorial-acordada" id="toc-línea-de-modelado-territorial-acordada" class="nav-link" data-scroll-target="#línea-de-modelado-territorial-acordada"><span class="header-section-number">11</span> Línea de modelado territorial acordada</a></li>
+  <li><a href="#primer-experimento-barriodía-y-cczdía" id="toc-primer-experimento-barriodía-y-cczdía" class="nav-link" data-scroll-target="#primer-experimento-barriodía-y-cczdía"><span class="header-section-number">12</span> Primer experimento barrio/día y CCZ/día</a>
+  <ul class="collapse">
+  <li><a href="#especificación" id="toc-especificación" class="nav-link" data-scroll-target="#especificación"><span class="header-section-number">12.1</span> Especificación</a></li>
+  <li><a href="#resultado-en-test" id="toc-resultado-en-test" class="nav-link" data-scroll-target="#resultado-en-test"><span class="header-section-number">12.2</span> Resultado en test</a></li>
+  <li><a href="#inestabilidad-entre-validación-y-test" id="toc-inestabilidad-entre-validación-y-test" class="nav-link" data-scroll-target="#inestabilidad-entre-validación-y-test"><span class="header-section-number">12.3</span> Inestabilidad entre validación y test</a></li>
+  <li><a href="#lectura-provisional" id="toc-lectura-provisional" class="nav-link" data-scroll-target="#lectura-provisional"><span class="header-section-number">12.4</span> Lectura provisional</a></li>
+  </ul></li>
+  <li><a href="#experimento-incremental-acordado" id="toc-experimento-incremental-acordado" class="nav-link" data-scroll-target="#experimento-incremental-acordado"><span class="header-section-number">13</span> Experimento incremental acordado</a></li>
+  <li><a href="#resultados-de-la-comparación-m0m4" id="toc-resultados-de-la-comparación-m0m4" class="nav-link" data-scroll-target="#resultados-de-la-comparación-m0m4"><span class="header-section-number">14</span> Resultados de la comparación M0–M4</a>
+  <ul class="collapse">
+  <li><a href="#implementación-y-cobertura" id="toc-implementación-y-cobertura" class="nav-link" data-scroll-target="#implementación-y-cobertura"><span class="header-section-number">14.1</span> Implementación y cobertura</a></li>
+  <li><a href="#aporta-la-distribución-del-ratio" id="toc-aporta-la-distribución-del-ratio" class="nav-link" data-scroll-target="#aporta-la-distribución-del-ratio"><span class="header-section-number">14.2</span> ¿Aporta la distribución del ratio?</a></li>
+  <li><a href="#lectura-de-los-demás-bloques" id="toc-lectura-de-los-demás-bloques" class="nav-link" data-scroll-target="#lectura-de-los-demás-bloques"><span class="header-section-number">14.3</span> Lectura de los demás bloques</a></li>
+  <li><a href="#decisión-provisional-y-siguiente-prueba" id="toc-decisión-provisional-y-siguiente-prueba" class="nav-link" data-scroll-target="#decisión-provisional-y-siguiente-prueba"><span class="header-section-number">14.4</span> Decisión provisional y siguiente prueba</a></li>
+  </ul></li>
+  <li><a href="#segunda-generación-jerarquía-barriosegmento" id="toc-segunda-generación-jerarquía-barriosegmento" class="nav-link" data-scroll-target="#segunda-generación-jerarquía-barriosegmento"><span class="header-section-number">15</span> Segunda generación: jerarquía barrio/segmento</a>
+  <ul class="collapse">
+  <li><a href="#motivación-y-especificación" id="toc-motivación-y-especificación" class="nav-link" data-scroll-target="#motivación-y-especificación"><span class="header-section-number">15.1</span> Motivación y especificación</a></li>
+  <li><a href="#tamaño-y-factibilidad-computacional" id="toc-tamaño-y-factibilidad-computacional" class="nav-link" data-scroll-target="#tamaño-y-factibilidad-computacional"><span class="header-section-number">15.2</span> Tamaño y factibilidad computacional</a></li>
+  <li><a href="#resultados-fuera-de-muestra" id="toc-resultados-fuera-de-muestra" class="nav-link" data-scroll-target="#resultados-fuera-de-muestra"><span class="header-section-number">15.3</span> Resultados fuera de muestra</a></li>
+  <li><a href="#decisión-provisional" id="toc-decisión-provisional" class="nav-link" data-scroll-target="#decisión-provisional"><span class="header-section-number">15.4</span> Decisión provisional</a></li>
+  </ul></li>
+  <li><a href="#propensión-reciente-del-barrio-e-interacción-con-el-exceso" id="toc-propensión-reciente-del-barrio-e-interacción-con-el-exceso" class="nav-link" data-scroll-target="#propensión-reciente-del-barrio-e-interacción-con-el-exceso"><span class="header-section-number">16</span> Propensión reciente del barrio e interacción con el exceso</a></li>
+  <li><a href="#top-20-e-interacción-entre-score-y-exceso" id="toc-top-20-e-interacción-entre-score-y-exceso" class="nav-link" data-scroll-target="#top-20-e-interacción-entre-score-y-exceso"><span class="header-section-number">17</span> Top-20 % e interacción entre score y exceso</a></li>
+  <li><a href="#extremos-locales-de-exceso-dentro-del-segmento" id="toc-extremos-locales-de-exceso-dentro-del-segmento" class="nav-link" data-scroll-target="#extremos-locales-de-exceso-dentro-del-segmento"><span class="header-section-number">18</span> Extremos locales de exceso dentro del segmento</a>
+  <ul class="collapse">
+  <li><a href="#comparación-visual-de-baselines-y-candidatos" id="toc-comparación-visual-de-baselines-y-candidatos" class="nav-link" data-scroll-target="#comparación-visual-de-baselines-y-candidatos"><span class="header-section-number">18.1</span> Comparación visual de baselines y candidatos</a></li>
+  </ul></li>
+  <li><a href="#registro-sintético-de-modelos-probados" id="toc-registro-sintético-de-modelos-probados" class="nav-link" data-scroll-target="#registro-sintético-de-modelos-probados"><span class="header-section-number">19</span> Registro sintético de modelos probados</a>
+  <ul class="collapse">
+  <li><a href="#modelos-territoriales-agregados-iniciales" id="toc-modelos-territoriales-agregados-iniciales" class="nav-link" data-scroll-target="#modelos-territoriales-agregados-iniciales"><span class="header-section-number">19.1</span> Modelos territoriales agregados iniciales</a></li>
+  <li><a href="#jerarquía-barriosegmento-y-resúmenes-del-score" id="toc-jerarquía-barriosegmento-y-resúmenes-del-score" class="nav-link" data-scroll-target="#jerarquía-barriosegmento-y-resúmenes-del-score"><span class="header-section-number">19.2</span> Jerarquía barrio/segmento y resúmenes del score</a></li>
+  <li><a href="#propensión-reciente-del-barrio" id="toc-propensión-reciente-del-barrio" class="nav-link" data-scroll-target="#propensión-reciente-del-barrio"><span class="header-section-number">19.3</span> Propensión reciente del barrio</a></li>
+  <li><a href="#top-20-del-score-e-interacciones-con-exceso" id="toc-top-20-del-score-e-interacciones-con-exceso" class="nav-link" data-scroll-target="#top-20-del-score-e-interacciones-con-exceso"><span class="header-section-number">19.4</span> Top-20 % del score e interacciones con exceso</a></li>
+  <li><a href="#extremos-locales-de-exceso-por-segmento" id="toc-extremos-locales-de-exceso-por-segmento" class="nav-link" data-scroll-target="#extremos-locales-de-exceso-por-segmento"><span class="header-section-number">19.5</span> Extremos locales de exceso por segmento</a></li>
+  <li><a href="#extremo-e-interacción-calculados-a-nivel-barrio" id="toc-extremo-e-interacción-calculados-a-nivel-barrio" class="nav-link" data-scroll-target="#extremo-e-interacción-calculados-a-nivel-barrio"><span class="header-section-number">19.6</span> Extremo e interacción calculados a nivel barrio</a></li>
+  </ul></li>
+  <li><a href="#próxima-línea-carga-de-atraso-ponderada-por-propensión" id="toc-próxima-línea-carga-de-atraso-ponderada-por-propensión" class="nav-link" data-scroll-target="#próxima-línea-carga-de-atraso-ponderada-por-propensión"><span class="header-section-number">20</span> Próxima línea: carga de atraso ponderada por propensión</a>
+  <ul class="collapse">
+  <li><a href="#construcción-propuesta" id="toc-construcción-propuesta" class="nav-link" data-scroll-target="#construcción-propuesta"><span class="header-section-number">20.1</span> Construcción propuesta</a></li>
+  <li><a href="#contraste-mínimo-acordado" id="toc-contraste-mínimo-acordado" class="nav-link" data-scroll-target="#contraste-mínimo-acordado"><span class="header-section-number">20.2</span> Contraste mínimo acordado</a></li>
+  <li><a href="#primer-contraste-de-momentos-y-pendientes-barriales" id="toc-primer-contraste-de-momentos-y-pendientes-barriales" class="nav-link" data-scroll-target="#primer-contraste-de-momentos-y-pendientes-barriales"><span class="header-section-number">20.3</span> Primer contraste de momentos y pendientes barriales</a></li>
+  <li><a href="#xgboost-como-corrección-de-la-expectativa-estructural" id="toc-xgboost-como-corrección-de-la-expectativa-estructural" class="nav-link" data-scroll-target="#xgboost-como-corrección-de-la-expectativa-estructural"><span class="header-section-number">20.4</span> XGBoost como corrección de la expectativa estructural</a></li>
+  <li><a href="#sensibilidad-a-la-ventana-de-propensión" id="toc-sensibilidad-a-la-ventana-de-propensión" class="nav-link" data-scroll-target="#sensibilidad-a-la-ventana-de-propensión"><span class="header-section-number">20.5</span> Sensibilidad a la ventana de propensión</a></li>
+  <li><a href="#cambio-reciente-respecto-de-la-propensión-habitual" id="toc-cambio-reciente-respecto-de-la-propensión-habitual" class="nav-link" data-scroll-target="#cambio-reciente-respecto-de-la-propensión-habitual"><span class="header-section-number">20.6</span> Cambio reciente respecto de la propensión habitual</a></li>
+  <li><a href="#feriados-y-días-posteriores" id="toc-feriados-y-días-posteriores" class="nav-link" data-scroll-target="#feriados-y-días-posteriores"><span class="header-section-number">20.7</span> Feriados y días posteriores</a></li>
+  <li><a href="#severidad-extrema-mediante-top-20" id="toc-severidad-extrema-mediante-top-20" class="nav-link" data-scroll-target="#severidad-extrema-mediante-top-20"><span class="header-section-number">20.8</span> Severidad extrema mediante top 20 %</a></li>
+  <li><a href="#cambio-reciente-del-volumen-global-com" id="toc-cambio-reciente-del-volumen-global-com" class="nav-link" data-scroll-target="#cambio-reciente-del-volumen-global-com"><span class="header-section-number">20.9</span> Cambio reciente del volumen global COM</a></li>
+  <li><a href="#evaluación-territorial-por-barrio" id="toc-evaluación-territorial-por-barrio" class="nav-link" data-scroll-target="#evaluación-territorial-por-barrio"><span class="header-section-number">20.10</span> Evaluación territorial por barrio</a></li>
+  </ul></li>
+  </ul>
+</nav>
+</div>
+<main class="content" id="quarto-document-content">
+
+<header id="title-block-header" class="quarto-title-block default">
+<div class="quarto-title">
+<h1 class="title">Pronóstico diario de clusters con reclamo COM</h1>
+<p class="subtitle lead">Diagnóstico y comparación incremental de modelos agregados</p>
+</div>
+
+
+
+<div class="quarto-title-meta">
+
+    
+  
+    
+  </div>
+  
+
+</header>
+
+<section id="objetivo-y-alcance" class="level2" data-number="1">
+<h2 data-number="1" class="anchored" data-anchor-id="objetivo-y-alcance"><span class="header-section-number">1</span> Objetivo y alcance</h2>
+<p>Este documento registra de forma incremental el análisis para anticipar cuántos clusters tendrán al menos un reclamo COM en el día objetivo. El primer paso es evaluar una predicción que ya está implícita en el modelo operativo por cluster:</p>
+<p><span class="math display">\[
+\widehat{N}_D = \sum_c \widehat{P}(Y_{c,D}=1),
+\]</span></p>
+<p>donde <span class="math inline">\(Y_{c,D}\)</span> indica si el cluster <span class="math inline">\(c\)</span> tuvo al menos un reclamo en el día <span class="math inline">\(D\)</span>.</p>
+<p>La suma representa el número esperado de clusters con reclamo si las probabilidades están bien calibradas. Un buen ranking espacial no garantiza que esta suma reproduzca la variación diaria: el modelo puede ordenar correctamente los clusters y, al mismo tiempo, producir probabilidades demasiado estables.</p>
+<p>Este diagnóstico no modifica ni reentrena el modelo. Utiliza las predicciones COM ya generadas para la aplicación y sus observados posteriormente completados.</p>
+<div class="cell">
+<div class="cell-output cell-output-stdout">
+<pre><code>[1] "Spanish_Uruguay.utf8"</code></pre>
+</div>
+</div>
+</section>
+<section id="serie-observada-completa" class="level2" data-number="2">
+<h2 data-number="2" class="anchored" data-anchor-id="serie-observada-completa"><span class="header-section-number">2</span> Serie observada completa</h2>
+<div class="cell">
+<div class="cell-output-display">
+<p><img src="pronostico_diario_clusters_reclamo_com_files/figure-html/serie-observada-completa-splits-1.png" class="img-fluid" width="1248"></p>
+</div>
+</div>
+<p>El gráfico permite inspeccionar conjuntamente cambios de nivel, amplitud y variabilidad entre los tres períodos antes de comparar modelos. La media móvil se utiliza solo como ayuda visual y no interviene en ningún ajuste.</p>
+</section>
+<section id="contrato-de-datos-observado" class="level2" data-number="3">
+<h2 data-number="3" class="anchored" data-anchor-id="contrato-de-datos-observado"><span class="header-section-number">3</span> Contrato de datos observado</h2>
+<div class="cell">
+<div class="cell-output-display">
+<table class="table table-sm table-striped small">
+<caption>Cobertura utilizada en el diagnóstico</caption>
+<thead>
+<tr class="header">
+<th style="text-align: left;">metrica</th>
+<th style="text-align: left;">valor</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">Filas cluster-día COM</td>
+<td style="text-align: left;">3.951.029</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Días totales</td>
+<td style="text-align: left;">509</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Días con observados completos</td>
+<td style="text-align: left;">502</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Fecha inicial completa</td>
+<td style="text-align: left;">2025-01-08</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Fecha final completa</td>
+<td style="text-align: left;">2026-05-24</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Días de entrenamiento</td>
+<td style="text-align: left;">358</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Días de validación</td>
+<td style="text-align: left;">90</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Días de test</td>
+<td style="text-align: left;">54</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Mínimo de clusters por día</td>
+<td style="text-align: left;">6577</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Máximo de clusters por día</td>
+<td style="text-align: left;">8373</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Versiones de modelo</td>
+<td style="text-align: left;">logistico_reducido_d2</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<p>El análisis exige observación completa del target para todos los clusters del día. El diagnóstico principal usa validación y test; entrenamiento se utiliza solo para aprender el promedio de referencia y aportar contexto. Los períodos abiertos, parciales o anteriores a la fecha mínima del modelo no se usan para medir error.</p>
+</section>
+<section id="métricas-del-predictor-agregado" class="level2" data-number="4">
+<h2 data-number="4" class="anchored" data-anchor-id="métricas-del-predictor-agregado"><span class="header-section-number">4</span> Métricas del predictor agregado</h2>
+<div class="cell">
+<div class="cell-output-display">
+<table class="table table-sm table-striped small">
+<caption>Desempeño diario por período del modelo</caption>
+<colgroup>
+<col style="width: 7%">
+<col style="width: 2%">
+<col style="width: 6%">
+<col style="width: 7%">
+<col style="width: 3%">
+<col style="width: 6%">
+<col style="width: 7%">
+<col style="width: 8%">
+<col style="width: 8%">
+<col style="width: 5%">
+<col style="width: 5%">
+<col style="width: 5%">
+<col style="width: 6%">
+<col style="width: 3%">
+<col style="width: 9%">
+<col style="width: 4%">
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: left;">periodo</th>
+<th style="text-align: right;">dias</th>
+<th style="text-align: right;">media_observada</th>
+<th style="text-align: right;">media_suma_scores</th>
+<th style="text-align: right;">sesgo</th>
+<th style="text-align: right;">mae_suma_scores</th>
+<th style="text-align: right;">rmse_suma_scores</th>
+<th style="text-align: right;">mae_promedio_train</th>
+<th style="text-align: right;">rmse_promedio_train</th>
+<th style="text-align: right;">cor_pearson</th>
+<th style="text-align: right;">cor_spearman</th>
+<th style="text-align: right;">sd_observado</th>
+<th style="text-align: right;">sd_suma_scores</th>
+<th style="text-align: right;">razon_sd</th>
+<th style="text-align: right;">pendiente_calibracion</th>
+<th style="text-align: right;">r2_diario</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">entrenamiento</td>
+<td style="text-align: right;">358</td>
+<td style="text-align: right;">833.170</td>
+<td style="text-align: right;">833.170</td>
+<td style="text-align: right;">0.000</td>
+<td style="text-align: right;">172.938</td>
+<td style="text-align: right;">217.098</td>
+<td style="text-align: right;">230.682</td>
+<td style="text-align: right;">293.974</td>
+<td style="text-align: right;">0.675</td>
+<td style="text-align: right;">0.690</td>
+<td style="text-align: right;">294.386</td>
+<td style="text-align: right;">188.345</td>
+<td style="text-align: right;">0.640</td>
+<td style="text-align: right;">1.055</td>
+<td style="text-align: right;">0.456</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">validacion</td>
+<td style="text-align: right;">90</td>
+<td style="text-align: right;">816.100</td>
+<td style="text-align: right;">891.915</td>
+<td style="text-align: right;">75.815</td>
+<td style="text-align: right;">144.593</td>
+<td style="text-align: right;">199.706</td>
+<td style="text-align: right;">156.782</td>
+<td style="text-align: right;">207.094</td>
+<td style="text-align: right;">0.448</td>
+<td style="text-align: right;">0.466</td>
+<td style="text-align: right;">207.545</td>
+<td style="text-align: right;">103.104</td>
+<td style="text-align: right;">0.497</td>
+<td style="text-align: right;">0.902</td>
+<td style="text-align: right;">0.201</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">test</td>
+<td style="text-align: right;">54</td>
+<td style="text-align: right;">882.056</td>
+<td style="text-align: right;">903.402</td>
+<td style="text-align: right;">21.346</td>
+<td style="text-align: right;">152.891</td>
+<td style="text-align: right;">202.137</td>
+<td style="text-align: right;">170.974</td>
+<td style="text-align: right;">220.669</td>
+<td style="text-align: right;">0.357</td>
+<td style="text-align: right;">0.378</td>
+<td style="text-align: right;">217.207</td>
+<td style="text-align: right;">81.161</td>
+<td style="text-align: right;">0.374</td>
+<td style="text-align: right;">0.956</td>
+<td style="text-align: right;">0.128</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">validacion + test</td>
+<td style="text-align: right;">144</td>
+<td style="text-align: right;">840.833</td>
+<td style="text-align: right;">896.222</td>
+<td style="text-align: right;">55.389</td>
+<td style="text-align: right;">147.705</td>
+<td style="text-align: right;">200.621</td>
+<td style="text-align: right;">162.104</td>
+<td style="text-align: right;">212.286</td>
+<td style="text-align: right;">0.418</td>
+<td style="text-align: right;">0.445</td>
+<td style="text-align: right;">212.888</td>
+<td style="text-align: right;">95.334</td>
+<td style="text-align: right;">0.448</td>
+<td style="text-align: right;">0.934</td>
+<td style="text-align: right;">0.175</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<p>El promedio de referencia se calcula solamente con los días de entrenamiento. No incorpora observaciones de validación o test, aunque todavía no sustituye un backtesting con reentrenamientos sucesivos.</p>
+<section id="hallazgos-preliminares-fuera-de-muestra" class="level3" data-number="4.1">
+<h3 data-number="4.1" class="anchored" data-anchor-id="hallazgos-preliminares-fuera-de-muestra"><span class="header-section-number">4.1</span> Hallazgos preliminares fuera de muestra</h3>
+<p>En los 144 días de validación y test, la suma de scores:</p>
+<ul>
+<li>sobrestima en promedio 55.4 clusters por día;</li>
+<li>obtiene MAE 147.7, frente a 162.1 del promedio aprendido en entrenamiento;</li>
+<li>reduce el MAE aproximadamente 8.9 % y el RMSE 5.5 % respecto de ese predictor constante;</li>
+<li>alcanza correlación de Pearson 0.418 y explica linealmente alrededor de 17.5 % de la variación diaria;</li>
+<li>presenta un desvío de 95.3 clusters, frente a 212.9 del observado: reproduce solo 44.8 % de la amplitud observada.</li>
+</ul>
+<p>La señal agregada es mejor que permanecer siempre en el promedio, pero la mejora es moderada y la variación pronosticada está fuertemente contraída. En test, la correlación baja a 0.357 y la razón de desvíos a 37.4 %, lo que refuerza la necesidad de revisar estabilidad temporal y señales comunes a toda la ciudad.</p>
+</section>
+</section>
+<section id="evolución-diaria" class="level2" data-number="5">
+<h2 data-number="5" class="anchored" data-anchor-id="evolución-diaria"><span class="header-section-number">5</span> Evolución diaria</h2>
+<div class="cell">
+<div class="cell-output-display">
+<p><img src="pronostico_diario_clusters_reclamo_com_files/figure-html/serie-temporal-1.png" class="img-fluid" width="1056"></p>
+</div>
+</div>
+</section>
+<section id="capacidad-para-reproducir-fluctuaciones" class="level2" data-number="6">
+<h2 data-number="6" class="anchored" data-anchor-id="capacidad-para-reproducir-fluctuaciones"><span class="header-section-number">6</span> Capacidad para reproducir fluctuaciones</h2>
+<div class="cell">
+<div class="cell-output-display">
+<p><img src="pronostico_diario_clusters_reclamo_com_files/figure-html/desviaciones-1.png" class="img-fluid" width="1056"></p>
+</div>
+</div>
+<p>La razón entre el desvío de la suma de scores y el desvío observado cuantifica la contracción de variabilidad. Un valor muy inferior a uno confirma que el predictor agregado se mueve poco frente a los cambios reales entre días.</p>
+</section>
+<section id="relación-entre-predicción-y-observado" class="level2" data-number="7">
+<h2 data-number="7" class="anchored" data-anchor-id="relación-entre-predicción-y-observado"><span class="header-section-number">7</span> Relación entre predicción y observado</h2>
+<div class="cell">
+<div class="cell-output-display">
+<p><img src="pronostico_diario_clusters_reclamo_com_files/figure-html/dispersion-1.png" class="img-fluid" width="672"></p>
+</div>
+</div>
+<p>La pendiente del ajuste diario no debe interpretarse como corrección definitiva: se estima sobre el mismo período evaluado. Funciona como diagnóstico de escala y permite observar si las probabilidades necesitan una calibración temporal adicional.</p>
+</section>
+<section id="días-de-mayor-afectación-observada" class="level2" data-number="8">
+<h2 data-number="8" class="anchored" data-anchor-id="días-de-mayor-afectación-observada"><span class="header-section-number">8</span> Días de mayor afectación observada</h2>
+<div class="cell">
+<div class="cell-output-display">
+<table class="table table-sm table-striped small">
+<caption>Primeros 20 días con mayor afectación; umbral P90 = 1125.3 clusters</caption>
+<colgroup>
+<col style="width: 10%">
+<col style="width: 18%">
+<col style="width: 17%">
+<col style="width: 7%">
+<col style="width: 18%">
+<col style="width: 27%">
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: left;">dia</th>
+<th style="text-align: right;">clusters_observados</th>
+<th style="text-align: right;">clusters_esperados</th>
+<th style="text-align: right;">error</th>
+<th style="text-align: right;">reclamos_observados</th>
+<th style="text-align: right;">reclamos_por_cluster_afectado</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">2026-04-13</td>
+<td style="text-align: right;">1393</td>
+<td style="text-align: right;">929.16</td>
+<td style="text-align: right;">-463.84</td>
+<td style="text-align: right;">1611</td>
+<td style="text-align: right;">1.156</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">2026-04-14</td>
+<td style="text-align: right;">1379</td>
+<td style="text-align: right;">976.61</td>
+<td style="text-align: right;">-402.39</td>
+<td style="text-align: right;">1624</td>
+<td style="text-align: right;">1.178</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">2026-03-09</td>
+<td style="text-align: right;">1341</td>
+<td style="text-align: right;">1066.94</td>
+<td style="text-align: right;">-274.06</td>
+<td style="text-align: right;">1507</td>
+<td style="text-align: right;">1.124</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">2026-04-20</td>
+<td style="text-align: right;">1298</td>
+<td style="text-align: right;">975.47</td>
+<td style="text-align: right;">-322.53</td>
+<td style="text-align: right;">1539</td>
+<td style="text-align: right;">1.186</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">2026-03-16</td>
+<td style="text-align: right;">1283</td>
+<td style="text-align: right;">925.53</td>
+<td style="text-align: right;">-357.47</td>
+<td style="text-align: right;">1591</td>
+<td style="text-align: right;">1.240</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">2026-04-06</td>
+<td style="text-align: right;">1252</td>
+<td style="text-align: right;">916.40</td>
+<td style="text-align: right;">-335.60</td>
+<td style="text-align: right;">1485</td>
+<td style="text-align: right;">1.186</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">2026-01-02</td>
+<td style="text-align: right;">1246</td>
+<td style="text-align: right;">1212.76</td>
+<td style="text-align: right;">-33.24</td>
+<td style="text-align: right;">1453</td>
+<td style="text-align: right;">1.166</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">2026-04-15</td>
+<td style="text-align: right;">1236</td>
+<td style="text-align: right;">973.17</td>
+<td style="text-align: right;">-262.83</td>
+<td style="text-align: right;">1387</td>
+<td style="text-align: right;">1.122</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">2026-01-05</td>
+<td style="text-align: right;">1214</td>
+<td style="text-align: right;">1203.13</td>
+<td style="text-align: right;">-10.87</td>
+<td style="text-align: right;">1471</td>
+<td style="text-align: right;">1.212</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">2026-01-07</td>
+<td style="text-align: right;">1202</td>
+<td style="text-align: right;">1037.81</td>
+<td style="text-align: right;">-164.19</td>
+<td style="text-align: right;">1417</td>
+<td style="text-align: right;">1.179</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">2026-03-10</td>
+<td style="text-align: right;">1193</td>
+<td style="text-align: right;">1083.45</td>
+<td style="text-align: right;">-109.55</td>
+<td style="text-align: right;">1362</td>
+<td style="text-align: right;">1.142</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">2026-03-11</td>
+<td style="text-align: right;">1193</td>
+<td style="text-align: right;">1010.49</td>
+<td style="text-align: right;">-182.51</td>
+<td style="text-align: right;">1337</td>
+<td style="text-align: right;">1.121</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">2026-05-04</td>
+<td style="text-align: right;">1171</td>
+<td style="text-align: right;">1100.33</td>
+<td style="text-align: right;">-70.67</td>
+<td style="text-align: right;">1289</td>
+<td style="text-align: right;">1.101</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">2026-04-28</td>
+<td style="text-align: right;">1169</td>
+<td style="text-align: right;">957.98</td>
+<td style="text-align: right;">-211.02</td>
+<td style="text-align: right;">1385</td>
+<td style="text-align: right;">1.185</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<p>Esta tabla permite revisar si la contracción es especialmente problemática en los días que más interesan al negocio. En etapas posteriores se incorporarán métricas formales para anticipar la superación de umbrales operativos.</p>
+<p>Los días de mayor afectación muestran errores negativos importantes. Por ejemplo, el 13 de abril de 2026 se observaron 1.393 clusters con reclamo y la suma de scores anticipó aproximadamente 929. Esto es consistente con un modelo que conserva cierta señal de nivel, pero no reacciona con suficiente amplitud ante shocks diarios.</p>
+</section>
+<section id="lectura-del-paso-1" class="level2" data-number="9">
+<h2 data-number="9" class="anchored" data-anchor-id="lectura-del-paso-1"><span class="header-section-number">9</span> Lectura del paso 1</h2>
+<p>La evaluación de este paso debe separar tres propiedades:</p>
+<ol type="1">
+<li><strong>Nivel:</strong> si la suma tiene una media parecida al total observado.</li>
+<li><strong>Movimiento:</strong> si sube y baja en los mismos días que el observado.</li>
+<li><strong>Amplitud:</strong> si reproduce la magnitud real de esas fluctuaciones.</li>
+</ol>
+<p>Un predictor puede tener poco sesgo medio y aun ser poco útil para anticipar días altos si permanece demasiado cerca del promedio. Las siguientes etapas deberán determinar si esa estabilidad proviene de calibración global, de las features disponibles, del objetivo de entrenamiento por cluster o de la pérdida de señales comunes a toda la ciudad.</p>
+<p>En este primer diagnóstico, una recalibración lineal simple no parece suficiente como explicación única. La pendiente agregada está cerca de uno, pero la correlación es moderada y queda mucha variación residual. El problema parece incluir falta de información para identificar qué días se apartan del nivel habitual, no solamente una escala incorrecta de probabilidades.</p>
+</section>
+<section id="próximos-análisis" class="level2" data-number="10">
+<h2 data-number="10" class="anchored" data-anchor-id="próximos-análisis"><span class="header-section-number">10</span> Próximos análisis</h2>
+<ul>
+<li>Comparar la suma de scores contra baselines temporales construidos sin mirar el futuro.</li>
+<li>Separar resultados por entrenamiento, validación y test si la salida permite reconstruir los períodos originales.</li>
+<li>Revisar calibración diaria y calibración por período.</li>
+<li>Identificar qué componentes del score varían entre días y cuáles solo ordenan clusters dentro de cada día.</li>
+<li>Evaluar variables de nivel ciudad que no pueden ser aprendidas adecuadamente por un modelo centrado en diferencias entre clusters.</li>
+<li>Definir y validar la noción operativa de día complicado.</li>
+</ul>
+</section>
+<section id="línea-de-modelado-territorial-acordada" class="level2" data-number="11">
+<h2 data-number="11" class="anchored" data-anchor-id="línea-de-modelado-territorial-acordada"><span class="header-section-number">11</span> Línea de modelado territorial acordada</h2>
+<p>Como siguiente línea se construirá una base <code>barrio/día</code>. El target será la cantidad de clusters del barrio con al menos un reclamo y la exposición será la cantidad de clusters activos o elegibles del barrio en ese día.</p>
+<p>La base podrá resumir, respetando el corte operativo:</p>
+<ul>
+<li>cantidad de clusters y contenedores activos;</li>
+<li>distribución del tiempo desde el último levante;</li>
+<li>cantidad y proporción de clusters atrasados;</li>
+<li>periodicidad teórica y exceso sobre esa periodicidad;</li>
+<li>calidad observada o inferida del estado de contenedores;</li>
+<li>historia de reclamos del barrio cerrada hasta <code>D-2</code>;</li>
+<li>distribución de scores del modelo por cluster;</li>
+<li>variables sociodemográficas, incluyendo NBI, densidad y vivienda.</li>
+</ul>
+<p>El modelo de barrio no incluirá simultáneamente CCZ ni municipio. Esas particiones son parcialmente redundantes y dificultarían interpretar qué nivel territorial está aportando la señal.</p>
+<p>En una etapa posterior se construirá una variante independiente <code>CCZ/día</code> bajo la misma lógica. Ambos niveles se compararán usando períodos, cortes temporales, familias de variables y métricas comunes. La comparación permitirá evaluar el equilibrio entre mayor detalle territorial en barrio y mayor estabilidad estadística en CCZ.</p>
+</section>
+<section id="primer-experimento-barriodía-y-cczdía" class="level2" data-number="12">
+<h2 data-number="12" class="anchored" data-anchor-id="primer-experimento-barriodía-y-cczdía"><span class="header-section-number">12</span> Primer experimento barrio/día y CCZ/día</h2>
+<section id="especificación" class="level3" data-number="12.1">
+<h3 data-number="12.1" class="anchored" data-anchor-id="especificación"><span class="header-section-number">12.1</span> Especificación</h3>
+<p>Se construyeron dos bases con igual período y familias de variables:</p>
+<ul>
+<li>62 barrios y 22.578 barrio-días de entrenamiento;</li>
+<li>18 CCZ y 6.559 CCZ-días de entrenamiento.</li>
+</ul>
+<p>En ambos casos el target es la cantidad de clusters con al menos un reclamo y la cantidad de clusters del territorio funciona como exposición binomial. Los modelos usan:</p>
+<ul>
+<li>día de semana y mes;</li>
+<li>media, desvío y percentil 90 del score por cluster;</li>
+<li>media y percentil 90 del tiempo desde el último levante;</li>
+<li>proporción de clusters con tiempo desde levante mayor o igual a tres días;</li>
+<li>contenedores activos y proporción inferida;</li>
+<li>historia COM agregada a uno, siete y treinta días;</li>
+<li>NBI, asentamiento, vivienda inadecuada y densidad;</li>
+<li>interacciones entre NBI y tiempo desde levante, y entre NBI y score.</li>
+</ul>
+<p>La estructura territorial se representa mediante un intercepto aleatorio penalizado. Esto permite que cada territorio tenga un nivel basal propio con <em>partial pooling</em>. La primera prueba con pendiente aleatoria por barrio resultó demasiado costosa para esta etapa y se simplificó antes de generar resultados.</p>
+<p>El modelo de barrio no utiliza CCZ ni municipio. El modelo de CCZ se entrena por separado y no utiliza barrio.</p>
+<p>Implementación reproducible:</p>
+<ul>
+<li><code>scripts/modelo_agregado_territorial_diario_com.R</code>;</li>
+<li><code>outputs/modelos_agregados_territoriales_com/</code>.</li>
+</ul>
+<div class="cell">
+<div class="cell-output-display">
+<table class="table table-sm table-striped small">
+<caption>Comparación fuera de muestra en test: abril y mayo de 2026</caption>
+<colgroup>
+<col style="width: 5%">
+<col style="width: 25%">
+<col style="width: 3%">
+<col style="width: 11%">
+<col style="width: 11%">
+<col style="width: 4%">
+<col style="width: 4%">
+<col style="width: 4%">
+<col style="width: 8%">
+<col style="width: 21%">
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: left;">nivel</th>
+<th style="text-align: left;">modelo</th>
+<th style="text-align: right;">dias</th>
+<th style="text-align: right;">media_observada</th>
+<th style="text-align: right;">media_predicha</th>
+<th style="text-align: right;">sesgo</th>
+<th style="text-align: right;">MAE</th>
+<th style="text-align: right;">RMSE</th>
+<th style="text-align: right;">correlacion</th>
+<th style="text-align: right;">variabilidad_reproducida_pct</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">barrio</td>
+<td style="text-align: left;">territorial_jerarquico_intercepto</td>
+<td style="text-align: right;">54</td>
+<td style="text-align: right;">882.1</td>
+<td style="text-align: right;">895.4</td>
+<td style="text-align: right;">13.4</td>
+<td style="text-align: right;">155.7</td>
+<td style="text-align: right;">189.3</td>
+<td style="text-align: right;">0.532</td>
+<td style="text-align: right;">76.3</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">barrio</td>
+<td style="text-align: left;">suma_scores_cluster</td>
+<td style="text-align: right;">54</td>
+<td style="text-align: right;">882.1</td>
+<td style="text-align: right;">903.4</td>
+<td style="text-align: right;">21.3</td>
+<td style="text-align: right;">152.9</td>
+<td style="text-align: right;">202.1</td>
+<td style="text-align: right;">0.357</td>
+<td style="text-align: right;">37.4</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">barrio</td>
+<td style="text-align: left;">promedio_train</td>
+<td style="text-align: right;">54</td>
+<td style="text-align: right;">882.1</td>
+<td style="text-align: right;">828.1</td>
+<td style="text-align: right;">-53.9</td>
+<td style="text-align: right;">172.3</td>
+<td style="text-align: right;">221.8</td>
+<td style="text-align: right;">NA</td>
+<td style="text-align: right;">0.0</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">ccz</td>
+<td style="text-align: left;">territorial_jerarquico_intercepto</td>
+<td style="text-align: right;">54</td>
+<td style="text-align: right;">882.1</td>
+<td style="text-align: right;">865.2</td>
+<td style="text-align: right;">-16.9</td>
+<td style="text-align: right;">157.2</td>
+<td style="text-align: right;">190.2</td>
+<td style="text-align: right;">0.529</td>
+<td style="text-align: right;">76.4</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">ccz</td>
+<td style="text-align: left;">suma_scores_cluster</td>
+<td style="text-align: right;">54</td>
+<td style="text-align: right;">882.1</td>
+<td style="text-align: right;">903.4</td>
+<td style="text-align: right;">21.3</td>
+<td style="text-align: right;">152.9</td>
+<td style="text-align: right;">202.1</td>
+<td style="text-align: right;">0.357</td>
+<td style="text-align: right;">37.4</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">ccz</td>
+<td style="text-align: left;">promedio_train</td>
+<td style="text-align: right;">54</td>
+<td style="text-align: right;">882.1</td>
+<td style="text-align: right;">828.1</td>
+<td style="text-align: right;">-53.9</td>
+<td style="text-align: right;">172.3</td>
+<td style="text-align: right;">221.8</td>
+<td style="text-align: right;">NA</td>
+<td style="text-align: right;">0.0</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</section>
+<section id="resultado-en-test" class="level3" data-number="12.2">
+<h3 data-number="12.2" class="anchored" data-anchor-id="resultado-en-test"><span class="header-section-number">12.2</span> Resultado en test</h3>
+<p>Los modelos territoriales no dominan en todas las métricas, pero cambian de forma importante la dinámica del pronóstico:</p>
+<ul>
+<li>la suma de scores alcanza correlación 0,357 y reproduce 37,4 % del desvío;</li>
+<li>barrio/día alcanza correlación 0,532 y reproduce 76,3 % del desvío;</li>
+<li>CCZ/día alcanza correlación 0,529 y reproduce 76,4 % del desvío;</li>
+<li>el RMSE baja de 202,1 con suma de scores a 189,3 con barrio y 190,2 con CCZ;</li>
+<li>el MAE de suma de scores, 152,9, continúa levemente por debajo de barrio, 155,7, y CCZ, 157,2.</li>
+</ul>
+<p>Esto indica que la agregación territorial y sus features dinámicas recuperan mucho mejor las subidas y bajadas entre días. La mejora se observa especialmente en correlación, amplitud y RMSE, pero todavía no en MAE.</p>
+<div class="cell">
+<div class="cell-output-display">
+<p><img src="pronostico_diario_clusters_reclamo_com_files/figure-html/serie-modelos-territoriales-1.png" class="img-fluid" width="1056"></p>
+</div>
+</div>
+</section>
+<section id="inestabilidad-entre-validación-y-test" class="level3" data-number="12.3">
+<h3 data-number="12.3" class="anchored" data-anchor-id="inestabilidad-entre-validación-y-test"><span class="header-section-number">12.3</span> Inestabilidad entre validación y test</h3>
+<div class="cell">
+<div class="cell-output-display">
+<table class="table table-sm table-striped small">
+<caption>Estabilidad de los modelos territoriales</caption>
+<colgroup>
+<col style="width: 9%">
+<col style="width: 14%">
+<col style="width: 7%">
+<col style="width: 7%">
+<col style="width: 7%">
+<col style="width: 15%">
+<col style="width: 37%">
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: left;">nivel</th>
+<th style="text-align: left;">periodo</th>
+<th style="text-align: right;">sesgo</th>
+<th style="text-align: right;">MAE</th>
+<th style="text-align: right;">RMSE</th>
+<th style="text-align: right;">correlacion</th>
+<th style="text-align: right;">variabilidad_reproducida_pct</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">barrio</td>
+<td style="text-align: left;">validacion</td>
+<td style="text-align: right;">191.8</td>
+<td style="text-align: right;">203.7</td>
+<td style="text-align: right;">250.7</td>
+<td style="text-align: right;">0.661</td>
+<td style="text-align: right;">88.0</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">barrio</td>
+<td style="text-align: left;">test</td>
+<td style="text-align: right;">13.4</td>
+<td style="text-align: right;">155.7</td>
+<td style="text-align: right;">189.3</td>
+<td style="text-align: right;">0.532</td>
+<td style="text-align: right;">76.3</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">ccz</td>
+<td style="text-align: left;">validacion</td>
+<td style="text-align: right;">147.8</td>
+<td style="text-align: right;">171.7</td>
+<td style="text-align: right;">218.4</td>
+<td style="text-align: right;">0.657</td>
+<td style="text-align: right;">85.3</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">ccz</td>
+<td style="text-align: left;">test</td>
+<td style="text-align: right;">-16.9</td>
+<td style="text-align: right;">157.2</td>
+<td style="text-align: right;">190.2</td>
+<td style="text-align: right;">0.529</td>
+<td style="text-align: right;">76.4</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<p>La principal advertencia es la sobreestimación en validación: aproximadamente 192 clusters diarios para barrio y 148 para CCZ. En test el sesgo cae a 13 para barrio y -17 para CCZ. Esta diferencia impide atribuir toda la mejora a una estructura estable y obliga a estudiar calendario, cambios de nivel y calibración temporal.</p>
+</section>
+<section id="lectura-provisional" class="level3" data-number="12.4">
+<h3 data-number="12.4" class="anchored" data-anchor-id="lectura-provisional"><span class="header-section-number">12.4</span> Lectura provisional</h3>
+<p>Barrio y CCZ entregan resultados muy parecidos a nivel ciudad. Barrio conserva mayor detalle para interpretar heterogeneidad social y operativa; CCZ ofrece una base más compacta y estable. En esta primera especificación no hay evidencia suficiente para elegir uno de forma definitiva.</p>
+<p>La interacción estimada no debe interpretarse todavía como evidencia de que el efecto del atraso sea mayor o menor según NBI. Comparte el modelo con historia COM, scores y efectos territoriales, y puede absorber correlaciones entre esas variables. Antes de interpretar coeficientes se requieren modelos por bloques, incertidumbre y análisis de sensibilidad.</p>
+<p>Los próximos pasos específicos son:</p>
+<ol type="1">
+<li>separar el aporte incremental de calendario, score, operación y territorio;</li>
+<li>investigar la sobreestimación de enero-marzo de 2026;</li>
+<li>probar calibración aprendida en validación y aplicada exclusivamente a test;</li>
+<li>evaluar desempeño por territorio, no solamente en el total ciudad;</li>
+<li>decidir si se justifica recuperar pendientes aleatorias por territorio.</li>
+</ol>
+</section>
+</section>
+<section id="experimento-incremental-acordado" class="level2" data-number="13">
+<h2 data-number="13" class="anchored" data-anchor-id="experimento-incremental-acordado"><span class="header-section-number">13</span> Experimento incremental acordado</h2>
+<p>Para identificar de dónde proviene la mejora se compararán modelos anidados:</p>
+<ol type="1">
+<li><strong>M0:</strong> suma diaria de scores del modelo por cluster.</li>
+<li><strong>M1:</strong> calendario, distribución territorial de scores e intercepto aleatorio de barrio o CCZ.</li>
+<li><strong>M2:</strong> M1 más los resúmenes operativos actualmente utilizados.</li>
+<li><strong>M3:</strong> M2 más una descripción de la distribución del ratio entre tiempo desde último levante y período teórico.</li>
+<li><strong>M4:</strong> M3 más variables sociodemográficas e interacciones.</li>
+</ol>
+<p>La primera versión de M3 utilizará el ratio predictivo medio de cada cluster, <code>mean_ratio_tiempo_periodo_pred</code>, y construirá por territorio/día:</p>
+<ul>
+<li>cantidad y proporción de clusters con ratio menor o igual a 1;</li>
+<li>cantidad y proporción con ratio entre 1 y 1,5;</li>
+<li>cantidad y proporción con ratio entre 1,5 y 2;</li>
+<li>cantidad y proporción con ratio mayor que 2;</li>
+<li>carga total de exceso, definida como la suma de <code>max(ratio - 1, 0)</code>;</li>
+<li>carga media de exceso por cluster.</li>
+</ul>
+<p>Los conteos describen volumen territorial y las proporciones permiten comparar territorios de distinto tamaño. La carga de exceso distingue muchos atrasos leves de una cola con atrasos extremos.</p>
+<p>Esta primera implementación clasifica clusters usando su ratio medio. Si aporta señal, se construirá una segunda versión desde contenedores, incluyendo distribución por intervalos y clusters con al menos un contenedor extremo. Esa extensión evitará que algunos contenedores muy atrasados queden ocultos por el promedio del cluster.</p>
+</section>
+<section id="resultados-de-la-comparación-m0m4" class="level2" data-number="14">
+<h2 data-number="14" class="anchored" data-anchor-id="resultados-de-la-comparación-m0m4"><span class="header-section-number">14</span> Resultados de la comparación M0–M4</h2>
+<section id="implementación-y-cobertura" class="level3" data-number="14.1">
+<h3 data-number="14.1" class="anchored" data-anchor-id="implementación-y-cobertura"><span class="header-section-number">14.1</span> Implementación y cobertura</h3>
+<p>La comparación acordada se implementó de forma reproducible para barrio/día y CCZ/día en:</p>
+<ul>
+<li><code>scripts/comparar_modelos_agregados_territoriales_m0_m4_com.R</code>;</li>
+<li><code>outputs/experimento_modelos_agregados_m0_m4_com/</code>.</li>
+</ul>
+<p>Todos los modelos M1–M4 convergieron. El ratio predictivo estuvo disponible para 99,47 % de los clusters de entrenamiento, 99,92 % de validación y 99,93 % de test. Por lo tanto, la comparación de M2 con M3 no está condicionada por una pérdida relevante de cobertura.</p>
+<div class="cell">
+<div class="cell-output-display">
+<table class="table table-sm table-striped small">
+<caption>Comparación incremental fuera de muestra en test</caption>
+<colgroup>
+<col style="width: 8%">
+<col style="width: 18%">
+<col style="width: 7%">
+<col style="width: 7%">
+<col style="width: 7%">
+<col style="width: 14%">
+<col style="width: 35%">
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: left;">nivel</th>
+<th style="text-align: left;">modelo</th>
+<th style="text-align: right;">sesgo</th>
+<th style="text-align: right;">MAE</th>
+<th style="text-align: right;">RMSE</th>
+<th style="text-align: right;">correlacion</th>
+<th style="text-align: right;">variabilidad_reproducida_pct</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">barrio</td>
+<td style="text-align: left;">M1</td>
+<td style="text-align: right;">-77.5</td>
+<td style="text-align: right;">181.7</td>
+<td style="text-align: right;">219.8</td>
+<td style="text-align: right;">0.392</td>
+<td style="text-align: right;">65.3</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">barrio</td>
+<td style="text-align: left;">M2</td>
+<td style="text-align: right;">6.6</td>
+<td style="text-align: right;">155.7</td>
+<td style="text-align: right;">189.0</td>
+<td style="text-align: right;">0.532</td>
+<td style="text-align: right;">76.2</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">barrio</td>
+<td style="text-align: left;">M3</td>
+<td style="text-align: right;">9.4</td>
+<td style="text-align: right;">155.8</td>
+<td style="text-align: right;">189.0</td>
+<td style="text-align: right;">0.535</td>
+<td style="text-align: right;">77.1</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">barrio</td>
+<td style="text-align: left;">M4</td>
+<td style="text-align: right;">21.7</td>
+<td style="text-align: right;">155.4</td>
+<td style="text-align: right;">189.7</td>
+<td style="text-align: right;">0.536</td>
+<td style="text-align: right;">76.9</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">barrio</td>
+<td style="text-align: left;">M0_suma_scores</td>
+<td style="text-align: right;">21.3</td>
+<td style="text-align: right;">152.9</td>
+<td style="text-align: right;">202.1</td>
+<td style="text-align: right;">0.357</td>
+<td style="text-align: right;">37.4</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">ccz</td>
+<td style="text-align: left;">M1</td>
+<td style="text-align: right;">-83.5</td>
+<td style="text-align: right;">182.6</td>
+<td style="text-align: right;">221.7</td>
+<td style="text-align: right;">0.396</td>
+<td style="text-align: right;">65.6</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">ccz</td>
+<td style="text-align: left;">M2</td>
+<td style="text-align: right;">-22.6</td>
+<td style="text-align: right;">159.3</td>
+<td style="text-align: right;">192.7</td>
+<td style="text-align: right;">0.520</td>
+<td style="text-align: right;">76.9</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">ccz</td>
+<td style="text-align: left;">M3</td>
+<td style="text-align: right;">-15.1</td>
+<td style="text-align: right;">158.9</td>
+<td style="text-align: right;">192.4</td>
+<td style="text-align: right;">0.523</td>
+<td style="text-align: right;">78.4</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">ccz</td>
+<td style="text-align: left;">M4</td>
+<td style="text-align: right;">-15.8</td>
+<td style="text-align: right;">157.5</td>
+<td style="text-align: right;">190.8</td>
+<td style="text-align: right;">0.529</td>
+<td style="text-align: right;">77.4</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">ccz</td>
+<td style="text-align: left;">M0_suma_scores</td>
+<td style="text-align: right;">21.3</td>
+<td style="text-align: right;">152.9</td>
+<td style="text-align: right;">202.1</td>
+<td style="text-align: right;">0.357</td>
+<td style="text-align: right;">37.4</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</section>
+<section id="aporta-la-distribución-del-ratio" class="level3" data-number="14.2">
+<h3 data-number="14.2" class="anchored" data-anchor-id="aporta-la-distribución-del-ratio"><span class="header-section-number">14.2</span> ¿Aporta la distribución del ratio?</h3>
+<p>El aporte de M3 sobre M2 es <strong>pequeño y no concluyente</strong>:</p>
+<ul>
+<li>en barrio, la correlación sube de 0,532 a 0,535 y la variabilidad reproducida de 76,2 % a 77,1 %, pero el RMSE queda prácticamente igual (189,0) y el MAE empeora 0,1 clusters;</li>
+<li>en CCZ, la correlación sube de 0,520 a 0,523, el RMSE baja de 192,7 a 192,4 y el MAE baja de 159,3 a 158,9;</li>
+<li>en validación, M3 aumenta la sobreestimación y empeora MAE y RMSE frente a M2 en ambos niveles territoriales.</li>
+</ul>
+<p>En consecuencia, la forma de la distribución del ratio contiene algo de señal, pero esta primera versión basada en el promedio por cluster no produce una mejora suficientemente estable para justificar por sí sola una mayor complejidad. El resultado también es compatible con redundancia respecto del tiempo desde el último levante que ya entra en M2.</p>
+</section>
+<section id="lectura-de-los-demás-bloques" class="level3" data-number="14.3">
+<h3 data-number="14.3" class="anchored" data-anchor-id="lectura-de-los-demás-bloques"><span class="header-section-number">14.3</span> Lectura de los demás bloques</h3>
+<p>El salto importante ocurre entre M1 y M2. Agregar historia COM y resúmenes operativos reduce en test el RMSE de 219,8 a 189,0 para barrio y de 221,7 a 192,7 para CCZ. La estructura territorial y la distribución de scores, sin ese bloque dinámico, no alcanzan por sí solas.</p>
+<p>M4, que incorpora variables sociodemográficas e interacciones, mejora levemente la correlación en ambos niveles. En CCZ obtiene el menor RMSE territorial de test (190,8), mientras que en barrio queda en 189,7. Sin embargo, mantiene la fuerte sobreestimación de validación. No corresponde interpretar todavía estas mejoras como evidencia sustantiva de una interacción entre atraso y NBI.</p>
+<div class="cell">
+<div class="cell-output-display">
+<p><img src="pronostico_diario_clusters_reclamo_com_files/figure-html/serie-m0-m4-test-1.png" class="img-fluid" width="1056"></p>
+</div>
+</div>
+</section>
+<section id="decisión-provisional-y-siguiente-prueba" class="level3" data-number="14.4">
+<h3 data-number="14.4" class="anchored" data-anchor-id="decisión-provisional-y-siguiente-prueba"><span class="header-section-number">14.4</span> Decisión provisional y siguiente prueba</h3>
+<p>M2 queda como especificación parsimoniosa de referencia: captura casi toda la mejora territorial observada en test. M3 se conserva como experimento, no como incorporación decidida. La siguiente prueba útil es construir los intervalos desde ratios de contenedores y medir clusters con al menos un contenedor extremo; esa formulación responde mejor a la hipótesis de que el promedio diluye el “desastre” interno. Antes de seleccionar un modelo operativo también debe resolverse la inestabilidad de nivel entre validación y test mediante evaluación temporal con más cortes y una calibración que se aprenda sin usar el período de test.</p>
+</section>
+</section>
+<section id="segunda-generación-jerarquía-barriosegmento" class="level2" data-number="15">
+<h2 data-number="15" class="anchored" data-anchor-id="segunda-generación-jerarquía-barriosegmento"><span class="header-section-number">15</span> Segunda generación: jerarquía barrio/segmento</h2>
+<section id="motivación-y-especificación" class="level3" data-number="15.1">
+<h3 data-number="15.1" class="anchored" data-anchor-id="motivación-y-especificación"><span class="header-section-number">15.1</span> Motivación y especificación</h3>
+<p>La comparación anterior utilizaba barrio/día o CCZ/día como unidad. Se exploró una estructura territorial más fina con una fila por segmento censal/día y dos niveles jerárquicos simultáneos:</p>
+<p><span class="math display">\[
+Y_{s,d}\sim\operatorname{Binomial}(N_{s,d},p_{s,d}),
+\]</span></p>
+<p><span class="math display">\[
+\operatorname{logit}(p_{s,d})=
+\text{día de semana}+f(\text{exceso}_{s,d})+
+u_{\text{barrio}(s)}+v_s.
+\]</span></p>
+<p>Aquí, <span class="math inline">\(Y_{s,d}\)</span> es la cantidad de clusters con reclamo y <span class="math inline">\(N_{s,d}\)</span> la cantidad de clusters del segmento. Los interceptos penalizados de barrio y segmento aplican <em>partial pooling</em>: capturan propensiones basales territoriales sin estimar cada zona de forma completamente independiente.</p>
+<p>La primera versión se mantuvo deliberadamente parsimoniosa:</p>
+<ul>
+<li>día de la semana, sin mes, porque entrenamiento contiene un solo ciclo anual;</li>
+<li>intercepto aleatorio de barrio;</li>
+<li>intercepto aleatorio de segmento censal;</li>
+<li>carga media de exceso del ratio tiempo desde levante/período, primero lineal y después mediante una función suave;</li>
+<li>resúmenes alternativos de la cola alta del score COM a nivel barrio/día.</li>
+</ul>
+<p>La carga media de exceso se define como:</p>
+<p><span class="math display">\[
+E_{s,d}=\frac{1}{N_{s,d}}\sum_c\max(r_{c,d}-1,0),
+\qquad
+r_{c,d}=\frac{\text{tiempo desde último levante}}
+{\text{período teórico}}.
+\]</span></p>
+<p>Los modelos evaluados fueron:</p>
+<ol type="1">
+<li><strong>A0:</strong> día de semana más jerarquía barrio/segmento;</li>
+<li><strong>A1:</strong> A0 más efecto lineal del exceso;</li>
+<li><strong>A2:</strong> A0 más efecto suave no lineal del exceso;</li>
+<li><strong>A3/A4:</strong> A2 más media o suma de los 20 scores más altos del barrio;</li>
+<li><strong>A5/A6:</strong> A2 más media o suma de los 30 scores más altos;</li>
+<li><strong>A7:</strong> A2 más percentil 90 del score del barrio;</li>
+<li><strong>A8:</strong> A2 más suma de todos los scores del barrio.</li>
+</ol>
+<p>Implementación reproducible:</p>
+<ul>
+<li><code>scripts/benchmark_modelo_segmento_barrio_com.R</code>;</li>
+<li><code>scripts/comparar_modelos_segmento_barrio_scores_com.R</code>;</li>
+<li><code>outputs/benchmark_modelo_segmento_barrio_com/</code>;</li>
+<li><code>outputs/comparacion_modelos_segmento_barrio_scores_com/</code>.</li>
+</ul>
+</section>
+<section id="tamaño-y-factibilidad-computacional" class="level3" data-number="15.2">
+<h3 data-number="15.2" class="anchored" data-anchor-id="tamaño-y-factibilidad-computacional"><span class="header-section-number">15.2</span> Tamaño y factibilidad computacional</h3>
+<div class="cell">
+<div class="cell-output-display">
+<table class="table table-sm table-striped small">
+<caption>Dimensión de la base segmento/día</caption>
+<thead>
+<tr class="header">
+<th style="text-align: left;">indicador</th>
+<th style="text-align: right;">valor</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">Filas cluster/día originales</td>
+<td style="text-align: right;">3951029.0</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Filas segmento/día</td>
+<td style="text-align: right;">469566.0</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Días</td>
+<td style="text-align: right;">509.0</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Barrios</td>
+<td style="text-align: right;">62.0</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Segmentos</td>
+<td style="text-align: right;">951.0</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Mediana de clusters por segmento/día</td>
+<td style="text-align: right;">7.0</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Segmento/día sin reclamos (%)</td>
+<td style="text-align: right;">49.4</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Memoria de la base agregada (MB)</td>
+<td style="text-align: right;">61.0</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="cell-output-display">
+<table class="table table-sm table-striped small">
+<caption>Tiempo de ajuste de las especificaciones iniciales</caption>
+<thead>
+<tr class="header">
+<th style="text-align: left;">modelo</th>
+<th style="text-align: right;">segundos</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">A0_jerarquia</td>
+<td style="text-align: right;">12.2</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">A1_exceso_lineal</td>
+<td style="text-align: right;">13.0</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">A2_exceso_suave</td>
+<td style="text-align: right;">14.2</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<p>La base contiene 469.566 segmento/días y 951 segmentos. Cerca de la mitad de las filas no presenta reclamos, pero la exposición binomial conserva la cantidad de clusters observados. Los primeros ajustes demoran entre 12 y 14 segundos; por tanto, la granularidad de segmento es computacionalmente viable con <code>mgcv::bam</code>.</p>
+</section>
+<section id="resultados-fuera-de-muestra" class="level3" data-number="15.3">
+<h3 data-number="15.3" class="anchored" data-anchor-id="resultados-fuera-de-muestra"><span class="header-section-number">15.3</span> Resultados fuera de muestra</h3>
+<div class="cell">
+<div class="cell-output-display">
+<table class="table table-sm table-striped small">
+<caption>Modelos jerárquicos segmento/día en validación y test</caption>
+<colgroup>
+<col style="width: 12%">
+<col style="width: 19%">
+<col style="width: 6%">
+<col style="width: 6%">
+<col style="width: 6%">
+<col style="width: 13%">
+<col style="width: 33%">
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: left;">período</th>
+<th style="text-align: left;">modelo</th>
+<th style="text-align: right;">sesgo</th>
+<th style="text-align: right;">MAE</th>
+<th style="text-align: right;">RMSE</th>
+<th style="text-align: right;">correlación</th>
+<th style="text-align: right;">variabilidad_reproducida_pct</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">test</td>
+<td style="text-align: left;">A0_jerarquia</td>
+<td style="text-align: right;">-38.4</td>
+<td style="text-align: right;">142.5</td>
+<td style="text-align: right;">174.6</td>
+<td style="text-align: right;">0.615</td>
+<td style="text-align: right;">55.0</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">test</td>
+<td style="text-align: left;">A2_exceso_suave</td>
+<td style="text-align: right;">19.6</td>
+<td style="text-align: right;">144.4</td>
+<td style="text-align: right;">176.3</td>
+<td style="text-align: right;">0.593</td>
+<td style="text-align: right;">71.2</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">test</td>
+<td style="text-align: left;">A1_exceso_lineal</td>
+<td style="text-align: right;">11.4</td>
+<td style="text-align: right;">146.4</td>
+<td style="text-align: right;">176.7</td>
+<td style="text-align: right;">0.588</td>
+<td style="text-align: right;">71.8</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">test</td>
+<td style="text-align: left;">A3_media_top20</td>
+<td style="text-align: right;">-18.4</td>
+<td style="text-align: right;">145.8</td>
+<td style="text-align: right;">177.2</td>
+<td style="text-align: right;">0.589</td>
+<td style="text-align: right;">72.0</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">test</td>
+<td style="text-align: left;">A4_suma_top20</td>
+<td style="text-align: right;">-18.1</td>
+<td style="text-align: right;">145.8</td>
+<td style="text-align: right;">177.2</td>
+<td style="text-align: right;">0.589</td>
+<td style="text-align: right;">72.0</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">test</td>
+<td style="text-align: left;">A6_suma_top30</td>
+<td style="text-align: right;">-11.2</td>
+<td style="text-align: right;">145.7</td>
+<td style="text-align: right;">177.2</td>
+<td style="text-align: right;">0.587</td>
+<td style="text-align: right;">72.7</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">test</td>
+<td style="text-align: left;">A7_score_p90</td>
+<td style="text-align: right;">-3.8</td>
+<td style="text-align: right;">145.4</td>
+<td style="text-align: right;">177.4</td>
+<td style="text-align: right;">0.585</td>
+<td style="text-align: right;">72.8</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">test</td>
+<td style="text-align: left;">A8_suma_scores</td>
+<td style="text-align: right;">30.0</td>
+<td style="text-align: right;">149.5</td>
+<td style="text-align: right;">182.8</td>
+<td style="text-align: right;">0.577</td>
+<td style="text-align: right;">76.3</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">test</td>
+<td style="text-align: left;">M0_suma_scores</td>
+<td style="text-align: right;">21.3</td>
+<td style="text-align: right;">152.9</td>
+<td style="text-align: right;">202.1</td>
+<td style="text-align: right;">0.357</td>
+<td style="text-align: right;">37.4</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">validacion</td>
+<td style="text-align: left;">A3_media_top20</td>
+<td style="text-align: right;">46.8</td>
+<td style="text-align: right;">118.2</td>
+<td style="text-align: right;">156.8</td>
+<td style="text-align: right;">0.691</td>
+<td style="text-align: right;">75.3</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">validacion</td>
+<td style="text-align: left;">A4_suma_top20</td>
+<td style="text-align: right;">47.1</td>
+<td style="text-align: right;">118.3</td>
+<td style="text-align: right;">156.9</td>
+<td style="text-align: right;">0.691</td>
+<td style="text-align: right;">75.3</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">validacion</td>
+<td style="text-align: left;">A6_suma_top30</td>
+<td style="text-align: right;">53.1</td>
+<td style="text-align: right;">119.5</td>
+<td style="text-align: right;">158.8</td>
+<td style="text-align: right;">0.692</td>
+<td style="text-align: right;">76.1</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">validacion</td>
+<td style="text-align: left;">A7_score_p90</td>
+<td style="text-align: right;">58.6</td>
+<td style="text-align: right;">120.4</td>
+<td style="text-align: right;">159.8</td>
+<td style="text-align: right;">0.696</td>
+<td style="text-align: right;">76.0</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">validacion</td>
+<td style="text-align: left;">A1_exceso_lineal</td>
+<td style="text-align: right;">91.6</td>
+<td style="text-align: right;">135.4</td>
+<td style="text-align: right;">174.4</td>
+<td style="text-align: right;">0.698</td>
+<td style="text-align: right;">76.1</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">validacion</td>
+<td style="text-align: left;">A2_exceso_suave</td>
+<td style="text-align: right;">97.5</td>
+<td style="text-align: right;">137.4</td>
+<td style="text-align: right;">177.0</td>
+<td style="text-align: right;">0.700</td>
+<td style="text-align: right;">73.8</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">validacion</td>
+<td style="text-align: left;">A8_suma_scores</td>
+<td style="text-align: right;">93.8</td>
+<td style="text-align: right;">134.8</td>
+<td style="text-align: right;">179.2</td>
+<td style="text-align: right;">0.685</td>
+<td style="text-align: right;">81.1</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">validacion</td>
+<td style="text-align: left;">A0_jerarquia</td>
+<td style="text-align: right;">56.7</td>
+<td style="text-align: right;">142.2</td>
+<td style="text-align: right;">180.6</td>
+<td style="text-align: right;">0.558</td>
+<td style="text-align: right;">60.0</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">validacion</td>
+<td style="text-align: left;">M0_suma_scores</td>
+<td style="text-align: right;">75.8</td>
+<td style="text-align: right;">144.6</td>
+<td style="text-align: right;">199.7</td>
+<td style="text-align: right;">0.448</td>
+<td style="text-align: right;">49.7</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<p>En test, A0 obtiene el menor error y la mayor correlación: RMSE 174,6, correlación 0,615 y MAE 142,5. El modelo es notablemente sencillo; su principal limitación es que reproduce solo 55,0 % de la variabilidad diaria y subestima en promedio 38 clusters.</p>
+<p>La función suave del exceso aumenta la variabilidad reproducida a 71,2 % y deja un sesgo de 19,6 clusters, pero el RMSE sube a 176,3. La mejora muy grande del AIC de entrenamiento no se traduce en una mejora inequívoca fuera de muestra.</p>
+<p>En validación, las variantes top-20 son claramente superiores: A3 alcanza RMSE 156,8, correlación 0,691 y MAE 118,2. En el período combinado de validación y test, A3 obtiene RMSE 164,8, correlación 0,645 y reproduce 73,2 % de la variabilidad, frente a RMSE 200,6 y correlación 0,418 de la suma directa de scores.</p>
+<p>La media y la suma top-20 producen resultados prácticamente idénticos. En 97,4 % de los barrio/días existen al menos 20 clusters; en esos casos una variable es exactamente la otra dividida entre veinte. Se conserva la suma top-20 como formulación más interpretable: aproxima la cantidad esperada de clusters con reclamo dentro de los veinte de mayor riesgo. Top-30 no aporta una mejora frente a top-20.</p>
+<div class="cell">
+<div class="cell-output-display">
+<p><img src="pronostico_diario_clusters_reclamo_com_files/figure-html/serie-segmento-barrio-test-1.png" class="img-fluid" width="1056"></p>
+</div>
+</div>
+</section>
+<section id="decisión-provisional" class="level3" data-number="15.4">
+<h3 data-number="15.4" class="anchored" data-anchor-id="decisión-provisional"><span class="header-section-number">15.4</span> Decisión provisional</h3>
+<p>La jerarquía barrio/segmento queda promovida como línea principal de investigación predictiva. Se conservan dos candidatos:</p>
+<ul>
+<li><strong>A0</strong>, como baseline territorial parsimonioso y mejor modelo en test;</li>
+<li><strong>A4</strong>, como candidato dinámico con jerarquía, exceso no lineal y suma top-20, por su desempeño en validación y en el período combinado.</li>
+</ul>
+<p>No se selecciona todavía un modelo operativo. El ganador cambia entre meses: top-20 domina especialmente en enero y febrero, mientras A0 resulta competitivo o superior hacia abril y mayo. El siguiente paso es un backtesting mensual que permita distinguir estacionalidad, cambios de calibración y cambios operativos.</p>
+</section>
+</section>
+<section id="propensión-reciente-del-barrio-e-interacción-con-el-exceso" class="level2" data-number="16">
+<h2 data-number="16" class="anchored" data-anchor-id="propensión-reciente-del-barrio-e-interacción-con-el-exceso"><span class="header-section-number">16</span> Propensión reciente del barrio e interacción con el exceso</h2>
+<p>Se evaluó si el exceso produce una corrección diferente en barrios con mayor propensión reciente a reclamar. Se construyeron dos indicadores con una ventana de treinta días cerrada en <code>D-2</code>:</p>
+<ol type="1">
+<li><strong>Tasa regularizada:</strong> clusters con reclamo divididos entre cluster-días observables del barrio.</li>
+<li><strong>Propensión relativa a A0:</strong> logaritmo del cociente entre clusters con reclamo observados y esperados por el modelo estructural A0.</li>
+</ol>
+<p>Ambos indicadores usan un prior equivalente a 200 cluster-días para evitar valores inestables. Se comparó A4 reentrenado sobre la misma muestra con cuatro variantes: efecto principal de cada propensión y efecto principal más interacción lineal con la carga media de exceso.</p>
+<p>Implementación:</p>
+<ul>
+<li><code>scripts/experimentar_propension_barrio_exceso_com.R</code>;</li>
+<li><code>outputs/experimento_propension_barrio_exceso_com/</code>.</li>
+</ul>
+<div class="cell">
+<div class="cell-output-display">
+<table class="table table-sm table-striped small">
+<caption>Propensión reciente del barrio e interacción con el exceso</caption>
+<colgroup>
+<col style="width: 10%">
+<col style="width: 30%">
+<col style="width: 5%">
+<col style="width: 5%">
+<col style="width: 5%">
+<col style="width: 11%">
+<col style="width: 28%">
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: left;">período</th>
+<th style="text-align: left;">modelo</th>
+<th style="text-align: right;">sesgo</th>
+<th style="text-align: right;">MAE</th>
+<th style="text-align: right;">RMSE</th>
+<th style="text-align: right;">correlación</th>
+<th style="text-align: right;">variabilidad_reproducida_pct</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">test</td>
+<td style="text-align: left;">P0_A4_referencia</td>
+<td style="text-align: right;">-21.7</td>
+<td style="text-align: right;">146.4</td>
+<td style="text-align: right;">177.6</td>
+<td style="text-align: right;">0.592</td>
+<td style="text-align: right;">73.6</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">test</td>
+<td style="text-align: left;">P1_tasa_30d</td>
+<td style="text-align: right;">2.2</td>
+<td style="text-align: right;">145.8</td>
+<td style="text-align: right;">178.5</td>
+<td style="text-align: right;">0.582</td>
+<td style="text-align: right;">74.3</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">test</td>
+<td style="text-align: left;">P2_tasa_30d_interaccion</td>
+<td style="text-align: right;">11.5</td>
+<td style="text-align: right;">148.1</td>
+<td style="text-align: right;">181.0</td>
+<td style="text-align: right;">0.575</td>
+<td style="text-align: right;">76.0</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">test</td>
+<td style="text-align: left;">R1_relativa_a0_30d</td>
+<td style="text-align: right;">18.6</td>
+<td style="text-align: right;">146.9</td>
+<td style="text-align: right;">181.1</td>
+<td style="text-align: right;">0.573</td>
+<td style="text-align: right;">74.4</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">test</td>
+<td style="text-align: left;">R2_relativa_a0_30d_interaccion</td>
+<td style="text-align: right;">22.5</td>
+<td style="text-align: right;">147.6</td>
+<td style="text-align: right;">181.9</td>
+<td style="text-align: right;">0.573</td>
+<td style="text-align: right;">75.0</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">validacion</td>
+<td style="text-align: left;">P0_A4_referencia</td>
+<td style="text-align: right;">43.4</td>
+<td style="text-align: right;">118.0</td>
+<td style="text-align: right;">156.0</td>
+<td style="text-align: right;">0.692</td>
+<td style="text-align: right;">77.1</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">validacion</td>
+<td style="text-align: left;">P1_tasa_30d</td>
+<td style="text-align: right;">46.7</td>
+<td style="text-align: right;">117.2</td>
+<td style="text-align: right;">157.5</td>
+<td style="text-align: right;">0.689</td>
+<td style="text-align: right;">76.6</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">validacion</td>
+<td style="text-align: left;">P2_tasa_30d_interaccion</td>
+<td style="text-align: right;">58.3</td>
+<td style="text-align: right;">119.5</td>
+<td style="text-align: right;">161.4</td>
+<td style="text-align: right;">0.697</td>
+<td style="text-align: right;">83.2</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">validacion</td>
+<td style="text-align: left;">R1_relativa_a0_30d</td>
+<td style="text-align: right;">60.3</td>
+<td style="text-align: right;">125.0</td>
+<td style="text-align: right;">167.7</td>
+<td style="text-align: right;">0.663</td>
+<td style="text-align: right;">78.5</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">validacion</td>
+<td style="text-align: left;">R2_relativa_a0_30d_interaccion</td>
+<td style="text-align: right;">63.9</td>
+<td style="text-align: right;">125.3</td>
+<td style="text-align: right;">168.1</td>
+<td style="text-align: right;">0.670</td>
+<td style="text-align: right;">79.9</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<p>La tasa regularizada sin interacción reduce el sesgo de test de -21,7 a 2,2 clusters y mejora levemente el MAE, pero el RMSE sube de 177,6 a 178,5 y la correlación baja de 0,592 a 0,582. En validación tampoco mejora el RMSE.</p>
+<p>Las dos interacciones empeoran RMSE y correlación en validación y test. Además, su signo estimado en entrenamiento es negativo: el efecto marginal del exceso disminuye al aumentar la propensión reciente. Este signo puede representar saturación, redundancia con el score COM o inestabilidad temporal; no se interpreta como evidencia de comportamiento territorial porque no generaliza fuera de muestra.</p>
+<p>El patrón mensual ayuda a explicar el resultado agregado: las propensiones mejoran algunos meses, especialmente febrero y abril de 2026, pero empeoran enero y mayo. Una ventana móvil de treinta días puede quedar rezagada cuando cambia rápidamente el nivel general de reclamos. Las variables se conservan como diagnóstico y posible instrumento de calibración, pero las interacciones no quedan promovidas al modelo predictivo actual.</p>
+</section>
+<section id="top-20-e-interacción-entre-score-y-exceso" class="level2" data-number="17">
+<h2 data-number="17" class="anchored" data-anchor-id="top-20-e-interacción-entre-score-y-exceso"><span class="header-section-number">17</span> Top-20 % e interacción entre score y exceso</h2>
+<p>La definición inicial de top-20 seleccionaba veinte clusters fijos por barrio/día. Se evaluó la idea original de seleccionar el 20 % con mayor score, lo que mantiene una fracción comparable en barrios de distinto tamaño. Se usó la media del top-20 %, porque su suma también incorpora el tamaño del barrio.</p>
+<p>Se compararon cuatro modelos con la misma jerarquía y función suave del exceso:</p>
+<ol type="1">
+<li><strong>B0:</strong> suma top-20 fija;</li>
+<li><strong>B1:</strong> media del top-20 %;</li>
+<li><strong>B2:</strong> B0 más interacción lineal entre exceso y top-20 fijo;</li>
+<li><strong>B3:</strong> B1 más interacción lineal entre exceso y top-20 %.</li>
+</ol>
+<p>Implementación:</p>
+<ul>
+<li><code>scripts/experimentar_top20pct_interaccion_exceso_com.R</code>;</li>
+<li><code>outputs/experimento_top20pct_interaccion_exceso_com/</code>.</li>
+</ul>
+<div class="cell">
+<div class="cell-output-display">
+<table class="table table-sm table-striped small">
+<caption>Top-20 fijo, top-20 % e interacción con el exceso</caption>
+<colgroup>
+<col style="width: 17%">
+<col style="width: 25%">
+<col style="width: 5%">
+<col style="width: 5%">
+<col style="width: 5%">
+<col style="width: 11%">
+<col style="width: 28%">
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: left;">período</th>
+<th style="text-align: left;">modelo</th>
+<th style="text-align: right;">sesgo</th>
+<th style="text-align: right;">MAE</th>
+<th style="text-align: right;">RMSE</th>
+<th style="text-align: right;">correlación</th>
+<th style="text-align: right;">variabilidad_reproducida_pct</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">test</td>
+<td style="text-align: left;">B0_top20_fijo</td>
+<td style="text-align: right;">-18.1</td>
+<td style="text-align: right;">145.8</td>
+<td style="text-align: right;">177.2</td>
+<td style="text-align: right;">0.589</td>
+<td style="text-align: right;">72.0</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">test</td>
+<td style="text-align: left;">B1_media_top20pct</td>
+<td style="text-align: right;">-15.0</td>
+<td style="text-align: right;">145.9</td>
+<td style="text-align: right;">177.4</td>
+<td style="text-align: right;">0.586</td>
+<td style="text-align: right;">72.3</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">test</td>
+<td style="text-align: left;">B2_top20_fijo_interaccion</td>
+<td style="text-align: right;">-10.3</td>
+<td style="text-align: right;">147.8</td>
+<td style="text-align: right;">179.8</td>
+<td style="text-align: right;">0.579</td>
+<td style="text-align: right;">75.4</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">test</td>
+<td style="text-align: left;">B3_top20pct_interaccion</td>
+<td style="text-align: right;">-7.2</td>
+<td style="text-align: right;">147.8</td>
+<td style="text-align: right;">180.0</td>
+<td style="text-align: right;">0.577</td>
+<td style="text-align: right;">75.6</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">validacion</td>
+<td style="text-align: left;">B1_media_top20pct</td>
+<td style="text-align: right;">47.3</td>
+<td style="text-align: right;">117.8</td>
+<td style="text-align: right;">156.4</td>
+<td style="text-align: right;">0.694</td>
+<td style="text-align: right;">75.4</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">validacion</td>
+<td style="text-align: left;">B0_top20_fijo</td>
+<td style="text-align: right;">47.1</td>
+<td style="text-align: right;">118.3</td>
+<td style="text-align: right;">156.9</td>
+<td style="text-align: right;">0.691</td>
+<td style="text-align: right;">75.3</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">validacion</td>
+<td style="text-align: left;">B3_top20pct_interaccion</td>
+<td style="text-align: right;">54.6</td>
+<td style="text-align: right;">119.7</td>
+<td style="text-align: right;">159.0</td>
+<td style="text-align: right;">0.697</td>
+<td style="text-align: right;">79.2</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">validacion</td>
+<td style="text-align: left;">B2_top20_fijo_interaccion</td>
+<td style="text-align: right;">53.7</td>
+<td style="text-align: right;">119.9</td>
+<td style="text-align: right;">159.3</td>
+<td style="text-align: right;">0.694</td>
+<td style="text-align: right;">78.8</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">validacion + test</td>
+<td style="text-align: left;">B1_media_top20pct</td>
+<td style="text-align: right;">23.9</td>
+<td style="text-align: right;">128.3</td>
+<td style="text-align: right;">164.6</td>
+<td style="text-align: right;">0.647</td>
+<td style="text-align: right;">73.3</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">validacion + test</td>
+<td style="text-align: left;">B0_top20_fijo</td>
+<td style="text-align: right;">22.6</td>
+<td style="text-align: right;">128.6</td>
+<td style="text-align: right;">164.8</td>
+<td style="text-align: right;">0.645</td>
+<td style="text-align: right;">73.2</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">validacion + test</td>
+<td style="text-align: left;">B2_top20_fijo_interaccion</td>
+<td style="text-align: right;">29.7</td>
+<td style="text-align: right;">130.4</td>
+<td style="text-align: right;">167.2</td>
+<td style="text-align: right;">0.643</td>
+<td style="text-align: right;">76.6</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">validacion + test</td>
+<td style="text-align: left;">B3_top20pct_interaccion</td>
+<td style="text-align: right;">31.5</td>
+<td style="text-align: right;">130.2</td>
+<td style="text-align: right;">167.2</td>
+<td style="text-align: right;">0.645</td>
+<td style="text-align: right;">76.9</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<p>B1 mejora levemente a B0 en validación: RMSE 156,4 frente a 156,9 y correlación 0,694 frente a 0,691. En test quedan prácticamente empatados: B0 obtiene RMSE 177,2 y B1 177,4. En validación más test, B1 alcanza RMSE 164,6 y correlación 0,647, una mejora pequeña frente a 164,8 y 0,645 de B0.</p>
+<p>La media del top-20 % queda como resumen preferido por coherencia conceptual y comparabilidad entre barrios, aunque la evidencia predictiva muestra un empate práctico con el top-20 fijo.</p>
+<p>Las interacciones no mejoran los errores fuera de muestra. Ambas tienen signo negativo en entrenamiento y aumentan la amplitud de la predicción, pero elevan el RMSE combinado de aproximadamente 164,6–164,8 a 167,2. Por tanto, no se incorporan al candidato actual. El resultado indica que una interacción lineal simple no captura de forma estable la coexistencia de atraso y concentración de riesgo COM; no descarta que exista una relación no lineal o condicionada por un cambio general de régimen.</p>
+<p>La referencia dinámica pasa a ser <strong>B1</strong>: día de semana, jerarquía barrio/segmento, exceso suave y media del 20 % de clusters con mayor score del barrio. A0 se conserva como expectativa estructural.</p>
+</section>
+<section id="extremos-locales-de-exceso-dentro-del-segmento" class="level2" data-number="18">
+<h2 data-number="18" class="anchored" data-anchor-id="extremos-locales-de-exceso-dentro-del-segmento"><span class="header-section-number">18</span> Extremos locales de exceso dentro del segmento</h2>
+<p>Se evaluó una representación más local del atraso: para cada segmento/día se ordenan los clusters por exceso sobre el período teórico y se calcula la media del 20 % más atrasado. Esta variable busca evitar que una situación grave en unos pocos clusters quede diluida por el promedio del segmento.</p>
+<p>La granularidad es exigente: el segmento/día mediano contiene ocho clusters con ratio válido y su top-20 % contiene dos. En 29,9 % de las filas el top representa un único cluster y en 72,8 % representa como máximo dos. Por eso se comparó el extremo contra el promedio sobre una muestra idéntica y con la misma regularización jerárquica.</p>
+<p>Modelos:</p>
+<ol type="1">
+<li><strong>E0:</strong> exceso medio del segmento;</li>
+<li><strong>E1:</strong> top-20 % de exceso del segmento en reemplazo del promedio;</li>
+<li><strong>E2:</strong> exceso medio más top-20 % local;</li>
+<li><strong>E3:</strong> E2 más interacción del extremo local con propensión del barrio;</li>
+<li><strong>E4:</strong> E2 más interacción del extremo local con top-20 % de scores COM.</li>
+</ol>
+<p>Implementación:</p>
+<ul>
+<li><code>scripts/experimentar_extremos_exceso_segmento_com.R</code>;</li>
+<li><code>outputs/experimento_extremos_exceso_segmento_com/</code>.</li>
+</ul>
+<div class="cell">
+<div class="cell-output-display">
+<table class="table table-sm table-striped small">
+<caption>Exceso medio, extremo local e interacciones</caption>
+<colgroup>
+<col style="width: 17%">
+<col style="width: 23%">
+<col style="width: 5%">
+<col style="width: 5%">
+<col style="width: 5%">
+<col style="width: 11%">
+<col style="width: 28%">
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: left;">período</th>
+<th style="text-align: left;">modelo</th>
+<th style="text-align: right;">sesgo</th>
+<th style="text-align: right;">MAE</th>
+<th style="text-align: right;">RMSE</th>
+<th style="text-align: right;">correlación</th>
+<th style="text-align: right;">variabilidad_reproducida_pct</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">test</td>
+<td style="text-align: left;">E1_extremo_segmento</td>
+<td style="text-align: right;">-15.5</td>
+<td style="text-align: right;">144.4</td>
+<td style="text-align: right;">174.8</td>
+<td style="text-align: right;">0.601</td>
+<td style="text-align: right;">72.4</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">test</td>
+<td style="text-align: left;">E0_exceso_medio</td>
+<td style="text-align: right;">-17.7</td>
+<td style="text-align: right;">146.4</td>
+<td style="text-align: right;">177.7</td>
+<td style="text-align: right;">0.590</td>
+<td style="text-align: right;">74.0</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">test</td>
+<td style="text-align: left;">E2_medio_mas_extremo</td>
+<td style="text-align: right;">-16.2</td>
+<td style="text-align: right;">146.7</td>
+<td style="text-align: right;">177.9</td>
+<td style="text-align: right;">0.589</td>
+<td style="text-align: right;">74.4</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">test</td>
+<td style="text-align: left;">E4_extremo_x_score</td>
+<td style="text-align: right;">-7.4</td>
+<td style="text-align: right;">148.5</td>
+<td style="text-align: right;">180.2</td>
+<td style="text-align: right;">0.581</td>
+<td style="text-align: right;">77.6</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">test</td>
+<td style="text-align: left;">E3_extremo_x_propension</td>
+<td style="text-align: right;">13.2</td>
+<td style="text-align: right;">148.3</td>
+<td style="text-align: right;">180.9</td>
+<td style="text-align: right;">0.577</td>
+<td style="text-align: right;">76.6</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">validacion</td>
+<td style="text-align: left;">E0_exceso_medio</td>
+<td style="text-align: right;">44.5</td>
+<td style="text-align: right;">117.8</td>
+<td style="text-align: right;">155.7</td>
+<td style="text-align: right;">0.695</td>
+<td style="text-align: right;">77.1</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">validacion</td>
+<td style="text-align: left;">E1_extremo_segmento</td>
+<td style="text-align: right;">44.9</td>
+<td style="text-align: right;">117.7</td>
+<td style="text-align: right;">155.8</td>
+<td style="text-align: right;">0.694</td>
+<td style="text-align: right;">75.6</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">validacion</td>
+<td style="text-align: left;">E2_medio_mas_extremo</td>
+<td style="text-align: right;">45.5</td>
+<td style="text-align: right;">117.8</td>
+<td style="text-align: right;">155.9</td>
+<td style="text-align: right;">0.696</td>
+<td style="text-align: right;">77.5</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">validacion</td>
+<td style="text-align: left;">E4_extremo_x_score</td>
+<td style="text-align: right;">53.4</td>
+<td style="text-align: right;">119.9</td>
+<td style="text-align: right;">158.6</td>
+<td style="text-align: right;">0.699</td>
+<td style="text-align: right;">81.2</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">validacion</td>
+<td style="text-align: left;">E3_extremo_x_propension</td>
+<td style="text-align: right;">59.3</td>
+<td style="text-align: right;">119.1</td>
+<td style="text-align: right;">161.0</td>
+<td style="text-align: right;">0.700</td>
+<td style="text-align: right;">82.7</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">validacion + test</td>
+<td style="text-align: left;">E1_extremo_segmento</td>
+<td style="text-align: right;">22.3</td>
+<td style="text-align: right;">127.7</td>
+<td style="text-align: right;">163.2</td>
+<td style="text-align: right;">0.653</td>
+<td style="text-align: right;">73.5</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">validacion + test</td>
+<td style="text-align: left;">E0_exceso_medio</td>
+<td style="text-align: right;">21.2</td>
+<td style="text-align: right;">128.5</td>
+<td style="text-align: right;">164.3</td>
+<td style="text-align: right;">0.648</td>
+<td style="text-align: right;">75.0</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">validacion + test</td>
+<td style="text-align: left;">E2_medio_mas_extremo</td>
+<td style="text-align: right;">22.4</td>
+<td style="text-align: right;">128.6</td>
+<td style="text-align: right;">164.5</td>
+<td style="text-align: right;">0.649</td>
+<td style="text-align: right;">75.4</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">validacion + test</td>
+<td style="text-align: left;">E4_extremo_x_score</td>
+<td style="text-align: right;">30.6</td>
+<td style="text-align: right;">130.6</td>
+<td style="text-align: right;">167.0</td>
+<td style="text-align: right;">0.649</td>
+<td style="text-align: right;">78.9</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">validacion + test</td>
+<td style="text-align: left;">E3_extremo_x_propension</td>
+<td style="text-align: right;">42.0</td>
+<td style="text-align: right;">130.0</td>
+<td style="text-align: right;">168.7</td>
+<td style="text-align: right;">0.653</td>
+<td style="text-align: right;">79.6</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<p>La representación extrema aporta una mejora real en la comparación apareada. En test, E1 reduce el RMSE de 177,7 a 174,8, el MAE de 146,4 a 144,4 y aumenta la correlación de 0,590 a 0,601. En validación queda prácticamente empatado con E0. En el período combinado obtiene RMSE 163,2, MAE 127,7 y correlación 0,653, frente a 164,3, 128,5 y 0,648 del exceso medio.</p>
+<p>Usar simultáneamente promedio y extremo no mejora, lo que sugiere que ambos resúmenes son redundantes y que la cola local es la representación más útil. La mejora de E1 aparece especialmente en marzo, abril y mayo de 2026, aunque no en enero y febrero.</p>
+<p>Las interacciones con propensión reciente y concentración de scores vuelven a tener signo negativo en entrenamiento y empeoran los errores externos. Por lo tanto, el avance proviene de representar mejor el atraso extremo, no de una interacción lineal estable.</p>
+<p><strong>E1 pasa a ser la referencia dinámica actual:</strong> día de semana, jerarquía barrio/segmento, media del top-20 % de scores COM del barrio y media del top-20 % de exceso dentro del segmento. La poca cantidad de clusters que integra cada extremo obliga a monitorear estabilidad, pero el <em>partial pooling</em> territorial y la función global penalizada limitan el riesgo de sobreajuste.</p>
+<section id="comparación-visual-de-baselines-y-candidatos" class="level3" data-number="18.1">
+<h3 data-number="18.1" class="anchored" data-anchor-id="comparación-visual-de-baselines-y-candidatos"><span class="header-section-number">18.1</span> Comparación visual de baselines y candidatos</h3>
+<p>La figura siguiente reúne los modelos que resumen la evolución del análisis:</p>
+<ul>
+<li><strong>M0:</strong> suma directa de scores COM;</li>
+<li><strong>A0:</strong> expectativa estructural basada en día de semana y jerarquía barrio/segmento;</li>
+<li><strong>B1:</strong> A0 más exceso medio del segmento y media del top-20 % de scores del barrio;</li>
+<li><strong>E1:</strong> reemplaza el exceso medio por el top-20 % de exceso local del segmento.</li>
+</ul>
+<div class="cell">
+<div class="cell-output-display">
+<p><img src="pronostico_diario_clusters_reclamo_com_files/figure-html/serie-baselines-candidatos-finales-1.png" class="img-fluid" width="1152"></p>
+</div>
+<div class="cell-output-display">
+<p><img src="pronostico_diario_clusters_reclamo_com_files/figure-html/serie-baselines-candidatos-finales-2.png" class="img-fluid" width="1152"></p>
+</div>
+<div class="cell-output-display">
+<p><img src="pronostico_diario_clusters_reclamo_com_files/figure-html/serie-baselines-candidatos-finales-3.png" class="img-fluid" width="1152"></p>
+</div>
+</div>
+<p>Los gráficos separados permiten distinguir dos propiedades. A0 repite una forma semanal relativamente estable y funciona como nivel estructural. B1 y E1 recuperan más amplitud y siguen parte de las fluctuaciones diarias, aunque aún fallan en varios cambios de nivel. E1 mejora el error agregado frente a B1, pero ninguno resuelve completamente la inestabilidad temporal observada entre meses.</p>
+</section>
+</section>
+<section id="registro-sintético-de-modelos-probados" class="level2" data-number="19">
+<h2 data-number="19" class="anchored" data-anchor-id="registro-sintético-de-modelos-probados"><span class="header-section-number">19</span> Registro sintético de modelos probados</h2>
+<p>Esta sección funciona únicamente como inventario de referencia. Resume la unidad de análisis, el cambio introducido por cada especificación y el hallazgo principal. Las definiciones, métricas y decisiones se desarrollan en las secciones anteriores.</p>
+<section id="modelos-territoriales-agregados-iniciales" class="level3" data-number="19.1">
+<h3 data-number="19.1" class="anchored" data-anchor-id="modelos-territoriales-agregados-iniciales"><span class="header-section-number">19.1</span> Modelos territoriales agregados iniciales</h3>
+<table class="table">
+<colgroup>
+<col style="width: 25%">
+<col style="width: 25%">
+<col style="width: 25%">
+<col style="width: 25%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Modelo</th>
+<th>Unidad</th>
+<th>Especificación resumida</th>
+<th>Hallazgo</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Territorial barrio</td>
+<td>Barrio/día</td>
+<td>Calendario, scores, operación, historia COM, variables sociodemográficas, interacciones e intercepto de barrio.</td>
+<td>Mejoró claramente la suma directa de scores, pero presentó inestabilidad entre validación y test.</td>
+</tr>
+<tr class="even">
+<td>Territorial CCZ</td>
+<td>CCZ/día</td>
+<td>Mismos bloques que el modelo de barrio, agregados por CCZ e intercepto de CCZ.</td>
+<td>Resultado parecido al de barrio; más compacto, pero sin ventaja concluyente.</td>
+</tr>
+<tr class="odd">
+<td>M0</td>
+<td>Ciudad/día</td>
+<td>Suma de scores COM por cluster.</td>
+<td>Referencia simple; varía poco y no reproduce bien las fluctuaciones diarias.</td>
+</tr>
+<tr class="even">
+<td>M1</td>
+<td>Barrio/día o CCZ/día</td>
+<td>Calendario, distribución de scores e intercepto territorial.</td>
+<td>Captura estructura territorial, pero no alcanza a explicar la dinámica diaria.</td>
+</tr>
+<tr class="odd">
+<td>M2</td>
+<td>Barrio/día o CCZ/día</td>
+<td>M1 más historia COM y resúmenes operativos.</td>
+<td>Produjo el mayor salto frente a M1.</td>
+</tr>
+<tr class="even">
+<td>M3</td>
+<td>Barrio/día o CCZ/día</td>
+<td>M2 más distribución del ratio tiempo desde levante/período y cargas de exceso.</td>
+<td>El bloque de ratio agregó poca mejora sobre M2 en esta representación.</td>
+</tr>
+<tr class="odd">
+<td>M4</td>
+<td>Barrio/día o CCZ/día</td>
+<td>M3 más variables sociodemográficas e interacciones.</td>
+<td>Mejora marginal; no aportó evidencia estable sobre las interacciones.</td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="jerarquía-barriosegmento-y-resúmenes-del-score" class="level3" data-number="19.2">
+<h3 data-number="19.2" class="anchored" data-anchor-id="jerarquía-barriosegmento-y-resúmenes-del-score"><span class="header-section-number">19.2</span> Jerarquía barrio/segmento y resúmenes del score</h3>
+<p>Todos los modelos A se ajustaron con una fila por segmento/día, respuesta binomial, día de semana e interceptos penalizados de barrio y segmento.</p>
+<table class="table">
+<colgroup>
+<col style="width: 33%">
+<col style="width: 33%">
+<col style="width: 33%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Modelo</th>
+<th>Cambio respecto de A0</th>
+<th>Hallazgo</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>M0 suma de scores</td>
+<td>Referencia no jerárquica: suma diaria de scores COM.</td>
+<td>Queda claramente por debajo de los modelos territoriales.</td>
+</tr>
+<tr class="even">
+<td>A0 jerarquía</td>
+<td>Solo día de semana y jerarquía barrio/segmento.</td>
+<td>Mejor resultado en test dentro de la primera comparación; reproduce poca amplitud diaria.</td>
+</tr>
+<tr class="odd">
+<td>A1 exceso lineal</td>
+<td>A0 más exceso medio lineal del segmento.</td>
+<td>No produjo una mejora consistente.</td>
+</tr>
+<tr class="even">
+<td>A2 exceso suave</td>
+<td>A0 más función suave del exceso medio.</td>
+<td>Recuperó más variabilidad, sin mejorar inequívocamente el RMSE externo.</td>
+</tr>
+<tr class="odd">
+<td>A3 media top-20</td>
+<td>A2 más media de los 20 scores más altos del barrio.</td>
+<td>Muy buen desempeño en validación.</td>
+</tr>
+<tr class="even">
+<td>A4 suma top-20</td>
+<td>A2 más suma de los 20 scores más altos del barrio.</td>
+<td>Candidato dinámico inicial; mejoró amplitud, pero no todos los cambios de nivel.</td>
+</tr>
+<tr class="odd">
+<td>A5 media top-30</td>
+<td>A2 más media de los 30 scores más altos.</td>
+<td>No superó de forma estable a las variantes top-20.</td>
+</tr>
+<tr class="even">
+<td>A6 suma top-30</td>
+<td>A2 más suma de los 30 scores más altos.</td>
+<td>Sin ventaja estable frente a top-20.</td>
+</tr>
+<tr class="odd">
+<td>A7 score p90</td>
+<td>A2 más percentil 90 del score del barrio.</td>
+<td>No mejoró a las mejores variantes de cola alta.</td>
+</tr>
+<tr class="even">
+<td>A8 suma de scores</td>
+<td>A2 más suma de todos los scores del barrio.</td>
+<td>La agregación total volvió a diluir la señal dinámica.</td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="propensión-reciente-del-barrio" class="level3" data-number="19.3">
+<h3 data-number="19.3" class="anchored" data-anchor-id="propensión-reciente-del-barrio"><span class="header-section-number">19.3</span> Propensión reciente del barrio</h3>
+<p>Estas pruebas conservaron la fila segmento/día y agregaron indicadores de propensión barrial calculados con treinta días cerrados en <code>D-2</code>.</p>
+<table class="table">
+<colgroup>
+<col style="width: 33%">
+<col style="width: 33%">
+<col style="width: 33%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Modelo</th>
+<th>Especificación resumida</th>
+<th>Hallazgo</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>P0</td>
+<td>A4 reentrenado sobre la muestra común.</td>
+<td>Referencia para aislar el aporte de la propensión.</td>
+</tr>
+<tr class="even">
+<td>P1</td>
+<td>P0 más tasa regularizada de reclamo del barrio.</td>
+<td>Corrigió parte del sesgo en test, pero no mejoró RMSE ni correlación.</td>
+</tr>
+<tr class="odd">
+<td>P2</td>
+<td>P1 más interacción entre exceso medio y tasa regularizada.</td>
+<td>Interacción negativa en entrenamiento y peor desempeño externo.</td>
+</tr>
+<tr class="even">
+<td>R1</td>
+<td>P0 más propensión relativa a la expectativa estructural A0.</td>
+<td>Sin mejora estable fuera de muestra.</td>
+</tr>
+<tr class="odd">
+<td>R2</td>
+<td>R1 más interacción entre exceso medio y propensión relativa.</td>
+<td>Tampoco generalizó; se descartó la interacción lineal.</td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="top-20-del-score-e-interacciones-con-exceso" class="level3" data-number="19.4">
+<h3 data-number="19.4" class="anchored" data-anchor-id="top-20-del-score-e-interacciones-con-exceso"><span class="header-section-number">19.4</span> Top-20 % del score e interacciones con exceso</h3>
+<table class="table">
+<colgroup>
+<col style="width: 33%">
+<col style="width: 33%">
+<col style="width: 33%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Modelo</th>
+<th>Especificación resumida</th>
+<th>Hallazgo</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>B0 top-20 fijo</td>
+<td>Exceso medio suave más suma de los 20 scores más altos del barrio.</td>
+<td>Referencia de cola alta fija.</td>
+</tr>
+<tr class="even">
+<td>B1 top-20 %</td>
+<td>Exceso medio suave más media del 20 % de scores más altos del barrio.</td>
+<td>Empate práctico con B0 y mejor coherencia entre barrios de distinto tamaño; referencia preferida.</td>
+</tr>
+<tr class="odd">
+<td>B2 interacción top-20 fijo</td>
+<td>B0 más interacción lineal entre exceso y suma top-20.</td>
+<td>Aumentó amplitud, pero empeoró el error externo.</td>
+</tr>
+<tr class="even">
+<td>B3 interacción top-20 %</td>
+<td>B1 más interacción lineal entre exceso y media top-20 %.</td>
+<td>Tampoco mejoró fuera de muestra.</td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="extremos-locales-de-exceso-por-segmento" class="level3" data-number="19.5">
+<h3 data-number="19.5" class="anchored" data-anchor-id="extremos-locales-de-exceso-por-segmento"><span class="header-section-number">19.5</span> Extremos locales de exceso por segmento</h3>
+<table class="table">
+<colgroup>
+<col style="width: 33%">
+<col style="width: 33%">
+<col style="width: 33%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Modelo</th>
+<th>Especificación resumida</th>
+<th>Hallazgo</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>E0 exceso medio</td>
+<td>Jerarquía, top-20 % del score y exceso medio del segmento.</td>
+<td>Referencia apareada.</td>
+</tr>
+<tr class="even">
+<td>E1 extremo de segmento</td>
+<td>E0 reemplazando el promedio por la media del 20 % de clusters con mayor exceso del segmento.</td>
+<td>Mejoró RMSE y correlación; referencia dinámica actual.</td>
+</tr>
+<tr class="odd">
+<td>E2 medio más extremo</td>
+<td>Incluye simultáneamente exceso medio y extremo.</td>
+<td>No mejoró E1; ambos resúmenes resultaron redundantes.</td>
+</tr>
+<tr class="even">
+<td>E3 extremo por propensión</td>
+<td>E2 más interacción entre extremo del segmento y propensión del barrio.</td>
+<td>Interacción negativa y peor desempeño externo.</td>
+</tr>
+<tr class="odd">
+<td>E4 extremo por score</td>
+<td>E2 más interacción entre extremo del segmento y top-20 % del score barrial.</td>
+<td>Tampoco generalizó.</td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="extremo-e-interacción-calculados-a-nivel-barrio" class="level3" data-number="19.6">
+<h3 data-number="19.6" class="anchored" data-anchor-id="extremo-e-interacción-calculados-a-nivel-barrio"><span class="header-section-number">19.6</span> Extremo e interacción calculados a nivel barrio</h3>
+<p>La primera familia mantuvo una fila por segmento/día, aunque las variables de extremo, propensión e interacción variaban por barrio/día y se repetían en los segmentos del barrio.</p>
+<table class="table">
+<colgroup>
+<col style="width: 33%">
+<col style="width: 33%">
+<col style="width: 33%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Modelo</th>
+<th>Especificación resumida</th>
+<th>Hallazgo</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>E1 referencia común</td>
+<td>Extremo por segmento, reestimado sobre la muestra comparable.</td>
+<td>Conservó la mejor precisión de esta familia.</td>
+</tr>
+<tr class="even">
+<td>H0 extremo barrial</td>
+<td>Reemplaza el extremo del segmento por el top-20 % de exceso del barrio.</td>
+<td>Perdió precisión: la agregación barrial diluyó focos locales.</td>
+</tr>
+<tr class="odd">
+<td>H1 extremo más propensión</td>
+<td>H0 más propensión histórica del barrio.</td>
+<td>Aumentó sobreestimación y error.</td>
+</tr>
+<tr class="even">
+<td>H2 interacción barrial</td>
+<td>H1 más interacción entre extremo y propensión del barrio.</td>
+<td>Interacción negativa, muy fuerte en entrenamiento y claramente peor fuera de muestra.</td>
+</tr>
+</tbody>
+</table>
+<p>Finalmente se repitió la hipótesis con una unidad genuina barrio/día: una fila por barrio y día, sin repetir predictores barriales entre segmentos.</p>
+<table class="table">
+<colgroup>
+<col style="width: 33%">
+<col style="width: 33%">
+<col style="width: 33%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Modelo</th>
+<th>Especificación resumida</th>
+<th>Hallazgo combinado en validación y test</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>BD0 extremo barrial</td>
+<td>Día de semana, top-20 % del score, extremo de exceso e intercepto de barrio.</td>
+<td>RMSE 171,3; correlación 0,643; sesgo +43,2.</td>
+</tr>
+<tr class="even">
+<td>BD1 más propensión</td>
+<td>BD0 más propensión histórica del barrio.</td>
+<td>RMSE 174,5; no mejoró correlación y aumentó el sesgo.</td>
+</tr>
+<tr class="odd">
+<td>BD2 interacción</td>
+<td>BD1 más interacción entre extremo de exceso y propensión del barrio.</td>
+<td>RMSE 182,9; correlación 0,645; sesgo +70,6. La interacción aumentó amplitud, pero deterioró la calibración.</td>
+</tr>
+</tbody>
+</table>
+<p>La repetición a nivel barrio/día confirmó que la falta de generalización no se explicaba principalmente por repetir el predictor barrial entre segmentos. La evidencia acumulada favorece representar mejor los extremos locales antes que agregar interacciones lineales. Este registro no promueve automáticamente cada ensayo al modelo vigente: <strong>E1 extremo de segmento</strong> continúa como referencia dinámica y <strong>A0</strong> como referencia estructural.</p>
+</section>
+</section>
+<section id="próxima-línea-carga-de-atraso-ponderada-por-propensión" class="level2" data-number="20">
+<h2 data-number="20" class="anchored" data-anchor-id="próxima-línea-carga-de-atraso-ponderada-por-propensión"><span class="header-section-number">20</span> Próxima línea: carga de atraso ponderada por propensión</h2>
+<p>Se acuerda detener la incorporación sucesiva de interacciones agregadas y organizar el siguiente desarrollo en tres componentes explícitos:</p>
+<ol type="1">
+<li><strong>Estructura:</strong> calendario y propensión territorial relativamente estable, que producen la expectativa basal y los ciclos semanales.</li>
+<li><strong>Shock operativo:</strong> una medida por cluster de cuánto se excede el tiempo de levante respecto de su período esperado.</li>
+<li><strong>Sensibilidad:</strong> composición entre el atraso del cluster y su propensión basal a generar reclamos.</li>
+</ol>
+<p>La hipótesis es que dos días pueden tener el mismo atraso medio y distinto riesgo agregado. No debería generar el mismo shock atrasar clusters que históricamente casi no reclaman que atrasar clusters con alta propensión basal.</p>
+<section id="construcción-propuesta" class="level3" data-number="20.1">
+<h3 data-number="20.1" class="anchored" data-anchor-id="construcción-propuesta"><span class="header-section-number">20.1</span> Construcción propuesta</h3>
+<p>Para cada cluster (<span class="math inline">\(i\)</span>) y día (<span class="math inline">\(d\)</span>), se definirán:</p>
+<ul>
+<li>(<span class="math inline">\(q_{i,d}\)</span>): propensión basal a reclamar, estimada sin variables contemporáneas de levante y respetando los cortes temporales;</li>
+<li>(<span class="math inline">\(x_{i,d}\)</span>): ratio entre tiempo desde el último levante y período teórico;</li>
+<li>(<span class="math inline">\(h(x_{i,d})\)</span>): intensidad de atraso, monótona, con posibilidad de umbral y saturación;</li>
+<li>(<span class="math inline">\(w_{i,d}=q_{i,d}h(x_{i,d})\)</span>): carga de atraso ponderada por propensión.</li>
+</ul>
+<p>La carga será aditiva:</p>
+<p><span class="math display">\[
+W_{g,d}=\sum_{i\in g}w_{i,d},
+\]</span></p>
+<p>donde (g) podrá ser segmento, barrio o toda la ciudad. Esto garantiza que el indicador de ciudad sea la suma de sus componentes territoriales y permite mostrar dónde se concentra el shock esperado.</p>
+<p>La propensión (q_{i,d}) no se tomará directamente del score COM vigente, porque ese score ya incluye variables relacionadas con levante. Usarlo como propensión y volver a multiplicarlo por atraso mezclaría estructura y shock y podría contar dos veces la misma información. La primera versión será una propensión histórica o estructural con <em>shrinkage</em> para clusters con poca historia y predicciones temporales fuera de muestra.</p>
+</section>
+<section id="contraste-mínimo-acordado" class="level3" data-number="20.2">
+<h3 data-number="20.2" class="anchored" data-anchor-id="contraste-mínimo-acordado"><span class="header-section-number">20.2</span> Contraste mínimo acordado</h3>
+<p>Se compararán solamente tres bloques sobre los mismos períodos:</p>
+<ol type="1">
+<li>expectativa estructural;</li>
+<li>estructura más atraso agregado sin ponderar;</li>
+<li>estructura más carga de atraso ponderada por propensión.</li>
+</ol>
+<p>La evaluación priorizará RMSE, MAE, sesgo, calibración y desempeño en días de volumen alto. También verificará estabilidad mensual y coherencia entre ciudad, barrio y segmento. Como sensibilidad se considerará una formulación en escala logit, donde el atraso modifica la probabilidad basal y el shock agregado es la suma de los incrementos de probabilidad. No se incorporarán nuevas familias de variables hasta resolver este contraste.</p>
+</section>
+<section id="primer-contraste-de-momentos-y-pendientes-barriales" class="level3" data-number="20.3">
+<h3 data-number="20.3" class="anchored" data-anchor-id="primer-contraste-de-momentos-y-pendientes-barriales"><span class="header-section-number">20.3</span> Primer contraste de momentos y pendientes barriales</h3>
+<p>Sobre una muestra común segmento/día se compararon la estructura sola, atraso medio sin ponderar, media de la carga ponderada, RMS de la carga ponderada y los dos momentos ponderados juntos. Todos los indicadores de atraso mejoran claramente la estructura. En validación obtiene menor RMSE el atraso sin ponderar (158,3) y en test el RMS ponderado (170,1). En el período combinado quedan prácticamente empatados, con RMSE entre 164,4 y 164,8.</p>
+<p>La media y el RMS ponderados presentan una correlación de 0,974 en entrenamiento. Incorporarlos simultáneamente no mejora el desempeño, por lo que no se justifica conservar ambos en la especificación actual.</p>
+<p>También se probaron dos pendientes aleatorias por barrio, centradas respecto del atraso habitual del barrio:</p>
+<table class="table">
+<colgroup>
+<col style="width: 21%">
+<col style="width: 28%">
+<col style="width: 28%">
+<col style="width: 21%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Modelo</th>
+<th style="text-align: right;">Sin pendiente: RMSE combinado</th>
+<th style="text-align: right;">Con pendiente: RMSE combinado</th>
+<th>Lectura</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Atraso medio sin ponderar</td>
+<td style="text-align: right;">164,4</td>
+<td style="text-align: right;">167,5</td>
+<td>La pendiente mejora mucho el ajuste interno, pero empeora validación y test.</td>
+</tr>
+<tr class="even">
+<td>Carga media ponderada</td>
+<td style="text-align: right;">164,7</td>
+<td style="text-align: right;">167,9</td>
+<td>Se repite el mismo patrón y tampoco generaliza.</td>
+</tr>
+</tbody>
+</table>
+<p>Las pendientes utilizan cerca de 58 grados de libertad para 62 barrios y reducen fuertemente el AIC de entrenamiento. Sin embargo, aumentan el error y el sesgo externo. No quedan promovidas; cualquier nueva heterogeneidad territorial deberá imponer mayor estructura o sustentarse en una hipótesis que pueda validarse temporalmente.</p>
+</section>
+<section id="xgboost-como-corrección-de-la-expectativa-estructural" class="level3" data-number="20.4">
+<h3 data-number="20.4" class="anchored" data-anchor-id="xgboost-como-corrección-de-la-expectativa-estructural"><span class="header-section-number">20.4</span> XGBoost como corrección de la expectativa estructural</h3>
+<p>Se evaluó un modelo flexible sin eliminar la estructura territorial. A0 genera una probabilidad basal por segmento/día y XGBoost recibe su logit como <code>base_margin</code> para aprender únicamente una corrección dinámica:</p>
+<p><span class="math display">\[
+\operatorname{logit}(p_{s,d})=
+\operatorname{logit}(p^{A0}_{s,d})+f_{\mathrm{XGB}}(X_{s,d}).
+\]</span></p>
+<p>Las probabilidades A0 usadas para entrenar XGBoost son OOF temporales: se ajustaron ventanas mensuales expansivas para abril–diciembre de 2025. Para validación y test, A0 utiliza todo el entrenamiento permitido de 2025. XGBoost usa árboles de profundidad 3 y una cantidad de iteraciones seleccionada dentro de noviembre–diciembre de 2025, sin ajustar hiperparámetros sobre validación o test.</p>
+<p>Se compararon:</p>
+<table class="table">
+<colgroup>
+<col style="width: 16%">
+<col style="width: 16%">
+<col style="width: 22%">
+<col style="width: 22%">
+<col style="width: 22%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Modelo</th>
+<th>Especificación</th>
+<th style="text-align: right;">RMSE validación</th>
+<th style="text-align: right;">RMSE test</th>
+<th style="text-align: right;">RMSE combinado</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>A0</td>
+<td>Día de semana y jerarquía barrio/segmento.</td>
+<td style="text-align: right;">178,3</td>
+<td style="text-align: right;"><strong>172,6</strong></td>
+<td style="text-align: right;">176,2</td>
+</tr>
+<tr class="even">
+<td>X0</td>
+<td>XGBoost desde cero, sin margen estructural.</td>
+<td style="text-align: right;">196,8</td>
+<td style="text-align: right;">186,7</td>
+<td style="text-align: right;">193,1</td>
+</tr>
+<tr class="odd">
+<td>X1</td>
+<td>A0 más corrección con calendario y levante.</td>
+<td style="text-align: right;">154,9</td>
+<td style="text-align: right;">173,0</td>
+<td style="text-align: right;">161,9</td>
+</tr>
+<tr class="even">
+<td>X2</td>
+<td>X1 más propensión histórica y momentos de carga.</td>
+<td style="text-align: right;"><strong>153,2</strong></td>
+<td style="text-align: right;">173,9</td>
+<td style="text-align: right;"><strong>161,3</strong></td>
+</tr>
+</tbody>
+</table>
+<p>El mal resultado de X0 indica que las variables dinámicas no reemplazan la estructura territorial. En cambio, X1 y X2 aumentan sustancialmente la variabilidad reproducida y mejoran el período combinado. X2 agrega una mejora pequeña frente a X1, concentrada en validación; en test no supera a A0.</p>
+<p>En X2, tiempo desde el último levante y atraso medio concentran la mayor importancia. La propensión media aporta 6,5 % del <em>gain</em>. Un diagnóstico SHAP de interacciones sobre 10.000 filas externas muestra como par más fuerte de todo el modelo <strong>atraso medio × propensión media</strong>. También aparece entre los primeros cruces <strong>tiempo desde último levante × propensión media</strong>. Esto demuestra que el modelo utiliza predictivamente la composición planteada, pero todavía no establece su dirección, interpretación causal ni estabilidad temporal.</p>
+<p>X2 queda como candidato para diagnóstico, no como modelo seleccionado. Antes de promoverlo corresponde visualizar la forma de las interacciones, verificarla por período y estudiar por qué la mejora de validación no se sostiene con igual magnitud en test.</p>
+<div class="cell">
+<div class="cell-output-display">
+<p><img src="pronostico_diario_clusters_reclamo_com_files/figure-html/serie-a0-e1-x2-1.png" class="img-fluid" width="1248"></p>
+</div>
+</div>
+<p>La figura separa validación y test para evitar comprimir las series. El observado se presenta con una línea punteada y más suave; los puntos amarillos identifican feriados según el calendario de referencia del proyecto. A0 y las variantes X2 se expanden por la razón diaria entre el universo completo y la muestra con propensión disponible; la cobertura externa media es cercana a 98,8 %. Este ajuste se usa únicamente para alinear visualmente los totales con E1 y el observado completo. Las métricas anteriores permanecen calculadas sobre la muestra común y no utilizan esta expansión.</p>
+</section>
+<section id="sensibilidad-a-la-ventana-de-propensión" class="level3" data-number="20.5">
+<h3 data-number="20.5" class="anchored" data-anchor-id="sensibilidad-a-la-ventana-de-propensión"><span class="header-section-number">20.5</span> Sensibilidad a la ventana de propensión</h3>
+<p>La propensión inicial de X2 utilizaba 90 observaciones previas. Se compararon cinco horizontes —7, 15, 30, 60 y 90— manteniendo idénticos A0, muestra, variables operativas, parámetros de XGBoost y selección interna de iteraciones. Todas las ventanas se cierran en <code>D-2</code>, permiten historia parcial y aplican <em>shrinkage</em> desde cluster hacia barrio y desde barrio hacia la tasa global.</p>
+<table class="table">
+<colgroup>
+<col style="width: 20%">
+<col style="width: 20%">
+<col style="width: 20%">
+<col style="width: 20%">
+<col style="width: 20%">
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: right;">Ventana</th>
+<th style="text-align: right;">RMSE validación</th>
+<th style="text-align: right;">RMSE test</th>
+<th style="text-align: right;">RMSE combinado</th>
+<th style="text-align: right;">Correlación combinada</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: right;">7</td>
+<td style="text-align: right;"><strong>151,9</strong></td>
+<td style="text-align: right;"><strong>174,5</strong></td>
+<td style="text-align: right;"><strong>160,7</strong></td>
+<td style="text-align: right;"><strong>0,667</strong></td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">15</td>
+<td style="text-align: right;">153,5</td>
+<td style="text-align: right;">177,3</td>
+<td style="text-align: right;">162,8</td>
+<td style="text-align: right;">0,657</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">30</td>
+<td style="text-align: right;">155,3</td>
+<td style="text-align: right;">176,9</td>
+<td style="text-align: right;">163,7</td>
+<td style="text-align: right;">0,650</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">60</td>
+<td style="text-align: right;">155,1</td>
+<td style="text-align: right;">177,3</td>
+<td style="text-align: right;">163,8</td>
+<td style="text-align: right;">0,649</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">90</td>
+<td style="text-align: right;">153,8</td>
+<td style="text-align: right;">176,4</td>
+<td style="text-align: right;">162,7</td>
+<td style="text-align: right;">0,651</td>
+</tr>
+</tbody>
+</table>
+<p>La ventana de siete observaciones obtiene el mejor resultado en los tres períodos agregados y reproduce mayor variabilidad. Frente a W90, mejora febrero, marzo y abril de 2026; W90 conserva ventaja en enero y mayo. Esto sugiere que la propensión reciente ayuda a que la corrección responda con mayor rapidez, pero no elimina la inestabilidad mensual.</p>
+<p>W7 queda como mejor ventana individual. No se incorporan simultáneamente los cinco horizontes. Si se continúa esta línea, el siguiente contraste será una combinación parsimoniosa entre nivel habitual y cambio reciente, por ejemplo una propensión larga junto con la diferencia entre W7 y esa referencia.</p>
+</section>
+<section id="cambio-reciente-respecto-de-la-propensión-habitual" class="level3" data-number="20.6">
+<h3 data-number="20.6" class="anchored" data-anchor-id="cambio-reciente-respecto-de-la-propensión-habitual"><span class="header-section-number">20.6</span> Cambio reciente respecto de la propensión habitual</h3>
+<p>Se realizó ese contraste manteniendo W7 como nivel reciente y agregando una sola variable: la diferencia entre W7 y una referencia de 30 o 60 observaciones. No se agregó el nivel largo como predictor independiente. A0, la muestra, las variables restantes y el procedimiento de ajuste permanecen idénticos.</p>
+<table class="table">
+<colgroup>
+<col style="width: 15%">
+<col style="width: 21%">
+<col style="width: 21%">
+<col style="width: 21%">
+<col style="width: 21%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Especificación</th>
+<th style="text-align: right;">RMSE validación</th>
+<th style="text-align: right;">RMSE test</th>
+<th style="text-align: right;">RMSE combinado</th>
+<th style="text-align: right;">Correlación combinada</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>W7</td>
+<td style="text-align: right;">151,9</td>
+<td style="text-align: right;">174,5</td>
+<td style="text-align: right;">160,7</td>
+<td style="text-align: right;">0,667</td>
+</tr>
+<tr class="even">
+<td>W7 + (q7 − q30)</td>
+<td style="text-align: right;">150,3</td>
+<td style="text-align: right;">172,2</td>
+<td style="text-align: right;">158,9</td>
+<td style="text-align: right;">0,675</td>
+</tr>
+<tr class="odd">
+<td>W7 + (q7 − q60)</td>
+<td style="text-align: right;"><strong>148,4</strong></td>
+<td style="text-align: right;"><strong>170,5</strong></td>
+<td style="text-align: right;"><strong>157,1</strong></td>
+<td style="text-align: right;"><strong>0,685</strong></td>
+</tr>
+</tbody>
+</table>
+<p>La diferencia respecto de 60 observaciones produce la mejora más clara. En test supera a W7 en enero, febrero, abril y mayo; marzo queda prácticamente empatado y levemente favorable a W7. La nueva variable explica 19,4 % del <em>gain</em> de ese modelo, por lo que no parece una adición ignorada por los árboles.</p>
+<p>El resultado sugiere que no importa solamente la propensión reciente de cada cluster, sino también cuánto se aparta de su nivel habitual de mediano plazo. W7 + (q7 − q60) queda como candidato preferido para continuar la evaluación, pero todavía no como modelo final seleccionado.</p>
+</section>
+<section id="feriados-y-días-posteriores" class="level3" data-number="20.7">
+<h3 data-number="20.7" class="anchored" data-anchor-id="feriados-y-días-posteriores"><span class="header-section-number">20.7</span> Feriados y días posteriores</h3>
+<p>Se evaluaron los feriados como parte de la corrección dinámica de A0, sin modificar el baseline estructural. El calendario utilizado es <code>data/reference/feriados/feriados.R</code>. En ese calendario Carnaval comprende dos días y Turismo comprende los cinco días laborables de la semana. No se extendió el indicador a otros días de esas semanas.</p>
+<p>El indicador <code>post_feriado</code> identifica el día calendario inmediatamente posterior al final de cada bloque consecutivo, siempre que ese día no sea también feriado. Se compararon el candidato vigente, el agregado de feriado y el agregado conjunto de feriado y postferiado sobre la misma muestra y con el mismo procedimiento de ajuste.</p>
+<div class="cell">
+<div class="cell-output-display">
+<table class="table table-sm table-striped small">
+<caption>Feriados y postferiados en la corrección dinámica de A0</caption>
+<colgroup>
+<col style="width: 36%">
+<col style="width: 23%">
+<col style="width: 7%">
+<col style="width: 7%">
+<col style="width: 7%">
+<col style="width: 15%">
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: left;">especificación</th>
+<th style="text-align: left;">período</th>
+<th style="text-align: right;">sesgo</th>
+<th style="text-align: right;">MAE</th>
+<th style="text-align: right;">RMSE</th>
+<th style="text-align: right;">correlación</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">W7 + (q7 - q60)</td>
+<td style="text-align: left;">validacion</td>
+<td style="text-align: right;">29.1</td>
+<td style="text-align: right;">110.7</td>
+<td style="text-align: right;">148.4</td>
+<td style="text-align: right;">0.722</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">W7 + (q7 - q60)</td>
+<td style="text-align: left;">test</td>
+<td style="text-align: right;">-41.0</td>
+<td style="text-align: right;">141.0</td>
+<td style="text-align: right;">170.5</td>
+<td style="text-align: right;">0.652</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Más feriado</td>
+<td style="text-align: left;">validacion</td>
+<td style="text-align: right;">24.6</td>
+<td style="text-align: right;">107.9</td>
+<td style="text-align: right;">143.8</td>
+<td style="text-align: right;">0.739</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Más feriado</td>
+<td style="text-align: left;">test</td>
+<td style="text-align: right;">-42.9</td>
+<td style="text-align: right;">143.9</td>
+<td style="text-align: right;">172.0</td>
+<td style="text-align: right;">0.653</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Más feriado y postferiado</td>
+<td style="text-align: left;">validacion</td>
+<td style="text-align: right;">29.5</td>
+<td style="text-align: right;">109.5</td>
+<td style="text-align: right;">147.0</td>
+<td style="text-align: right;">0.724</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Más feriado y postferiado</td>
+<td style="text-align: left;">test</td>
+<td style="text-align: right;">-41.7</td>
+<td style="text-align: right;">140.7</td>
+<td style="text-align: right;">169.9</td>
+<td style="text-align: right;">0.652</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Más feriado y top-20 % de h</td>
+<td style="text-align: left;">validacion</td>
+<td style="text-align: right;">29.2</td>
+<td style="text-align: right;">109.7</td>
+<td style="text-align: right;">147.5</td>
+<td style="text-align: right;">0.723</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Más feriado y top-20 % de h</td>
+<td style="text-align: left;">test</td>
+<td style="text-align: right;">-41.3</td>
+<td style="text-align: right;">141.4</td>
+<td style="text-align: right;">170.8</td>
+<td style="text-align: right;">0.650</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Más cambio global COM 7-60</td>
+<td style="text-align: left;">validacion</td>
+<td style="text-align: right;">28.3</td>
+<td style="text-align: right;">113.3</td>
+<td style="text-align: right;">155.4</td>
+<td style="text-align: right;">0.702</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Más cambio global COM 7-60</td>
+<td style="text-align: left;">test</td>
+<td style="text-align: right;">-49.4</td>
+<td style="text-align: right;">139.7</td>
+<td style="text-align: right;">174.8</td>
+<td style="text-align: right;">0.654</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Más ratio global COM 7/60</td>
+<td style="text-align: left;">validacion</td>
+<td style="text-align: right;">14.6</td>
+<td style="text-align: right;">108.9</td>
+<td style="text-align: right;">148.7</td>
+<td style="text-align: right;">0.703</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Más ratio global COM 7/60</td>
+<td style="text-align: left;">test</td>
+<td style="text-align: right;">-67.1</td>
+<td style="text-align: right;">141.7</td>
+<td style="text-align: right;">178.2</td>
+<td style="text-align: right;">0.646</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">W7 + (q7 - q60)</td>
+<td style="text-align: left;">validacion + test</td>
+<td style="text-align: right;">2.8</td>
+<td style="text-align: right;">122.1</td>
+<td style="text-align: right;">157.1</td>
+<td style="text-align: right;">0.685</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Más feriado</td>
+<td style="text-align: left;">validacion + test</td>
+<td style="text-align: right;">-0.7</td>
+<td style="text-align: right;">121.4</td>
+<td style="text-align: right;">155.0</td>
+<td style="text-align: right;">0.697</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Más feriado y postferiado</td>
+<td style="text-align: left;">validacion + test</td>
+<td style="text-align: right;">2.8</td>
+<td style="text-align: right;">121.2</td>
+<td style="text-align: right;">156.0</td>
+<td style="text-align: right;">0.686</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Más feriado y top-20 % de h</td>
+<td style="text-align: left;">validacion + test</td>
+<td style="text-align: right;">2.8</td>
+<td style="text-align: right;">121.6</td>
+<td style="text-align: right;">156.6</td>
+<td style="text-align: right;">0.685</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Más cambio global COM 7-60</td>
+<td style="text-align: left;">validacion + test</td>
+<td style="text-align: right;">-0.8</td>
+<td style="text-align: right;">123.2</td>
+<td style="text-align: right;">162.9</td>
+<td style="text-align: right;">0.671</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Más ratio global COM 7/60</td>
+<td style="text-align: left;">validacion + test</td>
+<td style="text-align: right;">-16.1</td>
+<td style="text-align: right;">121.2</td>
+<td style="text-align: right;">160.4</td>
+<td style="text-align: right;">0.666</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<p>Agregar solo <code>es_feriado</code> reduce el RMSE de validación de 148,4 a 143,8 y el RMSE combinado de 157,1 a 155,0. También deja el sesgo combinado prácticamente en cero. En los doce feriados de validación y test, la sobreestimación media baja de 126,0 a 85,3 clusters, aunque sigue siendo alta.</p>
+<p>Agregar además <code>post_feriado</code> no mejora la variante con feriado: el RMSE combinado queda en 156,0. En los siete postferiados disponibles reduce algo la subestimación media, pero la muestra es pequeña y no mejora el desempeño total. Por ahora, <code>es_feriado</code> queda como variante prometedora y <code>post_feriado</code> como hipótesis no confirmada. Ninguna de las dos se promueve todavía al scoring.</p>
+</section>
+<section id="severidad-extrema-mediante-top-20" class="level3" data-number="20.8">
+<h3 data-number="20.8" class="anchored" data-anchor-id="severidad-extrema-mediante-top-20"><span class="header-section-number">20.8</span> Severidad extrema mediante top 20 %</h3>
+<p>Se agregó <code>media_top20_h</code>, definida como la media del 20 % de clusters con mayor severidad dentro de cada segmento/día. La severidad conserva la misma definición saturada del modelo:</p>
+<p><span class="math display">\[
+h=\min\{\max(\text{ratio tiempo/período}-1,0),3\}.
+\]</span></p>
+<p>La feature se construyó dentro de la misma agregación que genera el target y las demás variables del XGBoost, con cobertura de 100 % sobre las 380.565 filas segmento/día. Se comparó el modelo con feriado contra la misma especificación más <code>media_top20_h</code>.</p>
+<table class="table">
+<colgroup>
+<col style="width: 15%">
+<col style="width: 21%">
+<col style="width: 21%">
+<col style="width: 21%">
+<col style="width: 21%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Especificación</th>
+<th style="text-align: right;">RMSE validación</th>
+<th style="text-align: right;">RMSE test</th>
+<th style="text-align: right;">RMSE combinado</th>
+<th style="text-align: right;">Correlación combinada</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>W7 + (q7 − q60) + feriado</td>
+<td style="text-align: right;"><strong>143,8</strong></td>
+<td style="text-align: right;"><strong>172,0</strong></td>
+<td style="text-align: right;"><strong>155,0</strong></td>
+<td style="text-align: right;"><strong>0,697</strong></td>
+</tr>
+<tr class="even">
+<td>Más top-20 % de <code>h</code></td>
+<td style="text-align: right;">147,5</td>
+<td style="text-align: right;">170,8</td>
+<td style="text-align: right;">156,6</td>
+<td style="text-align: right;">0,685</td>
+</tr>
+</tbody>
+</table>
+<p>El top 20 % de severidad no mejora el candidato con feriado. En los días por debajo del percentil 10 aumenta la sobreestimación media de 191,8 a 201,4 clusters; en los días por encima del percentil 90 aumenta la subestimación de 104,0 a 122,9 clusters. Aunque <code>media_top20_h</code> representa 10,1 % del <em>gain</em>, su uso no generaliza en la dirección buscada. La variable queda como experimento descartado en esta forma y no se incorpora al candidato vigente.</p>
+</section>
+<section id="cambio-reciente-del-volumen-global-com" class="level3" data-number="20.9">
+<h3 data-number="20.9" class="anchored" data-anchor-id="cambio-reciente-del-volumen-global-com"><span class="header-section-number">20.9</span> Cambio reciente del volumen global COM</h3>
+<p>Se evaluó si el nivel reciente de reclamos de toda la ciudad ayuda a anticipar cambios de régimen que no estén capturados por las propensiones territoriales. Para cada día objetivo se calcularon, con información cerrada en <code>D-2</code>:</p>
+<ul>
+<li>la diferencia entre el promedio diario de clusters con reclamo de los últimos 7 y 60 días;</li>
+<li>el cociente entre esos mismos promedios.</li>
+</ul>
+<p>Cada señal se agregó por separado al candidato con feriado.</p>
+<table class="table">
+<colgroup>
+<col style="width: 15%">
+<col style="width: 21%">
+<col style="width: 21%">
+<col style="width: 21%">
+<col style="width: 21%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Especificación</th>
+<th style="text-align: right;">RMSE validación</th>
+<th style="text-align: right;">RMSE test</th>
+<th style="text-align: right;">RMSE combinado</th>
+<th style="text-align: right;">Correlación combinada</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>W7 + (q7 − q60) + feriado</td>
+<td style="text-align: right;"><strong>143,8</strong></td>
+<td style="text-align: right;"><strong>172,0</strong></td>
+<td style="text-align: right;"><strong>155,0</strong></td>
+<td style="text-align: right;"><strong>0,697</strong></td>
+</tr>
+<tr class="even">
+<td>Más diferencia COM 7−60</td>
+<td style="text-align: right;">155,4</td>
+<td style="text-align: right;">174,8</td>
+<td style="text-align: right;">162,9</td>
+<td style="text-align: right;">0,671</td>
+</tr>
+<tr class="odd">
+<td>Más ratio COM 7/60</td>
+<td style="text-align: right;">148,7</td>
+<td style="text-align: right;">178,2</td>
+<td style="text-align: right;">160,4</td>
+<td style="text-align: right;">0,666</td>
+</tr>
+</tbody>
+</table>
+<p>Las dos variables son utilizadas intensamente por XGBoost, pero empeoran la generalización. La diferencia representa 37,7 % del <em>gain</em> de su variante y el ratio 25,9 %, sin traducirse en menor error. El resultado es compatible con una corrección excesiva hacia el nivel reciente. Ambas formulaciones quedan descartadas y no modifican el candidato vigente.</p>
+</section>
+<section id="evaluación-territorial-por-barrio" class="level3" data-number="20.10">
+<h3 data-number="20.10" class="anchored" data-anchor-id="evaluación-territorial-por-barrio"><span class="header-section-number">20.10</span> Evaluación territorial por barrio</h3>
+<p>Las predicciones segmento/día de A0, X2 W7 + <code>q7 - q60</code> y la variante con feriado se agregaron por barrio/día. La evaluación utiliza conjuntamente validación y test y conserva métricas absolutas y relativas al volumen medio.</p>
+<div class="cell">
+<div class="cell-output-display">
+<table class="table table-sm table-striped small">
+<caption>Resumen territorial del candidato con feriado</caption>
+<colgroup>
+<col style="width: 8%">
+<col style="width: 13%">
+<col style="width: 23%">
+<col style="width: 21%">
+<col style="width: 16%">
+<col style="width: 16%">
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: right;">barrios</th>
+<th style="text-align: right;">RMSE mediano</th>
+<th style="text-align: right;">RMSE relativo mediano</th>
+<th style="text-align: right;">Correlación mediana</th>
+<th style="text-align: right;">Sesgo positivo</th>
+<th style="text-align: right;">Sesgo negativo</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: right;">62</td>
+<td style="text-align: right;">5.07</td>
+<td style="text-align: right;">0.44</td>
+<td style="text-align: right;">0.485</td>
+<td style="text-align: right;">31</td>
+<td style="text-align: right;">31</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="cell-output-display">
+<table class="table table-sm table-striped small">
+<caption>Barrios con mayor RMSE absoluto</caption>
+<colgroup>
+<col style="width: 32%">
+<col style="width: 20%">
+<col style="width: 7%">
+<col style="width: 6%">
+<col style="width: 17%">
+<col style="width: 15%">
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: left;">barrio</th>
+<th style="text-align: right;">Media observada</th>
+<th style="text-align: right;">sesgo</th>
+<th style="text-align: right;">RMSE</th>
+<th style="text-align: right;">RMSE relativo</th>
+<th style="text-align: right;">correlación</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">POCITOS</td>
+<td style="text-align: right;">41.2</td>
+<td style="text-align: right;">-5.9</td>
+<td style="text-align: right;">16.0</td>
+<td style="text-align: right;">0.387</td>
+<td style="text-align: right;">0.333</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">PQUE. BATLLE, V. DOLORES</td>
+<td style="text-align: right;">34.3</td>
+<td style="text-align: right;">-4.0</td>
+<td style="text-align: right;">12.2</td>
+<td style="text-align: right;">0.355</td>
+<td style="text-align: right;">0.428</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">UNION</td>
+<td style="text-align: right;">38.5</td>
+<td style="text-align: right;">2.7</td>
+<td style="text-align: right;">10.9</td>
+<td style="text-align: right;">0.283</td>
+<td style="text-align: right;">0.554</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">CORDON</td>
+<td style="text-align: right;">39.4</td>
+<td style="text-align: right;">-3.5</td>
+<td style="text-align: right;">10.2</td>
+<td style="text-align: right;">0.260</td>
+<td style="text-align: right;">0.264</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">BUCEO</td>
+<td style="text-align: right;">31.2</td>
+<td style="text-align: right;">-0.7</td>
+<td style="text-align: right;">10.0</td>
+<td style="text-align: right;">0.322</td>
+<td style="text-align: right;">0.517</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">PRADO, NUEVA SAVONA</td>
+<td style="text-align: right;">28.7</td>
+<td style="text-align: right;">3.1</td>
+<td style="text-align: right;">9.9</td>
+<td style="text-align: right;">0.343</td>
+<td style="text-align: right;">0.434</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">MALVIN</td>
+<td style="text-align: right;">32.4</td>
+<td style="text-align: right;">1.1</td>
+<td style="text-align: right;">9.8</td>
+<td style="text-align: right;">0.303</td>
+<td style="text-align: right;">0.606</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">BELVEDERE</td>
+<td style="text-align: right;">19.9</td>
+<td style="text-align: right;">3.9</td>
+<td style="text-align: right;">8.2</td>
+<td style="text-align: right;">0.411</td>
+<td style="text-align: right;">0.491</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">AGUADA</td>
+<td style="text-align: right;">24.1</td>
+<td style="text-align: right;">-0.7</td>
+<td style="text-align: right;">8.0</td>
+<td style="text-align: right;">0.333</td>
+<td style="text-align: right;">0.519</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">PENAROL, LAVALLEJA</td>
+<td style="text-align: right;">19.1</td>
+<td style="text-align: right;">-1.6</td>
+<td style="text-align: right;">7.5</td>
+<td style="text-align: right;">0.395</td>
+<td style="text-align: right;">0.603</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<p>El candidato con feriado obtiene un RMSE mediano de 5,1 clusters por barrio, un RMSE relativo mediano de 0,440 y una correlación temporal mediana de 0,485. Los sesgos quedan equilibrados: 31 barrios presentan sobreestimación media y 31 subestimación media.</p>
+<p>X2 sin feriado mejora el RMSE de A0 en 53 de 62 barrios. Agregar feriado mejora frente a X2 sin feriado en 35 barrios y el candidato final supera a A0 en 53. Los nueve barrios donde A0 conserva menor RMSE son Prado–Nueva Savona, Cordón, Pocitos, Atahualpa, Centro, Barrio Sur, Capurro–Bella Vista, Casabó–Pajas Blancas y Parque Rodó.</p>
+<p>Los mayores errores absolutos del candidato se concentran en barrios de volumen alto: Pocitos, Parque Batlle–Villa Dolores, Unión, Cordón y Buceo. Las métricas relativas deben interpretarse con cautela en barrios de volumen casi nulo; por ejemplo, Casabó–Pajas Blancas tiene una media observada inferior a 0,1 clusters por día y por eso un error absoluto pequeño produce un cociente elevado.</p>
+<div class="cell">
+<div class="cell-output-display">
+<p><img src="pronostico_diario_clusters_reclamo_com_files/figure-html/serie-feriados-xgboost-1.png" class="img-fluid" width="1248"></p>
+</div>
+</div>
+</section>
+</section>
+
+</main>
+<!-- /main column -->
+<script id="quarto-html-after-body" type="application/javascript">
+window.document.addEventListener("DOMContentLoaded", function (event) {
+  const toggleBodyColorMode = (bsSheetEl) => {
+    const mode = bsSheetEl.getAttribute("data-mode");
+    const bodyEl = window.document.querySelector("body");
+    if (mode === "dark") {
+      bodyEl.classList.add("quarto-dark");
+      bodyEl.classList.remove("quarto-light");
+    } else {
+      bodyEl.classList.add("quarto-light");
+      bodyEl.classList.remove("quarto-dark");
+    }
+  }
+  const toggleBodyColorPrimary = () => {
+    const bsSheetEl = window.document.querySelector("link#quarto-bootstrap");
+    if (bsSheetEl) {
+      toggleBodyColorMode(bsSheetEl);
+    }
+  }
+  toggleBodyColorPrimary();  
+  const icon = "";
+  const anchorJS = new window.AnchorJS();
+  anchorJS.options = {
+    placement: 'right',
+    icon: icon
+  };
+  anchorJS.add('.anchored');
+  const isCodeAnnotation = (el) => {
+    for (const clz of el.classList) {
+      if (clz.startsWith('code-annotation-')) {                     
+        return true;
+      }
+    }
+    return false;
+  }
+  const clipboard = new window.ClipboardJS('.code-copy-button', {
+    text: function(trigger) {
+      const codeEl = trigger.previousElementSibling.cloneNode(true);
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+    }
+  });
+  clipboard.on('success', function(e) {
+    // button target
+    const button = e.trigger;
+    // don't keep focus
+    button.blur();
+    // flash "checked"
+    button.classList.add('code-copy-button-checked');
+    var currentTitle = button.getAttribute("title");
+    button.setAttribute("title", "Copiado");
+    let tooltip;
+    if (window.bootstrap) {
+      button.setAttribute("data-bs-toggle", "tooltip");
+      button.setAttribute("data-bs-placement", "left");
+      button.setAttribute("data-bs-title", "Copiado");
+      tooltip = new bootstrap.Tooltip(button, 
+        { trigger: "manual", 
+          customClass: "code-copy-button-tooltip",
+          offset: [0, -8]});
+      tooltip.show();    
+    }
+    setTimeout(function() {
+      if (tooltip) {
+        tooltip.hide();
+        button.removeAttribute("data-bs-title");
+        button.removeAttribute("data-bs-toggle");
+        button.removeAttribute("data-bs-placement");
+      }
+      button.setAttribute("title", currentTitle);
+      button.classList.remove('code-copy-button-checked');
+    }, 1000);
+    // clear code selection
+    e.clearSelection();
+  });
+  function tippyHover(el, contentFn) {
+    const config = {
+      allowHTML: true,
+      content: contentFn,
+      maxWidth: 500,
+      delay: 100,
+      arrow: false,
+      appendTo: function(el) {
+          return el.parentElement;
+      },
+      interactive: true,
+      interactiveBorder: 10,
+      theme: 'quarto',
+      placement: 'bottom-start'
+    };
+    window.tippy(el, config); 
+  }
+  const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+  for (var i=0; i<noterefs.length; i++) {
+    const ref = noterefs[i];
+    tippyHover(ref, function() {
+      // use id or data attribute instead here
+      let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+      try { href = new URL(href).hash; } catch {}
+      const id = href.replace(/^#\/?/, "");
+      const note = window.document.getElementById(id);
+      return note.innerHTML;
+    });
+  }
+      let selectedAnnoteEl;
+      const selectorForAnnotation = ( cell, annotation) => {
+        let cellAttr = 'data-code-cell="' + cell + '"';
+        let lineAttr = 'data-code-annotation="' +  annotation + '"';
+        const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+        return selector;
+      }
+      const selectCodeLines = (annoteEl) => {
+        const doc = window.document;
+        const targetCell = annoteEl.getAttribute("data-target-cell");
+        const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+        const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+        const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+        const lineIds = lines.map((line) => {
+          return targetCell + "-" + line;
+        })
+        let top = null;
+        let height = null;
+        let parent = null;
+        if (lineIds.length > 0) {
+            //compute the position of the single el (top and bottom and make a div)
+            const el = window.document.getElementById(lineIds[0]);
+            top = el.offsetTop;
+            height = el.offsetHeight;
+            parent = el.parentElement.parentElement;
+          if (lineIds.length > 1) {
+            const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+            const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+            height = bottom - top;
+          }
+          if (top !== null && height !== null && parent !== null) {
+            // cook up a div (if necessary) and position it 
+            let div = window.document.getElementById("code-annotation-line-highlight");
+            if (div === null) {
+              div = window.document.createElement("div");
+              div.setAttribute("id", "code-annotation-line-highlight");
+              div.style.position = 'absolute';
+              parent.appendChild(div);
+            }
+            div.style.top = top - 2 + "px";
+            div.style.height = height + 4 + "px";
+            let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+            if (gutterDiv === null) {
+              gutterDiv = window.document.createElement("div");
+              gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+              gutterDiv.style.position = 'absolute';
+              const codeCell = window.document.getElementById(targetCell);
+              const gutter = codeCell.querySelector('.code-annotation-gutter');
+              gutter.appendChild(gutterDiv);
+            }
+            gutterDiv.style.top = top - 2 + "px";
+            gutterDiv.style.height = height + 4 + "px";
+          }
+          selectedAnnoteEl = annoteEl;
+        }
+      };
+      const unselectCodeLines = () => {
+        const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+        elementsIds.forEach((elId) => {
+          const div = window.document.getElementById(elId);
+          if (div) {
+            div.remove();
+          }
+        });
+        selectedAnnoteEl = undefined;
+      };
+      // Attach click handler to the DT
+      const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+      for (const annoteDlNode of annoteDls) {
+        annoteDlNode.addEventListener('click', (event) => {
+          const clickedEl = event.target;
+          if (clickedEl !== selectedAnnoteEl) {
+            unselectCodeLines();
+            const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+            if (activeEl) {
+              activeEl.classList.remove('code-annotation-active');
+            }
+            selectCodeLines(clickedEl);
+            clickedEl.classList.add('code-annotation-active');
+          } else {
+            // Unselect the line
+            unselectCodeLines();
+            clickedEl.classList.remove('code-annotation-active');
+          }
+        });
+      }
+  const findCites = (el) => {
+    const parentEl = el.parentElement;
+    if (parentEl) {
+      const cites = parentEl.dataset.cites;
+      if (cites) {
+        return {
+          el,
+          cites: cites.split(' ')
+        };
+      } else {
+        return findCites(el.parentElement)
+      }
+    } else {
+      return undefined;
+    }
+  };
+  var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+  for (var i=0; i<bibliorefs.length; i++) {
+    const ref = bibliorefs[i];
+    const citeInfo = findCites(ref);
+    if (citeInfo) {
+      tippyHover(citeInfo.el, function() {
+        var popup = window.document.createElement('div');
+        citeInfo.cites.forEach(function(cite) {
+          var citeDiv = window.document.createElement('div');
+          citeDiv.classList.add('hanging-indent');
+          citeDiv.classList.add('csl-entry');
+          var biblioDiv = window.document.getElementById('ref-' + cite);
+          if (biblioDiv) {
+            citeDiv.innerHTML = biblioDiv.innerHTML;
+          }
+          popup.appendChild(citeDiv);
+        });
+        return popup.innerHTML;
+      });
+    }
+  }
+});
+</script>
+</div> <!-- /content -->
+
+
+
+</body></html>

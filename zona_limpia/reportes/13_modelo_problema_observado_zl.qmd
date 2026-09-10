@@ -1,0 +1,471 @@
+---
+title: "Modelo Zona Limpia: problema observado"
+subtitle: "Baseline XGBoost para estimar riesgo de problema observable en visitas efectivas"
+format:
+  html:
+    theme: cosmo
+    toc: true
+    toc-depth: 2
+    embed-resources: true
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+## Objetivo
+
+Este reporte documenta el primer baseline de modelo para estimar la probabilidad
+de encontrar un problema observable si se visita un cluster con Zona Limpia.
+
+El objetivo es distinto al del modelo COM operativo: aca no se busca predecir
+reclamos, sino aproximar un riesgo de problema observado en campo usando
+visitas efectivas de Zona Limpia.
+
+```{r}
+library(data.table)
+library(ggplot2)
+library(scales)
+library(knitr)
+library(kableExtra)
+
+resolver_path <- function(path) {
+  if (file.exists(path)) {
+    return(path)
+  }
+  path_parent <- file.path("..", path)
+  if (file.exists(path_parent)) {
+    return(path_parent)
+  }
+  path_grandparent <- file.path("..", "..", path)
+  if (file.exists(path_grandparent)) {
+    return(path_grandparent)
+  }
+  stop("No existe el archivo: ", path)
+}
+
+path_resumen <- resolver_path("zona_limpia/outputs/modelo_zl_observado_resumen_base.csv")
+path_resumen_splits <- resolver_path("zona_limpia/outputs/modelo_zl_observado_resumen_splits.csv")
+path_metricas <- resolver_path("zona_limpia/outputs/modelo_zl_observado_metricas.csv")
+path_metricas_reps <- resolver_path("zona_limpia/outputs/modelo_zl_observado_metricas_random_dia_reps.csv")
+path_metricas_targets <- resolver_path("zona_limpia/outputs/modelo_zl_observado_metricas_targets.csv")
+path_lift <- resolver_path("zona_limpia/outputs/modelo_zl_observado_lift.csv")
+path_importancia <- resolver_path("zona_limpia/outputs/modelo_zl_observado_importancia.csv")
+
+resumen_base <- fread(path_resumen)
+resumen_splits <- fread(path_resumen_splits)
+metricas <- fread(path_metricas)
+metricas_reps <- fread(path_metricas_reps)
+metricas_targets <- fread(path_metricas_targets)
+lift <- fread(path_lift)
+importancia <- fread(path_importancia)
+
+etiquetar_escenario <- function(x) {
+  etiquetas <- c(
+    temporal = "Temporal",
+    random_dia_estratificado_mes = "Random por dia",
+    random_estratificado_mes = "Random por fila"
+  )
+  out <- etiquetas[x]
+  out[is.na(out)] <- x[is.na(out)]
+  unname(out)
+}
+
+metricas[, escenario_label := etiquetar_escenario(escenario)]
+resumen_splits[, escenario_label := etiquetar_escenario(escenario)]
+metricas_reps[, escenario_label := "Random por dia repetido"]
+metricas_targets[, escenario_label := etiquetar_escenario(escenario)]
+lift[, escenario_label := etiquetar_escenario(escenario)]
+importancia[, escenario_label := etiquetar_escenario(escenario)]
+
+etiquetar_target <- function(x) {
+  etiquetas <- c(
+    target_principal = "ZL problema comparable",
+    target_hibrido_com_o_zl = "COM OR ZL problema",
+    target_com = "COM",
+    target_solo_zl_sin_com = "Solo ZL sin COM"
+  )
+  out <- etiquetas[x]
+  out[is.na(out)] <- x[is.na(out)]
+  unname(out)
+}
+
+metricas_targets[, target_label := etiquetar_target(target_eval)]
+
+col_temporal <- "#2F5AA8"
+col_random <- "#16817A"
+col_random_dia <- "#8B5A2B"
+col_alerta <- "#B84A4A"
+col_neutro <- "#6B7280"
+
+theme_zl <- function(base_size = 11) {
+  theme_minimal(base_size = base_size) +
+    theme(
+      plot.title = element_text(face = "bold", size = base_size + 2),
+      plot.subtitle = element_text(color = col_neutro),
+      axis.title = element_text(face = "bold"),
+      legend.title = element_blank(),
+      panel.grid.minor = element_blank()
+    )
+}
+```
+
+## Definicion Del Target
+
+El target del modelo es:
+
+```text
+hay_zl_problema_comparable
+```
+
+El target vale `1` cuando Zona Limpia visito el cluster y observo un problema
+comparable, como `basura_fuera` o `contenedor_desbordado`.
+
+COM no se usa como feature ni como target principal. Se conserva solo como
+evaluación secundaria para entender la relación entre el score ZL y los
+reclamos.
+
+`Voluminosos` queda excluido del entrenamiento inicial porque no es comparable
+directamente con el problema COM usado en el modelo operativo.
+
+## Universo De Entrenamiento
+
+El universo inicial son visitas efectivas de Zona Limpia, excluyendo meses con
+cobertura anomala y registros no comparables.
+
+```{r}
+resumen_tabla <- copy(resumen_base)
+resumen_tabla[, prevalencia := percent(prevalencia, accuracy = 0.1)]
+
+kable(
+  resumen_tabla,
+  caption = "Base observada por mes",
+  col.names = c("Mes", "Filas", "Positivos", "Prevalencia", "Clusters", "Dias"),
+  align = "lrrrrr"
+) |>
+  kable_styling(full_width = FALSE)
+```
+
+Decisiones principales del universo:
+
+- meses usados: `202510`, `202511`, `202512`, `202603`, `202604`, `202605`;
+- enero y febrero de 2026 quedan excluidos por cobertura anomala;
+- Municipio B tiene cobertura incompleta en la fuente actual de Zona Limpia;
+- el modelo aprende desde puntos observados por Zona Limpia, por lo que no debe
+  interpretarse todavía como una estimación insesgada para toda la ciudad.
+
+## Features
+
+El baseline usa variables disponibles antes de la observacion del problema:
+
+- variables operativas de levante y periodicidad con sufijo `_pred`;
+- exceso positivo y exceso truncado a 7 días entre tiempo desde último levante y período teórico;
+- variables censales y territoriales por cluster;
+- municipio, CCZ y barrio asignados por centroide;
+- variables calendario simples;
+- feriados, vispera de feriado y día habil.
+
+No se usan features COM como predictores.
+
+## Diseno De Evaluación
+
+Se generaron tres evaluaciones complementarias:
+
+- **Temporal**: train `202510-202512`, validación `202603`, test `202604-202605`.
+- **Random por fila**: particion aleatoria de filas `cluster_id`/`dia`, preservando mes y target.
+- **Random por día**: particion aleatoria de días completos dentro de cada mes.
+- **Random por día repetido**: cinco repeticiones del split por día para medir sensibilidad a la semilla.
+
+La evaluación temporal es la más exigente para uso operativo, porque mide
+generalizacion hacia meses posteriores. El random por fila sirve como techo
+optimista de senal aprendible. El random por día es una evaluación intermedia:
+mezcla meses, pero evita que clusters del mismo día queden repartidos entre
+train, validación y test.
+
+```{r}
+resumen_splits_tabla <- copy(resumen_splits)
+resumen_splits_tabla[, prevalencia := percent(prevalencia, accuracy = 0.1)]
+resumen_splits_tabla <- resumen_splits_tabla[
+  ,
+  .(escenario_label, split, filas, positivos, prevalencia, clusters, dias)
+]
+
+kable(
+  resumen_splits_tabla,
+  caption = "Composicion de splits por escenario",
+  col.names = c("Escenario", "Split", "Filas", "Positivos", "Prevalencia", "Clusters", "Dias"),
+  align = "llrrrrr"
+) |>
+  kable_styling(full_width = FALSE)
+```
+
+```{r}
+metricas_tabla <- copy(metricas)
+metricas_tabla[, prevalencia := percent(prevalencia, accuracy = 0.1)]
+metricas_tabla[, auc := number(auc, accuracy = 0.001)]
+metricas_tabla[, logloss := number(logloss, accuracy = 0.001)]
+metricas_tabla <- metricas_tabla[
+  ,
+  .(escenario_label, split, n, positivos, prevalencia, auc, logloss)
+]
+
+kable(
+  metricas_tabla,
+  caption = "Metricas por escenario y split",
+  col.names = c("Escenario", "Split", "N", "Positivos", "Prevalencia", "AUC", "Logloss"),
+  align = "llrrrrr"
+) |>
+  kable_styling(full_width = FALSE)
+```
+
+```{r}
+ggplot(metricas, aes(x = split, y = auc, fill = escenario_label)) +
+  geom_col(position = position_dodge(width = 0.72), width = 0.62) +
+  geom_hline(yintercept = 0.5, linetype = "dashed", color = col_neutro) +
+  scale_fill_manual(values = c(
+    "Temporal" = col_temporal,
+    "Random por dia" = col_random_dia,
+    "Random por fila" = col_random
+  )) +
+  scale_y_continuous(labels = number_format(accuracy = 0.01)) +
+  coord_cartesian(ylim = c(0.45, 0.75)) +
+  labs(
+    title = "AUC por escenario de evaluacion",
+    subtitle = "El random por dia evita mezclar clusters del mismo dia entre entrenamiento y evaluacion.",
+    x = NULL,
+    y = "AUC"
+  ) +
+  theme_zl()
+```
+
+```{r}
+metricas_reps_resumen <- metricas_reps[
+  split %in% c("validacion", "test"),
+  .(
+    reps = uniqueN(rep),
+    auc_min = min(auc),
+    auc_mediana = median(auc),
+    auc_max = max(auc),
+    logloss_mediana = median(logloss)
+  ),
+  by = split
+]
+metricas_reps_resumen[, `:=`(
+  auc_min = number(auc_min, accuracy = 0.001),
+  auc_mediana = number(auc_mediana, accuracy = 0.001),
+  auc_max = number(auc_max, accuracy = 0.001),
+  logloss_mediana = number(logloss_mediana, accuracy = 0.001)
+)]
+
+kable(
+  metricas_reps_resumen,
+  caption = "Random por dia repetido: sensibilidad a la semilla",
+  col.names = c("Split", "Reps", "AUC min", "AUC mediana", "AUC max", "Logloss mediana"),
+  align = "lrrrrr"
+) |>
+  kable_styling(full_width = FALSE)
+```
+
+## Sensibilidad Del Target
+
+El score se entrena con el target principal `ZL problema comparable`.
+Como diagnóstico, se evalua el mismo score contra variantes del target. Esto no
+reentrena modelos alternativos, pero ayuda a leer que senal está capturando.
+
+```{r}
+targets_tabla <- metricas_targets[
+  split %in% c("validacion", "test"),
+  .(escenario_label, split, target_label, n, positivos, prevalencia, auc)
+]
+targets_tabla[, prevalencia := percent(prevalencia, accuracy = 0.1)]
+targets_tabla[, auc := number(auc, accuracy = 0.001)]
+
+kable(
+  targets_tabla,
+  caption = "Evaluacion del mismo score contra targets alternativos",
+  col.names = c("Escenario", "Split", "Target evaluado", "N", "Positivos", "Prevalencia", "AUC"),
+  align = "lllrrrr"
+) |>
+  kable_styling(full_width = FALSE)
+```
+
+## Lift Operativo
+
+El lift ayuda a leer si el ranking concentra problemas en los clusters de mayor
+score. Para cada split se ordenan los clusters por `pred_prob` y se toma el top
+5%, 10%, 20% y 30%.
+
+- **Precisión**: dentro del top seleccionado, que porcentaje tenia problema ZL.
+- **Captura**: que porcentaje de todos los problemas ZL del split queda dentro de ese top.
+- **Lift**: precisión del top dividida por la prevalencia del split.
+
+La comparación natural no es contra 100%, sino contra la prevalencia base. Por
+ejemplo, si la prevalencia del split es 50% y el top 5% tiene precisión 75%, el
+lift es `1,5`: el top seleccionado tiene 50% más densidad de problemas que una
+selección aleatoria del mismo tamano.
+
+```{r}
+lift_plot <- lift[split %in% c("validacion", "test")]
+lift_plot[, top_pct_label := factor(
+  paste0("Top ", percent(top_pct, accuracy = 1)),
+  levels = paste0("Top ", percent(c(0.05, 0.10, 0.20, 0.30), accuracy = 1))
+)]
+
+prevalencia_plot <- metricas[
+  split %in% c("validacion", "test"),
+  .(split, escenario_label, prevalencia)
+]
+
+ggplot(lift_plot, aes(x = top_pct_label, y = precision, color = escenario_label, group = escenario_label)) +
+  geom_hline(
+    data = prevalencia_plot,
+    aes(yintercept = prevalencia, color = escenario_label),
+    linetype = "dashed",
+    linewidth = 0.5,
+    show.legend = FALSE
+  ) +
+  geom_line(linewidth = 0.8) +
+  geom_point(size = 2.4) +
+  facet_wrap(~ split) +
+  scale_color_manual(values = c(
+    "Temporal" = col_temporal,
+    "Random por dia" = col_random_dia,
+    "Random por fila" = col_random
+  )) +
+  scale_y_continuous(labels = percent_format(accuracy = 1)) +
+  labs(
+    title = "Precision en los clusters de mayor riesgo",
+    subtitle = "Lineas punteadas: prevalencia base del split. La distancia hasta la linea resume el enriquecimiento del top.",
+    x = NULL,
+    y = "Precision"
+  ) +
+  theme_zl()
+```
+
+```{r}
+ggplot(lift_plot, aes(x = top_pct_label, y = capture_rate, color = escenario_label, group = escenario_label)) +
+  geom_line(linewidth = 0.8) +
+  geom_point(size = 2.4) +
+  facet_wrap(~ split) +
+  scale_color_manual(values = c(
+    "Temporal" = col_temporal,
+    "Random por dia" = col_random_dia,
+    "Random por fila" = col_random
+  )) +
+  scale_y_continuous(labels = percent_format(accuracy = 1)) +
+  labs(
+    title = "Captura acumulada de positivos",
+    subtitle = "La captura muestra que proporcion de todos los positivos queda dentro del top seleccionado.",
+    x = NULL,
+    y = "Captura"
+  ) +
+  theme_zl()
+```
+
+```{r}
+lift_tabla <- lift_plot[
+  ,
+  .(
+    escenario_label,
+    split,
+    top_pct_label,
+    n,
+    positivos,
+    precision,
+    capture_rate,
+    lift
+  )
+]
+lift_tabla[, precision := percent(precision, accuracy = 0.1)]
+lift_tabla[, capture_rate := percent(capture_rate, accuracy = 0.1)]
+lift_tabla[, lift := number(lift, accuracy = 0.01)]
+
+kable(
+  lift_tabla,
+  caption = "Lift operativo por top seleccionado",
+  col.names = c("Escenario", "Split", "Top", "N", "Positivos", "Precision", "Captura", "Lift"),
+  align = "lllrrrrr"
+) |>
+  kable_styling(full_width = FALSE)
+```
+
+## Variables Importantes
+
+La importancia se reporta como importancia interna del XGBoost. Sirve como
+diagnóstico inicial, no como interpretación causal.
+
+```{r}
+imp_top <- importancia[
+  ,
+  head(.SD[order(-Gain)], 15),
+  by = escenario_label
+]
+imp_top[, Feature := factor(Feature, levels = unique(imp_top[order(Gain), Feature]))]
+
+ggplot(imp_top, aes(x = Gain, y = Feature, fill = escenario_label)) +
+  geom_col(width = 0.7) +
+  facet_wrap(~ escenario_label, scales = "free_y") +
+  scale_fill_manual(values = c(
+    "Temporal" = col_temporal,
+    "Random por dia" = col_random_dia,
+    "Random por fila" = col_random
+  )) +
+  labs(
+    title = "Variables con mayor ganancia",
+    subtitle = "Top 15 por escenario. La lectura es exploratoria.",
+    x = "Gain",
+    y = NULL
+  ) +
+  theme_zl() +
+  theme(legend.position = "none")
+```
+
+## Lectura Inicial
+
+La evaluación random por fila muestra AUC cercano a `0,68` en validación y test.
+Esto sugiere que existe senal aprendible en las variables disponibles, aunque
+este escenario puede ser optimista porque mezcla clusters de un mismo día entre
+train y evaluación.
+
+La evaluación random por día mantiene días completos fuera del entrenamiento.
+El AUC queda cerca de `0,68` en validación y cerca de `0,66` en test. Esto indica
+que parte de la senal se sostiene cuando no se mezcla el contexto diario, aunque
+hay una baja respecto al random por fila.
+
+Las repeticiones del random por día muestran que el AUC test se mueve
+aproximadamente entre `0,663` y `0,681`. Esto confirma que la lectura depende de
+la composicion de días, pero que el resultado está claramente por encima del
+split temporal.
+
+La evaluación temporal cae a AUC cercano a `0,60`. Esa caida es importante:
+indica que el baseline todavía no generaliza de forma robusta cuando se entrena
+en fines de 2025 y se evalua en 2026. Las causas posibles incluyen cambios de
+criterio operativo, diferencias de cobertura, estacionalidad, cambios de
+registro o selección no aleatoria de visitas.
+
+La sensibilidad de targets sugiere que el score ZL no captura reclamos COM
+puros con la misma fuerza. En random por día test, el AUC contra COM queda cerca
+de `0,51`, mientras que contra el target hibrido `COM OR ZL problema` queda
+cerca de `0,65`.
+
+Por ahora, este modelo debe leerse como baseline exploratorio. No alcanza para
+reemplazar una regla operativa, pero si deja un punto de comparación concreto
+para nuevas features, nuevos targets y evaluaciones con sesgo de selección.
+
+## Limitaciones
+
+- El modelo se entrena solo sobre visitas efectivas de Zona Limpia.
+- Municipio B tiene cobertura incompleta en la fuente actual.
+- La selección de Zona Limpia no es aleatoria y puede concentrar lugares con
+  mayor riesgo.
+- COM no entra al target principal, pero sigue siendo una fuente relevante para
+  evaluación cruzada y comparación con el modelo de reclamos.
+- Las métricas temporales muestran estabilidad limitada.
+
+## Proximos Pasos
+
+- Reentrenar o reevaluar cuando se integre la fuente faltante de Municipio B.
+- Comparar contra ajustes por propensión de visita.
+- Profundizar calibración y estabilidad diaria antes de usarlo como insumo operativo.
+- Evaluar si nuevas fuentes externas, como lluvia disponible ex ante, agregan senal.
+- Mantener separada la lectura de reclamos COM y la lectura de problema observado.

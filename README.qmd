@@ -1,0 +1,387 @@
+---
+title: "modelo_com_jupiter"
+subtitle: "Mapa operativo del proyecto"
+format:
+  html:
+    theme: cosmo
+    toc: true
+    toc-depth: 3
+    number-sections: true
+execute:
+  echo: true
+  warning: false
+  message: false
+---
+
+## Objetivo
+
+Construir un flujo reproducible para identificar zonas calientes de problemas y reclamos asociados a contenedores.
+
+La unidad principal actual para modelado es `cluster_id`/`dia`, usando:
+
+- levantes diarios de contenedores;
+- reclamos COM asignados espacialmente;
+- clusters espaciales de referencia;
+- features historicas de reclamos, incluyendo historia observada del cluster;
+- features de levante y periodicidad.
+
+## Documentacion
+
+- [Flujo de datos](documentacion/flujo_datos.qmd): preparacion de levantes, COM, clusters, asignaciones y base `cluster_dia`.
+- [Modelos](documentacion/modelos.qmd): features, splits temporales, metricas y experimentos de modelado.
+- [Proceso de scoring operativo](documentacion/proceso_scoring_operativo.qmd): actualizacion incremental, cortes temporales y tabla para la app.
+- [Contrato de datos de la app operativa v2](documentacion/contrato_datos_app_operativa_v2.qmd): serie histórica agregada y detalle cartográfico particionado por fecha.
+- [Funciones reutilizables de modelos](documentacion/modelos_utils.qmd): utilidades compartidas para entrenamiento y evaluacion.
+- [Diagnostico de variables](documentacion/diagnostico_variables_modelo.qmd): revision de variables, colinealidad y seleccion.
+- [Analisis territorial de predicciones COM](documentacion/analisis_territorial_pred.qmd): discriminacion, calibracion y utilidad operativa del modelo global por CCZ.
+- [Pronóstico diario de clusters con reclamo COM](documentacion/pronostico_diario_clusters_reclamo_com.qmd): evaluación de la suma diaria de probabilidades y desarrollo incremental del pronóstico agregado.
+- [Resumen del pronóstico diario COM](documentacion/resumen_pronostico_diario_com.qmd): síntesis para compartir de los tres modelos principales, sus métricas y el desempeño territorial.
+
+## Memoria Del Proyecto
+
+Para retomar el proyecto en futuras sesiones sin depender de memoria conversacional:
+
+- [Reglas de trabajo para Codex](AGENTS.md)
+- [Tareas activas y planificadas](TAREAS.md)
+- [Hitos del proyecto](documentacion/HITOS.md)
+- [Registros puntuales de cambios](documentacion/versiones/README.md)
+
+## Datos De Prueba
+
+Los datos locales de prueba estan en:
+
+- `data/paraprobar/datos_levante.parquet`
+- `data/paraprobar/datos_com.parquet`
+
+Los scripts usan por defecto datos locales. Para correr contra servidor:
+
+```{r}
+#| eval: false
+Sys.setenv(MODO_DATOS_LEVANTE = "servidor")
+Sys.setenv(MODO_DATOS_COM = "servidor")
+```
+
+## Diagrama Del Flujo
+
+```{=html}
+<div class="mermaid">
+flowchart TD
+  fuente_levante["Servidor o data/paraprobar/datos_levante.parquet"] --> get_levante["scripts/get_datos_levante.R"]
+  get_levante --> parquet_levante["data/parquet/levante/"]
+
+  fuente_com["Servidor o data/paraprobar/datos_com.parquet"] --> get_com["scripts/get_datos_COM.R"]
+  get_com --> parquet_com["data/parquet/com/"]
+
+  parquet_com --> check_espacial["scripts/check_espacial_com_levante.R"]
+  parquet_levante --> check_espacial
+  check_espacial --> diag_espacial["diagnostico espacial COM-levantes"]
+
+  parquet_levante --> gen_cluster["scripts/gen_cluster_referencia_unicos.R"]
+  gen_cluster --> ref_clusters["data/reference/clusters/"]
+
+  parquet_levante --> asignar_posiciones["scripts/asignar_clusters_posiciones_nuevas.R"]
+  ref_clusters --> asignar_posiciones
+  asignar_posiciones --> cluster_update["data/processed/cluster_update_check/"]
+
+  cluster_update --> cluster_territorial["scripts/construir_cluster_territorial_segmento_censal.R"]
+  cluster_territorial --> tabla_territorial["data/processed/cluster_territorial/"]
+
+  parquet_com --> asignar_com["scripts/asignar_com_contenedores_clusters.R"]
+  parquet_levante --> asignar_com
+  cluster_update --> asignar_com
+  asignar_com --> com_cluster["data/processed/com_contenedor_cluster/"]
+
+  parquet_levante --> base_cluster_dia["scripts/construir_base_cluster_dia.R"]
+  cluster_update --> base_cluster_dia
+  com_cluster --> base_cluster_dia
+  base_cluster_dia --> modelo_cluster_dia["data/processed/modelo_cluster_dia/base_cluster_dia/"]
+
+  modelo_cluster_dia --> features_historicas["scripts/construir_features_historicas_cluster_dia.R"]
+  features_historicas --> features_cluster_dia["data/processed/modelo_cluster_dia/features_cluster_dia/"]
+
+  features_cluster_dia --> modelo_logistico["scripts/modelo_logistico_cluster_dia.R"]
+  modelo_logistico --> salida_logistico["data/processed/modelos/logistico_cluster_dia/"]
+
+  classDef input fill:#fff4d6,stroke:#b88700,color:#111;
+  classDef script fill:#e8f1ff,stroke:#2f6fbd,color:#111;
+  classDef data fill:#edf7ed,stroke:#3b8f3b,color:#111;
+  classDef diagnostico fill:#f2f2f2,stroke:#777,color:#111;
+  classDef model fill:#f4e8ff,stroke:#7b3fb2,color:#111;
+
+  class fuente_levante,fuente_com input;
+  class get_levante,get_com,check_espacial,gen_cluster,asignar_posiciones,cluster_territorial,asignar_com,base_cluster_dia,features_historicas script;
+  class parquet_levante,parquet_com,ref_clusters,cluster_update,tabla_territorial,com_cluster,modelo_cluster_dia,features_cluster_dia data;
+  class diag_espacial diagnostico;
+  class modelo_logistico,salida_logistico model;
+</div>
+<script type="module">
+  import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs";
+  mermaid.initialize({ startOnLoad: true });
+</script>
+```
+
+## Orden De Ejecucion
+
+::: {.callout-note}
+### Paso 1: Levantes
+
+**Script:** `scripts/get_datos_levante.R`  
+**Salida:** `data/parquet/levante/`
+:::
+
+::: {.callout-note}
+### Paso 2: COM
+
+**Script:** `scripts/get_datos_COM.R`  
+**Salida:** `data/parquet/com/`
+:::
+
+::: {.callout-note}
+### Paso 3: Chequeo espacial
+
+**Script:** `scripts/check_espacial_com_levante.R`  
+**Salida:** diagnostico en consola
+:::
+
+::: {.callout-note}
+### Paso 4: Clusters de referencia
+
+**Script:** `scripts/gen_cluster_referencia_unicos.R`  
+**Salida:** `data/reference/clusters/`
+:::
+
+::: {.callout-note}
+### Paso 5: Posiciones nuevas
+
+**Script:** `scripts/asignar_clusters_posiciones_nuevas.R`  
+**Salida:** `data/processed/cluster_update_check/`
+:::
+
+::: {.callout-note}
+### Paso 6: Territorio por cluster
+
+**Script:** `scripts/construir_cluster_territorial_segmento_censal.R`  
+**Salida:** `data/processed/cluster_territorial/`
+:::
+
+::: {.callout-note}
+### Paso 7: COM a contenedores y clusters
+
+**Script:** `scripts/asignar_com_contenedores_clusters.R`  
+**Salida:** `data/processed/com_contenedor_cluster/`
+:::
+
+::: {.callout-note}
+### Paso 8: Base cluster-dia
+
+**Script:** `scripts/construir_base_cluster_dia.R`  
+**Salida:** `data/processed/modelo_cluster_dia/base_cluster_dia/`
+:::
+
+::: {.callout-note}
+### Paso 9: Features historicas cluster-dia
+
+**Script:** `scripts/construir_features_historicas_cluster_dia.R`  
+**Salida:** `data/processed/modelo_cluster_dia/features_cluster_dia/`
+:::
+
+::: {.callout-note}
+### Paso 10: Modelo logistico baseline
+
+**Script:** `scripts/modelo_logistico_cluster_dia.R`  
+**Salida:** `data/processed/modelos/logistico_cluster_dia/`
+:::
+
+## Salidas Principales
+
+::: {.callout-note}
+### `data/parquet/levante/`
+
+Tabla diaria por contenedor. Representa que contenedores estan activos o inferidos como activos cada dia, cuanto tiempo paso desde el ultimo levante y que tan confiable es esa imputacion.
+
+**Fundamento:** es la base operativa del proyecto. Sin esta tabla no se puede saber que contenedores estaban disponibles para recibir reclamos en una fecha.
+
+**Genera:** `scripts/get_datos_levante.R`  
+**Consume:** clusters, asignacion COM y base `cluster_dia`
+:::
+
+::: {.callout-note}
+### `data/parquet/com/`
+
+Tabla de reclamos COM preparada. Conserva incidentes objetivo, excluye repetidos y transforma coordenadas a EPSG:32721.
+
+**Fundamento:** estandariza los reclamos para que puedan compararse espacialmente con los contenedores.
+
+**Genera:** `scripts/get_datos_COM.R`  
+**Consume:** chequeo espacial y asignacion COM a contenedores/clusters
+:::
+
+::: {.callout-note}
+### `data/reference/clusters/`
+
+Referencia espacial versionada de clusters de posiciones de contenedores.
+
+**Fundamento:** permite trabajar con unidades espaciales estables. Esto evita que cada corrida cambie arbitrariamente los IDs espaciales y permite asignar posiciones nuevas contra una referencia fija.
+
+**Genera:** `scripts/gen_cluster_referencia_unicos.R`  
+**Consume:** asignacion de posiciones nuevas
+:::
+
+::: {.callout-note}
+### `data/processed/cluster_update_check/`
+
+Diagnostico y mapeo actualizado entre posiciones actuales de levantes y clusters de referencia.
+
+**Fundamento:** separa la referencia fija de la realidad operativa actual. Las posiciones nuevas se clasifican como `asignado`, `revision` o `pendiente` sin modificar la referencia.
+
+**Genera:** `scripts/asignar_clusters_posiciones_nuevas.R`  
+**Consume:** asignacion COM y base `cluster_dia`
+:::
+
+::: {.callout-note}
+### `data/processed/cluster_territorial/`
+
+Tabla fija por `version_cluster`/`cluster_id` con asignacion a segmento censal 2011 y variables territoriales: poblacion, hogares, viviendas, NBI y densidades por km2.
+
+**Fundamento:** permite incorporar contexto territorial estable a modelos COM, modelos Zona Limpia, analisis de sesgo y mapas sin recalcular cruces espaciales en cada tabla diaria.
+
+**Genera:** `scripts/construir_cluster_territorial_segmento_censal.R`  
+**Consume:** modelos, diagnosticos territoriales y analisis Zona Limpia
+:::
+
+::: {.callout-note}
+### `data/processed/com_contenedor_cluster/`
+
+Asignacion de reclamos COM al contenedor activo/elegible mas cercano en el mismo dia y al cluster correspondiente.
+
+**Fundamento:** COM es un evento puntual con incertidumbre espacial. Se asigna al contenedor mas cercano como paso tecnico, pero el modelado se hace luego a nivel cluster para evitar falsos ceros en contenedores vecinos.
+
+**Genera:** `scripts/asignar_com_contenedores_clusters.R`  
+**Consume:** `scripts/construir_base_cluster_dia.R`
+:::
+
+::: {.callout-note}
+### `data/processed/modelo_cluster_dia/base_cluster_dia/`
+
+Tabla `cluster_id`/`dia` con targets COM y features contemporaneas de levantes.
+
+**Fundamento:** el cluster es una unidad mas robusta que el contenedor individual cuando hay varios contenedores cercanos. Un reclamo puede representar el estado de la zona, no necesariamente de un unico contenedor.
+
+**Genera:** `scripts/construir_base_cluster_dia.R`  
+**Consume:** features historicas
+:::
+
+::: {.callout-note}
+### `data/processed/modelo_cluster_dia/features_cluster_dia/`
+
+Tabla principal para modelado. Contiene `base_cluster_dia` mas features historicas de reclamos por cluster.
+
+**Fundamento:** permite predecir riesgo usando informacion historica disponible antes del dia objetivo, evitando leakage.
+
+**Genera:** `scripts/construir_features_historicas_cluster_dia.R`  
+**Consume:** modelos
+:::
+
+::: {.callout-note}
+### `data/processed/modelos/logistico_cluster_dia/`
+
+Resultados del baseline logistico: predicciones, metricas, lift, calibracion y coeficientes.
+
+**Fundamento:** sirve como primer modelo interpretable y como referencia para comparar modelos mas complejos.
+
+**Genera:** `scripts/modelo_logistico_cluster_dia.R`
+:::
+
+## Estado Actual
+
+- La base de modelado usa `cluster_id`/`dia`.
+- Los reclamos `asignado` y `revision` entran al target; `pendiente` queda fuera.
+- Las features historicas excluyen el dia objetivo y separan "sin reclamo previo observado" de la cantidad de historia disponible del cluster.
+- Las features predictivas de levante usan corte diario a la 01:00 mediante columnas `_pred`.
+- El baseline logistico aplica warm-up desde `2026-01-08` y no crea indicadores `_na` automaticos para variables `_pred` de levante/ratio.
+- El baseline logistico ya genera metricas, lift, calibracion, coeficientes y predicciones de validacion.
+
+## Decisiones Clave
+
+::: {.callout-note}
+### Unidad de modelado
+
+La unidad principal es `cluster_id`/`dia`, no `contenedor_id`/`dia`.
+
+**Motivo:** un reclamo COM puede representar un problema de la zona cuando hay varios contenedores cercanos. Modelar por contenedor individual puede crear falsos ceros en contenedores vecinos.
+:::
+
+::: {.callout-note}
+### Target COM
+
+El target usa reclamos con:
+
+- `estado_asignacion_com == "asignado"`
+- `estado_asignacion_com == "revision"`
+
+Los reclamos `pendiente` quedan fuera.
+
+**Motivo:** `asignado` y `revision` tienen una relacion espacial razonable con un cluster. `pendiente` queda demasiado lejos para usarlo como etiqueta confiable.
+:::
+
+::: {.callout-note}
+### Elegibilidad contenedor-dia
+
+La tabla de levantes conserva dias activos e inferidos, pero los pasos de asignacion/modelado usan `contenedor_dia_elegible_modelo` cuando existe.
+
+Regla actual:
+
+- actividad observada; o
+- actividad inferida con `dias_desde_ultima_observacion_estado <= 8` y `dias_total_tramo_inferido_estado <= 15`.
+
+**Motivo:** evitar que contenedores con actividad inferida debil generen tiempos de levante extremos o asignaciones COM dudosas.
+:::
+
+::: {.callout-note}
+### Tiempo de levante predictivo
+
+Para modelado operativo se usan variables con sufijo `_pred`.
+
+Regla:
+
+- `fecha_corte_prediccion = dia + 1 hora`
+- `fecha_ultimo_levante_pred = ultimo levante <= fecha_corte_prediccion`
+
+**Motivo:** si se predice el dia `D` a la 01:00, no se pueden usar levantes ocurridos durante `D` despues de esa hora. Esto evita leakage.
+:::
+
+::: {.callout-note}
+### Features historicas
+
+Las ventanas de reclamos de 7 y 30 dias miran hacia atras y excluyen el dia objetivo.
+
+Tambien se calcula la historia observada del cluster hasta el dia anterior. Esto permite distinguir entre un cluster sin reclamo previo al inicio de la serie y un cluster sin reclamo previo luego de muchos dias observados.
+
+**Motivo:** para predecir `D`, solo se usa informacion disponible hasta `D-1`.
+:::
+
+::: {.callout-note}
+### Tabla final para modelo
+
+La tabla principal para modelar es:
+
+- `data/processed/modelo_cluster_dia/features_cluster_dia/`
+
+Contiene targets, features contemporaneas de levantes, ratios tiempo/periodo y features historicas de reclamos.
+
+Para la historia de reclamos se usan variables explicitas:
+
+- `sin_reclamo_previo_observado`;
+- `dias_historia_observada_cluster`;
+- `dias_desde_ultimo_reclamo_o_inicio`.
+
+Para modelado operativo, las features de tiempo desde ultimo levante deben usar las columnas agregadas con sufijo `_pred`, que respetan el corte diario a la 01:00.
+:::
+
+## Proximos Pasos
+
+1. Regenerar levantes, COM y derivados con datos sincronizados desde servidor.
+2. Decidir la regla final de elegibilidad `contenedor_dia_elegible_modelo`.
+3. Revisar reclamos `revision` y `pendiente`.
+4. Ajustar el conjunto final de features.
+5. Comparar el baseline logistico contra modelos no lineales.

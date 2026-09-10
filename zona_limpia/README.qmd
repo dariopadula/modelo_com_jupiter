@@ -1,0 +1,354 @@
+---
+title: "Analisis Zona Limpia"
+format:
+  html:
+    theme: cosmo
+    toc: true
+    toc-depth: 3
+---
+
+## Objetivo
+
+Este directorio contiene scripts y diagnosticos exploratorios para analizar registros COM cuyo incidente comienza con `Zona limpia`.
+
+El objetivo es auditar la seleccion de contenedores problematicos realizada por un privado, sin alterar el pipeline operativo del modelo ni la app.
+
+## Contrato De Datos
+
+La salida actual del modelo se mantiene en:
+
+- `data/parquet/com/`
+
+La base ampliada para analisis se genera en:
+
+- `data/parquet/com_completo/`
+
+`com_completo` incluye:
+
+- incidentes usados por el modelo;
+- incidentes que comienzan con `Zona limpia`;
+- indicadores auxiliares para distinguir ambos grupos.
+- `incidente_zona_limpia_mapeado`, con la categoria canonica definida en `mapeo_incidentes_zona_limpia.csv`.
+
+## Scripts
+
+- `01_generar_com_completo.R`: genera `data/parquet/com_completo/`. No escribe `data/parquet/com/`; esa salida sigue perteneciendo al pipeline global en `scripts/get_datos_COM.R`.
+- `02_diagnostico_etiquetas_zona_limpia.R`: genera tablas de frecuencias para revisar etiquetas originales y normalizadas.
+- `03_analisis_descriptivo_zona_limpia.R`: genera el primer descriptivo total y mensual de Zona Limpia.
+- `04_comparar_com_zona_limpia_cluster_dia.R`: asigna Zona Limpia a clusters y compara, por `cluster_id`/`dia`, reclamos COM contra resultados Zona Limpia.
+- `05_evaluar_scores_com_vs_zona_limpia.R`: cruza scores COM existentes con eventos Zona Limpia para evaluar si el modelo prioriza problemas observados en campo sin reclamo COM.
+- `06_comparar_seleccion_zl_vs_modelo_diario.R`: compara, por dia, la seleccion efectiva de Zona Limpia contra el top N sugerido por el modelo logistico reducido D-2, usando el mismo N diario de visitas efectivas.
+- `reportes/07_visualizar_seleccion_zl_vs_modelo.qmd`: reporte visual con tasas, diferencias diarias, comparacion mensual y solapamiento entre seleccion Zona Limpia y top N del modelo.
+- `08_modelo_problema_observado_zl_xgboost.R`: primer baseline XGBoost para problema observado en visitas efectivas de Zona Limpia, sin usar COM como target principal ni como feature.
+- `reportes/13_modelo_problema_observado_zl.qmd`: reporte metodologico del baseline XGBoost para problema observado Zona Limpia.
+- `09_diagnostico_criterio_levante_zl.R`: diagnostica si la seleccion de Zona Limpia se asocia con tiempo desde ultimo levante, periodo teorico, ratio tiempo/periodo y exceso `tiempo - periodo` truncado.
+- `reportes/10_sesgos_seleccion_zona_limpia.qmd`: reporte que consolida sesgos de seleccion territorial, correspondencia COM-Zona Limpia y patrones asociados al criterio de levante.
+- `11_diagnostico_correspondencia_com_zl_territorio.R`: diagnostica, por municipio, CCZ y barrio, que proporcion de problemas observados por Zona Limpia tiene reclamo COM asociado.
+- `12_modelo_propension_visita_zl_y_ajuste_correspondencia.R`: entrena un modelo exploratorio de propension de visita Zona Limpia y recalcula la correspondencia COM-ZL con pesos IPW.
+
+## Reportes
+
+Los reportes Quarto y sus HTML renderizados quedan separados de los scripts en:
+
+- `zona_limpia/reportes/`
+
+Esto mantiene en la raiz de `zona_limpia/` los scripts, funciones, configuracion liviana y README del modulo.
+
+## Mapeo De Etiquetas
+
+El archivo `mapeo_incidentes_zona_limpia.csv` contiene el mapeo acordado desde etiquetas normalizadas hacia categorias canonicas de Zona Limpia.
+
+Categorias canonicas actuales:
+
+- `Zona limpia - No visitado`
+- `Zona limpia - Limpio - No intervenido`
+- `Zona limpia - Basura fuera`
+- `Zona limpia - No se encuentra`
+- `Zona limpia - Contenedor desbordado`
+- `Zona limpia - Voluminosos`
+- `Zona limpia - No se pudo realizar`
+
+## Periodo Valido De Analisis
+
+Los analisis de Zona Limpia excluyen los meses `202508`, `202509`, `202601` y `202602`. En esos meses la cantidad de registros es anormalmente baja y se interpreta como un problema de registro/cobertura, no como una reduccion real de actividad o problemas.
+
+La exclusion se aplica en los scripts analiticos, pero no modifica la base ampliada `data/parquet/com_completo/`.
+
+## Decision Actual
+
+La funcion `normalizar_incidente_zona_limpia()` corrige diferencias tipograficas basicas, como guiones distintos y espacios, y etiqueta casos obvios como `no_se_encuentra` y `limpio`.
+
+El mapeo fino inicial queda definido en `mapeo_incidentes_zona_limpia.csv`.
+
+## Comparacion COM vs Zona Limpia
+
+La comparacion se realiza a nivel `cluster_id`/`dia`, usando la misma referencia de clusters del flujo principal. Las salidas reproducibles quedan en:
+
+- `data/processed/zona_limpia/asignaciones_zona_limpia/`
+- `data/processed/zona_limpia/zona_limpia_cluster_dia/`
+- `data/processed/zona_limpia/comparacion_com_zona_limpia_cluster_dia/`
+
+Los resumenes livianos quedan en:
+
+- `zona_limpia/outputs/comparacion_com_zona_limpia_resumen_estado.csv`
+- `zona_limpia/outputs/comparacion_com_zona_limpia_resumen_estado_universo_comparable.csv`
+- `zona_limpia/outputs/comparacion_com_zona_limpia_resumen_mensual.csv`
+- `zona_limpia/outputs/comparacion_com_zona_limpia_resumen_mensual_universo_comparable.csv`
+- `zona_limpia/outputs/comparacion_com_zona_limpia_resumen_cluster.csv`
+
+Para la comparacion estricta con COM, `Voluminosos` se mantiene separado y no cuenta como problema comparable. Los problemas comparables de Zona Limpia son:
+
+- `basura_fuera`
+- `contenedor_desbordado`
+
+La variable `estado_comparacion` distingue, entre otros casos:
+
+- ambas fuentes reportan problema;
+- solo Zona Limpia reporta problema comparable;
+- solo COM reporta problema;
+- Zona Limpia reporta limpio;
+- Zona Limpia reporta voluminosos;
+- Zona Limpia no permite validar porque no hubo visita efectiva.
+
+La tabla completa conserva casos sin visita efectiva para medir cobertura operativa, pero la comparacion de coincidencia entre COM y Zona Limpia debe hacerse con `universo_comparable_zl == TRUE`. Ese universo incluye cluster-dias donde Zona Limpia tuvo observacion efectiva: problema comparable, voluminosos o limpio. Los casos `no_visitado`, `no_se_encuentra` y `no_se_pudo_realizar` no deben interpretarse como acuerdo ni desacuerdo con COM.
+
+## Scores COM vs Zona Limpia
+
+La evaluacion de scores COM frente a Zona Limpia queda en:
+
+- `data/processed/zona_limpia/scores_com_vs_zona_limpia_cluster_dia/`
+- `zona_limpia/outputs/scores_com_vs_zona_limpia_resumen_modelo_periodo.csv`
+- `zona_limpia/outputs/scores_com_vs_zona_limpia_resumen_estado.csv`
+- `zona_limpia/outputs/scores_com_vs_zona_limpia_resumen_solo_zl_problema.csv`
+- `zona_limpia/outputs/scores_com_vs_zona_limpia_captura_top_por_estado.csv`
+- `zona_limpia/outputs/scores_com_vs_zona_limpia_decil_solo_zl_problema.csv`
+
+La pregunta central es si los problemas observados por Zona Limpia sin reclamo COM (`solo_zona_limpia_problema`) aparecen en percentiles altos del score COM.
+
+Lectura inicial:
+
+- el score COM concentra bien los casos donde tambien hay reclamo COM;
+- los casos `solo_zona_limpia_problema` no quedan particularmente sobrerrepresentados en el top 10% diario;
+- esto refuerza la conveniencia de explorar un modelo especifico de problema observado por Zona Limpia y un modelo de propension de visita.
+
+## Seleccion Zona Limpia vs Modelo A Igual N Diario
+
+La comparacion diaria queda en:
+
+- `zona_limpia/outputs/seleccion_zl_vs_modelo_diario_logistico_reducido_d2.csv`
+- `zona_limpia/outputs/seleccion_zl_vs_modelo_mensual_logistico_reducido_d2.csv`
+
+Periodo analizado:
+
+- marzo, abril y mayo de 2026, segun disponibilidad de features y scores.
+
+Modelo:
+
+- `logistico_reducido_d2`, aplicado desde el modelo entrenado guardado sin reentrenar.
+
+Regla de comparacion:
+
+- para cada dia se calcula `n_visitas_zl` como la cantidad de clusters con visita efectiva de Zona Limpia;
+- se seleccionan los `n_visitas_zl` clusters de mayor score del modelo ese mismo dia;
+- el problema real observado se define como `hay_com OR hay_zl_problema_comparable`;
+- `Voluminosos` no cuenta como problema en esta metrica principal y queda reportado solo como columna auxiliar.
+- tambien se reportan metricas COM-only, que evalúan estrictamente cuantos reclamos COM quedan dentro de la seleccion de Zona Limpia y dentro del top N del modelo.
+
+Esta comparacion es conservadora para el modelo, porque en clusters sugeridos por el modelo pero no visitados por Zona Limpia solo se observan problemas si hubo reclamo COM.
+
+El reporte visual para comunicar estos resultados esta en:
+
+- `zona_limpia/reportes/07_visualizar_seleccion_zl_vs_modelo.qmd`
+
+## Modelo De Problema Observado Zona Limpia
+
+El primer baseline queda en:
+
+- `zona_limpia/08_modelo_problema_observado_zl_xgboost.R`
+- `zona_limpia/reportes/13_modelo_problema_observado_zl.qmd`
+- `data/processed/modelos/zona_limpia_problema_observado_xgboost/`
+- `zona_limpia/outputs/modelo_zl_observado_resumen_base.csv`
+- `zona_limpia/outputs/modelo_zl_observado_resumen_splits.csv`
+- `zona_limpia/outputs/modelo_zl_observado_metricas.csv`
+- `zona_limpia/outputs/modelo_zl_observado_metricas_random_dia_reps.csv`
+- `zona_limpia/outputs/modelo_zl_observado_metricas_targets.csv`
+- `zona_limpia/outputs/modelo_zl_observado_lift.csv`
+- `zona_limpia/outputs/modelo_zl_observado_importancia.csv`
+
+Universo:
+
+- visitas efectivas de Zona Limpia;
+- meses `202510`, `202511`, `202512`, `202603`, `202604`, `202605`;
+- se excluyen `202508`, `202509`, `202601` y `202602`;
+- se excluyen registros con `Voluminosos`.
+
+Target:
+
+- `1` si hay problema comparable observado por Zona Limpia;
+- `0` si Zona Limpia tuvo visita efectiva sin problema comparable;
+- COM no se usa como target principal ni como feature predictiva; queda solo como evaluacion secundaria.
+
+Features:
+
+- variables operativas de levante y periodicidad con corte predictivo `_pred`;
+- exceso positivo y truncado a 7 dias entre tiempo desde ultimo levante y periodo teorico;
+- variables territoriales censales;
+- municipio, CCZ y barrio asignados al cluster;
+- variables calendario simples;
+- feriados, vispera de feriado y dia habil.
+
+Fuente climatica disponible para evaluacion futura:
+
+- `scripts/descargar_clima_inumet_melilla_g3.R` procesa CSV locales de datos abiertos de INUMET para `Aeropuerto Melilla G3`;
+- archivos fuente en `data/raw/inumet/datos_abiertos/inumet_temperatura_del_aire.csv` y `data/raw/inumet/datos_abiertos/inumet_precipitacion_acumulada_horaria.csv`;
+- salidas procesadas en `data/processed/clima/inumet_melilla_g3/`;
+- variables diarias disponibles: temperatura media, minima, maxima y precipitacion acumulada;
+- tabla de features predictivas disponible en `data/processed/clima/inumet_melilla_g3/clima_inumet_melilla_g3_features_diarias.csv`;
+- las features predictivas para el dia `D` usan clima hasta `D-1`, incluyendo resumen del dia anterior y ventana `D-3` a `D-1`;
+- la cobertura procesada actual va desde `2025-01-01` hasta `2026-07-13`;
+- se corrio una evaluacion exploratoria en salidas separadas (`zona_limpia/outputs/experimentos_clima/`); el clima mejora el split random por fila, pero no mejora random por dia ni temporal, por lo que no se promueve al baseline.
+
+### Cascada De Features ZL
+
+Para ordenar el modelo de problema observado Zona Limpia se agrego una comparacion de escenarios de complejidad creciente mediante `FEATURE_SET_ZL`:
+
+- `operativo_minimo`: levante, contenedores, inferencia y calendario operativo;
+- `operativo_segmento`: minimo + variables censales parsimoniosas de segmento;
+- `operativo_clima`: minimo + clima;
+- `segmento_clima`: minimo + segmento + clima;
+- `amplio_actual`: especificacion amplia con agregados territoriales y municipio/CCZ/barrio nominal.
+
+Salidas:
+
+- `data/processed/modelos/experimentos_cascada_zl/`;
+- `zona_limpia/outputs/experimentos_cascada_zl/`.
+
+Lectura inicial: `amplio_actual` mejora los splits random, pero usa muchas mas columnas y territorio nominal. En evaluacion temporal, `operativo_segmento` queda muy competitivo y evita municipio, CCZ y barrio como categorias; por ahora es el candidato parsimonioso mas prudente para seguir explorando.
+
+Evaluaciones:
+
+- temporal: train `202510-202512`, validacion `202603`, test `202604-202605`;
+- random por fila, estratificada por mes y target;
+- random por dia, sorteando dias completos dentro de cada mes.
+- random por dia repetido con cinco semillas para medir sensibilidad del split.
+
+Lectura inicial:
+
+- el split random por fila muestra senal aprendible con AUC cercano a `0,68`;
+- el split random por dia mantiene AUC cercano a `0,68` en validacion y `0,66` en test;
+- las repeticiones random por dia ubican el AUC test aproximadamente entre `0,663` y `0,681`;
+- el split temporal baja a AUC cercano a `0,60` en validacion/test, consistente con posibles cambios de criterio o regimen entre fines de 2025 y 2026.
+
+## Sesgo Territorial Y Cobertura De Zona Limpia
+
+La cobertura territorial de Zona Limpia no debe interpretarse automaticamente como criterio operativo real. En particular, los registros de Zona Limpia del Municipio B no aparecen en esta fuente de datos; existen en otra tabla pendiente de integracion. Por lo tanto, la baja cobertura observada para Municipio B en estos analisis refleja un faltante de fuente y no necesariamente una decision de no visitar ese territorio.
+
+Esto afecta:
+
+- diagnosticos de cobertura territorial;
+- comparaciones entre municipios, CCZ o barrios;
+- modelos entrenados con visitas efectivas de Zona Limpia;
+- evaluaciones contrafactuales que usen Zona Limpia como observacion de campo.
+
+Hasta integrar la fuente adicional del Municipio B, las lecturas territoriales deben marcar ese municipio como cobertura incompleta.
+
+## Diagnostico De Criterio De Levante
+
+El diagnostico de variables de levante queda en:
+
+- `zona_limpia/09_diagnostico_criterio_levante_zl.R`
+- `zona_limpia/outputs/diagnostico_levante_zl_resumen_variables.csv`
+- `zona_limpia/outputs/diagnostico_levante_zl_bin_exceso_mean_trunc_7.csv`
+- `zona_limpia/outputs/diagnostico_levante_zl_decil_exceso_mean_trunc_7.csv`
+- `zona_limpia/outputs/diagnostico_levante_zl_municipio.csv`
+- `zona_limpia/outputs/diagnostico_levante_zl_ccz.csv`
+
+La variable exploratoria principal es:
+
+```text
+exceso_mean_tiempo_periodo_pred_trunc_7 =
+  min(max(mean_tiempo_desde_ultimo_levante_pred - mean_levante_periodo, 0), 7)
+```
+
+Lectura inicial:
+
+- los cluster-dias visitados por Zona Limpia tienen mayor tiempo desde ultimo levante y mayor ratio tiempo/periodo que los no visitados;
+- la tasa de visita aumenta al pasar de exceso `0` a excesos positivos moderados;
+- la tasa de problema observado en visitas tambien sube con excesos moderados;
+- el patron no es lineal simple: en excesos altos hay menos casos y la tasa de visita cae;
+- Municipio B debe interpretarse con cobertura incompleta por fuente faltante.
+
+Este resultado sugiere que una variable de exceso sobre periodo teorico puede ser relevante para explicar la seleccion de Zona Limpia y deberia probarse explicitamente en el modelo observado.
+
+## Reporte De Sesgos De Seleccion
+
+El reporte consolidado queda en:
+
+- `zona_limpia/reportes/10_sesgos_seleccion_zona_limpia.qmd`
+
+Incluye:
+
+- advertencia de fuente faltante para Municipio B;
+- cobertura por municipio y CCZ;
+- correspondencia COM-Zona Limpia cruda y ajustada por propension de visita;
+- diagnostico del exceso sobre periodo teorico de levante;
+- comparacion de variables de levante entre cluster-dias visitados y no visitados.
+
+## Correspondencia COM Y Problemas Observados
+
+El diagnostico territorial de correspondencia entre COM y problemas observados por Zona Limpia queda en:
+
+- `zona_limpia/11_diagnostico_correspondencia_com_zl_territorio.R`
+- `zona_limpia/outputs/correspondencia_com_zl_territorio_global.csv`
+- `zona_limpia/outputs/correspondencia_com_zl_territorio_municipio.csv`
+- `zona_limpia/outputs/correspondencia_com_zl_territorio_ccz.csv`
+- `zona_limpia/outputs/correspondencia_com_zl_territorio_barrio.csv`
+- `zona_limpia/outputs/correspondencia_com_zl_territorio_mensual_municipio.csv`
+
+Definicion principal:
+
+```text
+tasa_com_dado_zl_problema = ambos / zl_problema
+```
+
+Es decir, entre los cluster-dias donde Zona Limpia observo un problema comparable, que proporcion tuvo tambien reclamo COM.
+
+Lectura inicial, excluyendo Municipio B por fuente incompleta:
+
+- la correspondencia global es baja: aproximadamente `10,8%` de los problemas observados por Zona Limpia tienen COM asociado;
+- existe variacion territorial fuerte entre municipios y CCZ;
+- municipios como F, G, A y D muestran menor correspondencia COM dado problema ZL;
+- CH, C y E muestran mayor correspondencia relativa, aunque aun con mayoria de problemas ZL sin COM.
+
+Este diagnostico es una primera aproximacion a diferencias territoriales en propension a reclamar o en captura COM de problemas observados en campo.
+
+## Ajuste Por Propension De Visita Zona Limpia
+
+Para no generalizar mecanicamente desde puntos visitados por Zona Limpia a toda la ciudad, se agrega un ajuste exploratorio por propension de visita:
+
+- `zona_limpia/12_modelo_propension_visita_zl_y_ajuste_correspondencia.R`
+- `zona_limpia/outputs/propension_visita_zl_metricas.csv`
+- `zona_limpia/outputs/propension_visita_zl_importancia.csv`
+- `zona_limpia/outputs/propension_visita_zl_diagnostico_pesos.csv`
+- `zona_limpia/outputs/correspondencia_com_zl_ipw_global.csv`
+- `zona_limpia/outputs/correspondencia_com_zl_ipw_municipio.csv`
+- `zona_limpia/outputs/correspondencia_com_zl_ipw_ccz.csv`
+
+El modelo estima:
+
+```text
+P(visita efectiva Zona Limpia | features previas de levante, territorio y calendario)
+```
+
+Se excluye Municipio B por fuente incompleta. El baseline usa todas las visitas y una muestra de no visitados como controles; luego corrige las probabilidades por la prevalencia real de visita. Las visitas observadas se ponderan con pesos IPW estabilizados.
+
+Resultado inicial:
+
+- AUC de validacion en muestra de controles: `0,706`;
+- prevalencia real de visita no B: `9,6%`;
+- ratio crudo `problemas ZL / COM`: `5,44`;
+- ratio ajustado por propension `problemas ZL / COM`: `5,65`;
+- ratio crudo `solo ZL problema / COM`: `4,86`;
+- ratio ajustado por propension `solo ZL problema / COM`: `5,07`.
+
+La lectura ajustada no elimina la hipotesis de subreclamo; si algo, la mantiene o la refuerza levemente dentro de los supuestos del modelo de propension.

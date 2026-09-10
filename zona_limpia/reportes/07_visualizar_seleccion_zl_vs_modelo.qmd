@@ -1,0 +1,330 @@
+---
+title: "Zona Limpia vs modelo: selección diaria"
+subtitle: "Comparación a igual cantidad de visitas diarias"
+format:
+  html:
+    theme: cosmo
+    toc: true
+    toc-depth: 2
+    embed-resources: true
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+## Objetivo
+
+Este reporte compara dos mecanismos de selección de clusters:
+
+- la selección efectiva visitada por Zona Limpia;
+- el top N diario sugerido por el modelo `logistico_reducido_d2`.
+
+La comparación usa el mismo N por día: si Zona Limpia tuvo `n_visitas_zl`
+visitas efectivas, el modelo selecciona los `n_visitas_zl` clusters con mayor
+score ese mismo día.
+
+Se muestran dos objetivos distintos:
+
+- **problema real observado**: reclamo COM o problema comparable observado por
+  Zona Limpia;
+- **reclamo COM**: solo reclamos COM, que corresponde al objetivo original del
+  modelo.
+
+`Voluminosos` no cuenta como problema en la métrica principal.
+
+```{r}
+library(data.table)
+library(ggplot2)
+library(scales)
+library(knitr)
+library(kableExtra)
+
+resolver_path <- function(path) {
+  if (file.exists(path)) {
+    return(path)
+  }
+  path_parent <- file.path("..", path)
+  if (file.exists(path_parent)) {
+    return(path_parent)
+  }
+  path_grandparent <- file.path("..", "..", path)
+  if (file.exists(path_grandparent)) {
+    return(path_grandparent)
+  }
+  stop("No existe el archivo: ", path)
+}
+
+path_diario <- resolver_path(
+  "zona_limpia/outputs/seleccion_zl_vs_modelo_diario_logistico_reducido_d2.csv"
+)
+path_mensual <- resolver_path(
+  "zona_limpia/outputs/seleccion_zl_vs_modelo_mensual_logistico_reducido_d2.csv"
+)
+
+diario <- fread(path_diario)
+mensual <- fread(path_mensual)
+
+diario[, dia := as.IDate(dia)]
+diario[, mes := factor(
+  anio_mes,
+  levels = c(202603L, 202604L, 202605L),
+  labels = c("Marzo", "Abril", "Mayo")
+)]
+mensual[, mes := factor(
+  anio_mes,
+  levels = c(202603L, 202604L, 202605L),
+  labels = c("Marzo", "Abril", "Mayo")
+)]
+
+diario_visitas <- diario[n_visitas_zl > 0]
+
+col_zl <- "#16817A"
+col_modelo <- "#2F5AA8"
+col_pos <- "#2F5AA8"
+col_neg <- "#B84A4A"
+col_neutro <- "#6B7280"
+
+theme_zl <- function(base_size = 11) {
+  theme_minimal(base_size = base_size) +
+    theme(
+      plot.title.position = "plot",
+      plot.title = element_text(face = "bold", size = base_size + 3),
+      plot.subtitle = element_text(color = "#4B5563"),
+      panel.grid.minor = element_blank(),
+      panel.grid.major.x = element_blank(),
+      legend.position = "top",
+      legend.title = element_blank(),
+      strip.text = element_text(face = "bold"),
+      axis.title = element_text(color = "#374151")
+    )
+}
+
+fmt_num <- function(x) format(x, big.mark = ".", decimal.mark = ",", scientific = FALSE)
+fmt_pct <- function(x) percent(x, accuracy = 0.1, decimal.mark = ",")
+```
+
+## Resumen Mensual
+
+Cada mes resume comparaciones diarias a igual cantidad de puntos: para cada día,
+el modelo COM elige la misma cantidad de clusters que visito Zona Limpia.
+
+- `ZL` refiere a la selección efectivamente visitada por Zona Limpia.
+- `Modelo` refiere al top N diario del modelo COM `logistico_reducido_d2`.
+- `Problemas` cuenta clusters con reclamo COM o problema comparable observado por Zona Limpia.
+- `COM` cuenta clusters con reclamo COM.
+- Las tasas se calculan dividiendo por la cantidad de visitas/puntos seleccionados.
+
+Nota metodologica: este reporte compara la selección efectiva de Zona Limpia
+contra el modelo COM existente. No usa el modelo ZL puro.
+
+```{r}
+tabla_mensual <- mensual[
+  ,
+  .(
+    Mes = mes,
+    `Visitas ZL` = fmt_num(n_visitas_zl_total),
+    `Problemas ZL` = fmt_num(n_zl_con_problema_real_total),
+    `Problemas modelo` = fmt_num(n_modelo_top_con_problema_real_observado_total),
+    `Tasa problema ZL` = fmt_pct(tasa_zl_problema_real_agregada),
+    `Tasa problema modelo` = fmt_pct(tasa_modelo_problema_real_observado_agregada),
+    `COM ZL` = fmt_num(n_zl_con_com_total),
+    `COM modelo` = fmt_num(n_modelo_top_con_com_total),
+    `Tasa COM ZL` = fmt_pct(tasa_zl_com_agregada),
+    `Tasa COM modelo` = fmt_pct(tasa_modelo_com_agregada)
+  )
+]
+
+kable(
+  tabla_mensual,
+  format = "html",
+  align = "lrrrrrrrrr",
+  caption = "Resumen mensual a igual cantidad de visitas diarias"
+) |>
+  kable_styling(
+    full_width = FALSE,
+    bootstrap_options = c("striped", "hover", "condensed")
+  )
+```
+
+## Tasa Diaria Por Objetivo
+
+```{r}
+tasas_diarias <- rbindlist(list(
+  diario_visitas[
+    ,
+    .(
+      dia,
+      mes,
+      objetivo = "Problema real observado",
+      `Zona Limpia` = tasa_zl_problema_real,
+      Modelo = tasa_modelo_problema_real_observado
+    )
+  ],
+  diario_visitas[
+    ,
+    .(
+      dia,
+      mes,
+      objetivo = "Reclamo COM",
+      `Zona Limpia` = tasa_zl_com,
+      Modelo = tasa_modelo_com
+    )
+  ]
+), fill = TRUE)
+
+tasas_diarias_long <- melt(
+  tasas_diarias,
+  id.vars = c("dia", "mes", "objetivo"),
+  variable.name = "mecanismo",
+  value.name = "tasa"
+)
+
+ggplot(tasas_diarias_long, aes(dia, tasa, color = mecanismo)) +
+  geom_line(linewidth = 0.75, alpha = 0.9) +
+  geom_point(size = 1.4, alpha = 0.85) +
+  facet_wrap(~ objetivo, ncol = 1, scales = "free_y") +
+  scale_color_manual(values = c("Zona Limpia" = col_zl, "Modelo" = col_modelo)) +
+  scale_y_continuous(labels = percent_format(accuracy = 1, decimal.mark = ",")) +
+  labs(
+    title = "Tasa diaria de acierto a igual N",
+    subtitle = "Cada dia el modelo selecciona tantos clusters como visitas efectivas tuvo Zona Limpia",
+    x = NULL,
+    y = "Tasa"
+  ) +
+  theme_zl()
+```
+
+## Tasas Agregadas Por Mes
+
+```{r}
+tasas_mensuales <- rbindlist(list(
+  mensual[
+    ,
+    .(
+      mes,
+      objetivo = "Problema real observado",
+      `Zona Limpia` = tasa_zl_problema_real_agregada,
+      Modelo = tasa_modelo_problema_real_observado_agregada
+    )
+  ],
+  mensual[
+    ,
+    .(
+      mes,
+      objetivo = "Reclamo COM",
+      `Zona Limpia` = tasa_zl_com_agregada,
+      Modelo = tasa_modelo_com_agregada
+    )
+  ]
+), fill = TRUE)
+
+tasas_mensuales_long <- melt(
+  tasas_mensuales,
+  id.vars = c("mes", "objetivo"),
+  variable.name = "mecanismo",
+  value.name = "tasa"
+)
+
+ggplot(tasas_mensuales_long, aes(mes, tasa, fill = mecanismo)) +
+  geom_col(position = position_dodge(width = 0.72), width = 0.62) +
+  geom_text(
+    aes(label = percent(tasa, accuracy = 0.1, decimal.mark = ",")),
+    position = position_dodge(width = 0.72),
+    vjust = -0.25,
+    size = 3.2
+  ) +
+  facet_wrap(~ objetivo, ncol = 1) +
+  scale_fill_manual(values = c("Zona Limpia" = col_zl, "Modelo" = col_modelo)) +
+  scale_y_continuous(
+    labels = percent_format(accuracy = 1, decimal.mark = ","),
+    expand = expansion(mult = c(0, 0.12))
+  ) +
+  labs(
+    title = "El ganador cambia segun el objetivo",
+    subtitle = "Zona Limpia concentra mas problemas observados; el modelo concentra mas reclamos COM",
+    x = NULL,
+    y = "Tasa agregada"
+  ) +
+  theme_zl()
+```
+
+## Diferencia Diaria Modelo Menos Zona Limpia
+
+Valores positivos favorecen al modelo. Valores negativos favorecen a Zona
+Limpia.
+
+```{r}
+diferencias_diarias <- rbindlist(list(
+  diario_visitas[
+    ,
+    .(
+      dia,
+      mes,
+      objetivo = "Problema real observado",
+      diferencia = diferencia_n_problemas_modelo_vs_zl
+    )
+  ],
+  diario_visitas[
+    ,
+    .(
+      dia,
+      mes,
+      objetivo = "Reclamo COM",
+      diferencia = diferencia_n_com_modelo_vs_zl
+    )
+  ]
+), fill = TRUE)
+
+diferencias_diarias[, signo := fifelse(diferencia >= 0, "Modelo", "Zona Limpia")]
+
+ggplot(diferencias_diarias, aes(dia, diferencia, fill = signo)) +
+  geom_hline(yintercept = 0, color = "#111827", linewidth = 0.35) +
+  geom_col(width = 0.85) +
+  facet_wrap(~ objetivo, ncol = 1, scales = "free_y") +
+  scale_fill_manual(values = c("Modelo" = col_pos, "Zona Limpia" = col_neg)) +
+  scale_y_continuous(labels = label_number(big.mark = ".", decimal.mark = ",")) +
+  labs(
+    title = "Diferencia diaria en cantidad de casos capturados",
+    subtitle = "Modelo menos Zona Limpia, a igual cantidad de clusters seleccionados por dia",
+    x = NULL,
+    y = "Diferencia de casos"
+  ) +
+  theme_zl()
+```
+
+Las barras anteriores son la lectura central del reporte: cuando la diferencia
+se calcula sobre problemas reales observados, predominan valores negativos; al
+calcularla solo sobre reclamos COM, predominan valores positivos. Esto muestra
+que el mecanismo actual de Zona Limpia y el modelo COM priorizan objetivos
+distintos.
+
+## Solapamiento Entre Selecciones
+
+```{r}
+ggplot(diario_visitas, aes(dia, pct_visitas_zl_en_top_modelo)) +
+  geom_area(fill = "#DBEAFE", alpha = 0.85) +
+  geom_line(color = col_modelo, linewidth = 0.75) +
+  geom_point(color = col_modelo, size = 1.2, alpha = 0.75) +
+  scale_y_continuous(labels = percent_format(accuracy = 1, decimal.mark = ",")) +
+  labs(
+    title = "Solapamiento entre la seleccion de Zona Limpia y el top N del modelo",
+    subtitle = "Porcentaje de visitas efectivas de Zona Limpia que tambien estaban dentro del top N del modelo",
+    x = NULL,
+    y = "Solapamiento"
+  ) +
+  theme_zl()
+```
+
+## Lectura
+
+La evidencia apunta a dos objetivos distintos:
+
+- si la meta es detectar problemas observados en campo, la selección efectiva
+  de Zona Limpia concentra más casos;
+- si la meta es anticipar reclamos COM, el modelo concentra muchos más reclamos
+  que la selección de Zona Limpia a igual cantidad de visitas.
+
+La primera comparación es conservadora para el modelo, porque los problemas sin
+reclamo COM solo son observables cuando Zona Limpia efectivamente visito el
+cluster.

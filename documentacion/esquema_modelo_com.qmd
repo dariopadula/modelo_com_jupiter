@@ -1,0 +1,133 @@
+---
+title: "Esquema del modelo para predecir reclamos COM"
+format:
+  html:
+    theme: cosmo
+    toc: true
+    toc-depth: 2
+    number-sections: true
+    embed-resources: true
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+## Objetivo
+
+El modelo busca estimar, para cada día, en qué zonas es más probable que aparezcan reclamos COM asociados a residuos alrededor de contenedores.
+
+El resultado es un **score entre 0 y 1**:
+
+- valores más altos indican mayor probabilidad estimada de reclamo;
+- el score sirve para ordenar zonas por prioridad relativa;
+- no debe interpretarse como una medición directa de todos los problemas reales.
+
+## Unidad de análisis: cluster-día
+
+La unidad de análisis no es el contenedor individual, sino el **cluster-día**.
+
+Un **cluster** agrupa uno o más contenedores cercanos que funcionan como una misma unidad territorial de análisis. La idea es que un reclamo no siempre representa exactamente a un único contenedor, sino a una pequeña zona donde hay contenedores próximos entre sí.
+
+Entonces, el modelo estima:
+
+> la probabilidad de que un cluster tenga al menos un reclamo COM en un día determinado.
+
+## Datos usados
+
+```{mermaid}
+flowchart TD
+  A[Contenedores activos por día] --> C[Asignación espacial]
+  B[Reclamos COM] --> C
+  C --> D[Reclamo asignado a contenedor activo]
+  E[Tabla de clusters] --> F[Contenedor asociado a cluster]
+  D --> G[Reclamo asignado a cluster-día]
+  F --> G
+  H[Levantes y período teórico] --> I[Variables del cluster-día]
+  G --> I
+  A --> I
+  I --> J[Modelo COM]
+  J --> K[Probabilidad de reclamo por cluster-día]
+```
+
+Primero se define qué contenedores están activos en cada día. Los reclamos COM se asignan espacialmente al contenedor activo más cercano/elegible. Como cada contenedor pertenece a un cluster, el reclamo queda luego asociado a un cluster-día. Sobre esa base se agregan las variables históricas, de levantes y de período teórico para entrenar el modelo.
+
+Tablas principales:
+
+| Tabla | Rol en el modelo |
+|---|---|
+| Contenedores activos por día | Define el universo diario de contenedores elegibles |
+| Reclamos COM | Registra los reclamos que se quieren predecir |
+| Tabla de clusters | Indica a qué cluster pertenece cada contenedor |
+| Levantes y período teórico | Aporta información operativa sobre frecuencia esperada y tiempo desde el último levante |
+| Base cluster-día | Integra las fuentes anteriores y queda como tabla final de modelado |
+
+Las variables históricas se construyen usando información disponible antes del día a predecir. En la versión operativa más prudente se usan reclamos cerrados hasta `D-2`.
+
+## Variables usadas
+
+El modelo usa variables como:
+
+- reclamos recientes en el mismo cluster;
+- cantidad de reclamos acumulados en ventanas de 7 y 30 días;
+- días desde el último reclamo conocido;
+- cantidad de contenedores activos;
+- tiempo desde el último levante;
+- período teórico de levante;
+- relación entre tiempo desde último levante y período teórico;
+- exceso sobre el período teórico, es decir, cuánto se superó el tiempo esperado de levante;
+- indicadores de calidad o inferencia de los datos de levantes.
+
+En el modelo logístico reducido D-2, las variables con mayor peso relativo son:
+
+| Variable | Lectura |
+|---|---|
+| Días desde el último reclamo | A mayor distancia desde el último reclamo, menor probabilidad estimada de reclamo |
+| Reclamos acumulados en 30 días | Más reclamos recientes aumentan el riesgo estimado |
+| Tiempo desde el último levante | Más tiempo desde el último levante aumenta el riesgo estimado |
+| Sin reclamo previo observado | Diferencia clusters sin historia previa de reclamos |
+| Período teórico de levante | Resume cada cuántos días debería ocurrir el levante |
+| Reclamos acumulados en 7 días | Captura historia muy reciente de reclamos |
+
+## Modelos entrenados
+
+| Modelo | Para qué se usó |
+|---|---|
+| Logístico completo | Primer baseline interpretable |
+| Logístico reducido | Versión más simple, con menos variables |
+| Logístico reducido D-2 | Versión más prudente para uso operativo |
+| Random Forest | Comparación con modelo no lineal |
+| XGBoost | Comparación no lineal y experimentos |
+
+La versión integrada en la app/scoring para reclamos COM es el **logístico reducido D-2**.
+
+## Métricas del modelo
+
+Métricas generales del modelo logístico reducido D-2:
+
+| Split | N | Prevalencia | AUC | Logloss |
+|---|---:|---:|---:|---:|
+| Entrenamiento | 2.750.585 | 10,8% | 0,772 | 0,298 |
+| Validación | 736.041 | 10,0% | 0,753 | 0,288 |
+| Test | 427.999 | 11,1% | 0,753 | 0,308 |
+
+Lift en validación:
+
+| Top priorizado | Precisión | Captura | Lift |
+|---|---:|---:|---:|
+| 1% | 47,0% | 4,7% | 4,71 |
+| 5% | 36,8% | 18,4% | 3,69 |
+| 10% | 30,9% | 31,0% | 3,10 |
+| 20% | 24,7% | 49,4% | 2,47 |
+
+El **lift** compara la tasa de reclamos dentro del grupo priorizado contra la tasa promedio general.
+
+Por ejemplo, un lift de `3,10` en el top 10% quiere decir que ese grupo tiene aproximadamente 3,1 veces más concentración de reclamos que el promedio de todos los clusters evaluados.
+
+En validación, si se toma el 10% de clusters con mayor score, se captura aproximadamente el 31% de los reclamos observados. Ese grupo tiene una tasa de reclamo cercana al 30,9%, contra una prevalencia general cercana al 10%.
+
+## Resumen
+
+El modelo funciona bien para ordenar clusters según probabilidad de reclamo COM. Su principal valor es priorizar zonas donde es más probable que aparezcan reclamos, no necesariamente todos los problemas existentes.
+
+Esto es importante porque puede haber problemas reales que no se transforman en reclamos. Por eso el score COM debe leerse como una predicción de reclamos, no como una predicción completa de problemas físicos. Para esa segunda pregunta se trabaja con información de Zona Limpia y modelos específicos de problemas observados.

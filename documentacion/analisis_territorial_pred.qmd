@@ -1,0 +1,382 @@
+---
+title: "Análisis territorial de las predicciones COM"
+subtitle: "Desempeño del modelo logístico reducido D-2 por CCZ"
+format:
+  html:
+    theme: cosmo
+    toc: true
+    toc-depth: 3
+    number-sections: true
+    embed-resources: true
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+```{r}
+library(data.table)
+library(ggplot2)
+library(knitr)
+
+path_resultados <- "../outputs/diagnostico_territorial_modelo_com_ccz"
+leer_resultado <- function(nombre) {
+  fread(file.path(path_resultados, paste0(nombre, ".csv")))
+}
+
+control_cobertura <- leer_resultado("control_cobertura")
+metricas_globales <- leer_resultado("metricas_globales")
+metricas_ccz <- leer_resultado("metricas_ccz")
+metricas_mensuales_ccz <- leer_resultado("metricas_mensuales_ccz")
+ranking_ccz <- leer_resultado("ranking_ccz")
+intervalos_bootstrap <- leer_resultado("intervalos_bootstrap_ccz")
+metadata <- leer_resultado("metadata")
+
+etiqueta_split <- function(x) fifelse(x == "validacion", "Validación", "Test")
+fmt_entero <- function(x) format(round(x), big.mark = ".", decimal.mark = ",", scientific = FALSE)
+fmt_decimal <- function(x, d = 3) formatC(x, format = "f", digits = d, decimal.mark = ",")
+fmt_pct <- function(x, d = 1) paste0(fmt_decimal(100 * x, d), "%")
+```
+
+## Resumen ejecutivo
+
+Este informe evalúa si el modelo global de reclamos COM mantiene un desempeño
+comparable entre los Centros Comunales Zonales (CCZ). No se entrenó un modelo
+por CCZ y el territorio no se utilizó como predictor: se aplicó el mismo modelo
+a toda la ciudad y luego se desagregaron sus resultados.
+
+Resultados principales:
+
+- el cruce territorial tiene cobertura completa en los 18 CCZ;
+- el AUC global es `r fmt_decimal(metricas_globales[split == "validacion", auc])`
+  en validación y `r fmt_decimal(metricas_globales[split == "test", auc])` en test;
+- el AUC por CCZ varía entre
+  `r fmt_decimal(min(metricas_ccz[split == "validacion", auc]))` y
+  `r fmt_decimal(max(metricas_ccz[split == "validacion", auc]))` en validación,
+  y entre `r fmt_decimal(min(metricas_ccz[split == "test", auc]))` y
+  `r fmt_decimal(max(metricas_ccz[split == "test", auc]))` en test;
+- la calibración también presenta diferencias territoriales;
+- el ranking global de ciudad y el ranking local dentro de cada CCZ representan
+  políticas operativas diferentes.
+
+El modelo conserva capacidad de discriminación en todos los CCZ, pero su
+magnitud y calibración no son uniformes. Estas diferencias describen el target
+COM y no constituyen por sí solas evidencia de diferencias en problemas físicos.
+
+## Pregunta y dimensiones de evaluación
+
+El modelo estima, para cada `cluster_id` y día, la probabilidad de que exista al
+menos un reclamo COM válido. La pregunta es si el mismo modelo global ordena y
+calibra adecuadamente ese riesgo en los distintos CCZ y cómo distribuye su
+priorización territorial.
+
+Se distinguen tres dimensiones:
+
+1. **Discriminación:** ordenamiento de cluster-días con y sin reclamo dentro de
+   cada CCZ.
+2. **Calibración:** correspondencia entre probabilidad predicha y tasa observada.
+3. **Utilidad operativa:** captura bajo un ranking global de ciudad y bajo
+   rankings locales por CCZ.
+
+## Modelo y cortes temporales
+
+Se evaluó el modelo logístico reducido COM con historia cerrada hasta `D-2`. Las
+predicciones fueron reconstruidas desde el modelo y la preparación guardados,
+sin reentrenamiento. Se conservaron sus splits temporales originales.
+
+```{r}
+metadata[, .(
+  `Versión de clusters` = version_cluster,
+  `Rezago COM` = paste0("D-", rezago_reclamos_dias),
+  `Meses de validación` = meses_validacion,
+  `Meses de test` = meses_test,
+  `Remuestreos bootstrap` = bootstrap_reps
+)] |>
+  kable(align = "l", caption = "Configuración del diagnóstico")
+```
+
+Cada cluster se cruzó con la capa administrativa mediante
+`version_cluster`/`cluster_id`. El CCZ se usó exclusivamente para auditar las
+predicciones.
+
+## Cobertura territorial
+
+```{r}
+tabla_cobertura <- copy(control_cobertura)
+tabla_cobertura[, Split := etiqueta_split(split)]
+tabla_cobertura[, .(
+  Split, Filas = fmt_entero(filas), Clusters = fmt_entero(clusters),
+  Días = fmt_entero(dias), Positivos = fmt_entero(positivos), CCZ = ccz,
+  `Filas sin CCZ` = fmt_entero(filas_sin_ccz),
+  `Clusters sin CCZ` = fmt_entero(clusters_sin_ccz)
+)] |>
+  kable(align = "lrrrrrrr", caption = "Cobertura de las predicciones")
+```
+
+No se observaron predicciones sin CCZ ni duplicaciones de la clave territorial.
+
+## Desempeño global
+
+```{r}
+tabla_global <- copy(metricas_globales)
+tabla_global[, Split := etiqueta_split(split)]
+tabla_global[, .(
+  Split, N = fmt_entero(n), Positivos = fmt_entero(positivos),
+  Prevalencia = fmt_pct(prevalencia), `Predicción media` = fmt_pct(pred_media),
+  AUC = fmt_decimal(auc), Logloss = fmt_decimal(logloss), Brier = fmt_decimal(brier)
+)] |>
+  kable(align = "lrrrrrrr", caption = "Métricas globales reconstruidas")
+```
+
+Estas métricas coinciden, salvo diferencias numéricas despreciables, con las
+salidas originales del modelo. Esto valida la reconstrucción usada para la
+desagregación territorial.
+
+## Discriminación por CCZ
+
+El AUC se calcula usando únicamente predicciones y observados del mismo CCZ. Un
+AUC alto indica que, dentro de ese territorio, los cluster-días con reclamo
+tienden a recibir mayor score.
+
+```{r}
+auc_plot <- copy(metricas_ccz)
+auc_plot[, Split := etiqueta_split(split)]
+auc_plot[, ccz := factor(ccz, levels = sort(unique(ccz)))]
+
+ggplot(auc_plot, aes(ccz, auc, color = Split, group = Split)) +
+  geom_hline(yintercept = 0.5, linetype = "dashed", color = "grey60") +
+  geom_line(linewidth = 0.5) +
+  geom_point(size = 2) +
+  scale_y_continuous(limits = c(0.5, 0.8)) +
+  labs(
+    title = "La capacidad de discriminación varía entre CCZ",
+    subtitle = "AUC del mismo modelo global dentro de cada territorio",
+    x = "CCZ", y = "AUC", color = "Período"
+  ) +
+  theme_minimal(base_size = 11) +
+  theme(legend.position = "top")
+```
+
+```{r}
+metricas_ccz[split == "test"][order(auc), .(
+  CCZ = ccz, Clusters = fmt_entero(clusters), Positivos = fmt_entero(positivos),
+  Prevalencia = fmt_pct(prevalencia), AUC = fmt_decimal(auc),
+  Logloss = fmt_decimal(logloss), Brier = fmt_decimal(brier)
+)] |>
+  kable(align = "lrrrrrr", caption = "Desempeño por CCZ en test")
+```
+
+El AUC debe leerse junto con prevalencia, calibración y volumen. Un CCZ con
+menor AUC no necesariamente tiene menor precisión o menos reclamos.
+
+## Incertidumbre temporal
+
+Se calcularon métricas diarias por CCZ y se remuestrearon días completos 1.000
+veces. Los intervalos siguientes corresponden a la **media diaria** del AUC, no
+al AUC agrupado de toda la ventana.
+
+```{r}
+ci_auc <- intervalos_bootstrap[metrica == "auc"]
+ci_auc[, Split := etiqueta_split(split)]
+ci_auc[, ccz := factor(ccz, levels = sort(unique(ccz)))]
+
+ggplot(ci_auc, aes(ccz, estimacion_bootstrap, color = Split)) +
+  geom_pointrange(
+    aes(ymin = ci_025, ymax = ci_975),
+    position = position_dodge(width = 0.45)
+  ) +
+  coord_flip() +
+  labs(
+    title = "Incertidumbre del AUC diario medio por CCZ",
+    subtitle = "Intervalos percentiles del 95% mediante remuestreo de días",
+    x = "CCZ", y = "AUC diario medio", color = "Período"
+  ) +
+  theme_minimal(base_size = 11) +
+  theme(legend.position = "top")
+```
+
+Los intervalos no deben utilizarse como una clasificación automática de
+territorios “buenos” y “malos”, especialmente por las múltiples comparaciones.
+
+## Calibración territorial
+
+La calibración compara el riesgo medio predicho con la tasa observada. Por
+encima de la diagonal hay más reclamos que los predichos; por debajo, el modelo
+predice más riesgo que el observado.
+
+```{r}
+cal_plot <- copy(metricas_ccz)
+cal_plot[, Split := etiqueta_split(split)]
+
+ggplot(cal_plot, aes(pred_media, prevalencia, label = ccz, color = Split)) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "grey50") +
+  geom_point(size = 2.4) +
+  ggrepel::geom_text_repel(
+    size = 3,
+    max.overlaps = Inf,
+    seed = 20260716,
+    show.legend = FALSE
+  ) +
+  facet_wrap(~ Split) +
+  scale_x_continuous(labels = scales::label_percent(decimal.mark = ",")) +
+  scale_y_continuous(labels = scales::label_percent(decimal.mark = ",")) +
+  coord_equal() +
+  labs(
+    title = "La calibración global no es uniforme entre territorios",
+    subtitle = "Cada etiqueta representa un CCZ",
+    x = "Probabilidad media predicha", y = "Tasa observada", color = "Período"
+  ) +
+  theme_minimal(base_size = 11) +
+  theme(legend.position = "top")
+```
+
+```{r}
+metricas_ccz[split == "test"][order(diferencia_pred_obs), .(
+  CCZ = ccz, `Tasa observada` = fmt_pct(prevalencia),
+  `Predicción media` = fmt_pct(pred_media),
+  `Predicción - observado` = fmt_pct(diferencia_pred_obs),
+  `Observado / esperado` = fmt_decimal(razon_observado_esperado, 2)
+)] |>
+  kable(align = "lrrrr", caption = "Calibración territorial en test")
+```
+
+La salida `calibracion_ccz_bandas.csv` complementa esta lectura con cinco bandas
+globales de score compartidas entre territorios.
+
+## Ranking global y ranking local
+
+Se evaluaron dos políticas:
+
+- **Global:** seleccionar diariamente el top 5%, 10% o 20% de toda la ciudad.
+- **Local:** seleccionar esos porcentajes dentro de cada CCZ, reservando una
+  capacidad territorial proporcional.
+
+```{r}
+ranking_plot <- ranking_ccz[top_pct == 0.10]
+ranking_plot[, Politica := fifelse(
+  tipo_ranking == "global_ciudad", "Top 10% global", "Top 10% dentro del CCZ"
+)]
+ranking_plot[, Split := etiqueta_split(split)]
+
+ggplot(ranking_plot, aes(ccz, capture_rate, fill = Politica)) +
+  geom_col(position = "dodge") +
+  facet_wrap(~ Split) +
+  scale_y_continuous(labels = scales::label_percent(decimal.mark = ",")) +
+  labs(
+    title = "Captura de reclamos por CCZ bajo dos políticas",
+    subtitle = "Top 10% diario", x = "CCZ",
+    y = "Proporción de reclamos del CCZ capturada", fill = "Política"
+  ) +
+  theme_minimal(base_size = 11) +
+  theme(legend.position = "top")
+```
+
+```{r}
+ranking_test <- ranking_ccz[split == "test" & top_pct == 0.10]
+ranking_test <- metricas_ccz[
+  split == "test",
+  .(ccz, clusters)
+][
+  ranking_test,
+  on = "ccz"
+]
+
+ranking_test[, .(
+  CCZ = ccz,
+  Politica = fifelse(tipo_ranking == "global_ciudad", "Global", "Local"),
+  Clusters = fmt_entero(clusters),
+  `N cluster-día` = fmt_entero(n),
+  `Peso en universo` = fmt_pct(participacion_universo),
+  Seleccionados = fmt_entero(seleccionados),
+  `Peso dentro del top` = fmt_pct(participacion_top),
+  `Tasa de selección` = fmt_pct(tasa_seleccion),
+  Prevalencia = fmt_pct(prevalencia),
+  Precisión = fmt_pct(precision), Captura = fmt_pct(capture_rate),
+  Lift = fmt_decimal(lift_vs_ccz, 2),
+  `Representación relativa` = fmt_decimal(razon_representacion, 2)
+)][order(CCZ, Politica)] |>
+  kable(
+    align = "llrrrrrrrrrrr",
+    caption = "Ranking global y local por CCZ en test, top 10% diario"
+  )
+```
+
+`Clusters` cuenta identificadores distintos y `N cluster-día` mide la exposición
+acumulada durante test. El peso territorial se calcula con cluster-días porque
+el ranking y la selección se realizan diariamente.
+
+La representación relativa compara el peso del CCZ dentro del top con su peso
+en el universo:
+
+```text
+representación relativa = peso dentro del top / peso en el universo
+```
+
+Esto equivale a dividir la tasa de selección del CCZ por la tasa de selección
+global, cercana al 10% en esta tabla. Un valor mayor que 1 indica
+sobrerrepresentación. En el ranking local queda cercano a 1 por construcción.
+
+La prevalencia se muestra para hacer auditable el lift:
+
+```text
+lift = precisión / prevalencia del CCZ
+```
+
+La captura es la proporción de cluster-días positivos del CCZ que quedó dentro
+de la selección diaria.
+
+El ranking global busca maximizar la priorización conjunta según el score; el
+local garantiza presencia territorial. La elección depende del objetivo y de
+las restricciones operativas.
+
+## Estabilidad mensual
+
+```{r}
+mensual_plot <- copy(metricas_mensuales_ccz)
+mensual_plot[, periodo := as.Date(paste0(anio_mes, "01"), format = "%Y%m%d")]
+mensual_plot[, ccz := factor(ccz, levels = sort(unique(ccz)))]
+
+ggplot(mensual_plot, aes(periodo, auc, group = ccz, color = ccz)) +
+  geom_line(alpha = 0.75) +
+  geom_point(size = 1.5) +
+  facet_wrap(~ ccz, ncol = 6) +
+  guides(color = "none") +
+  labs(title = "Evolución mensual del AUC por CCZ", x = "Mes", y = "AUC") +
+  theme_minimal(base_size = 10) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+La ventana de test contiene solo dos meses. Su estabilidad mensual debe leerse
+como confirmación acotada, no como evidencia de largo plazo.
+
+## Límites de interpretación
+
+El target `tuvo_reclamo` mide reclamos COM observados. Una diferencia entre CCZ
+puede combinar frecuencia real de problemas, exposición, composición de
+contenedores, historia de reclamos, propensión territorial a reclamar y
+desempeño propio del modelo.
+
+Este análisis permite afirmar dónde el modelo predice y prioriza mejor los
+**reclamos COM**, pero no dónde existen más problemas físicos ni si hay equidad
+territorial. Zona Limpia ofrece una fuente complementaria para estudiar
+problemas observados sin reclamo y debe analizarse por separado.
+
+## Conclusiones
+
+1. El modelo global mantiene discriminación en los 18 CCZ, pero el desempeño no
+   es homogéneo.
+2. Un buen AUC territorial no garantiza buena calibración.
+3. La composición territorial depende de si se adopta ranking global o local.
+4. Antes de modificar el modelo conviene confirmar los patrones en nuevas
+   ventanas y contrastarlos con diferencias en propensión de reclamo.
+5. Si una descalibración persiste, el siguiente experimento razonable sería una
+   recalibración aprendida fuera de test, no 18 modelos independientes.
+
+## Reproducibilidad
+
+El diagnóstico se genera mediante:
+
+- `scripts/diagnostico_territorial_modelo_com_ccz.R`;
+- modelo `logistico_cluster_dia_reducido_reclamos_d2`;
+- capa `cluster_admin_territorial`;
+- salidas en `outputs/diagnostico_territorial_modelo_com_ccz/`.

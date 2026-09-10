@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="es" xml:lang="es"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.3.433">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+
+<title>Pronóstico diario de clusters con reclamo COM</title>
+<style>
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+.display.math{display: block; text-align: center; margin: 0.5rem auto;}
+</style>
+
+
+<script src="resumen_pronostico_diario_com_files/libs/clipboard/clipboard.min.js"></script>
+<script src="resumen_pronostico_diario_com_files/libs/quarto-html/quarto.js"></script>
+<script src="resumen_pronostico_diario_com_files/libs/quarto-html/popper.min.js"></script>
+<script src="resumen_pronostico_diario_com_files/libs/quarto-html/tippy.umd.min.js"></script>
+<script src="resumen_pronostico_diario_com_files/libs/quarto-html/anchor.min.js"></script>
+<link href="resumen_pronostico_diario_com_files/libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="resumen_pronostico_diario_com_files/libs/quarto-html/quarto-syntax-highlighting.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="resumen_pronostico_diario_com_files/libs/bootstrap/bootstrap.min.js"></script>
+<link href="resumen_pronostico_diario_com_files/libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="resumen_pronostico_diario_com_files/libs/bootstrap/bootstrap.min.css" rel="stylesheet" id="quarto-bootstrap" data-mode="light">
+
+
+</head>
+
+<body>
+
+<div id="quarto-content" class="page-columns page-rows-contents page-layout-article">
+<div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+  <nav id="TOC" role="doc-toc" class="toc-active">
+    <h2 id="toc-title">Tabla de contenidos</h2>
+   
+  <ul class="collapse">
+  <li><a href="#objetivo" id="toc-objetivo" class="nav-link active" data-scroll-target="#objetivo">Objetivo</a></li>
+  <li><a href="#períodos-de-evaluación" id="toc-períodos-de-evaluación" class="nav-link" data-scroll-target="#períodos-de-evaluación">Períodos de evaluación</a></li>
+  <li><a href="#modelos-comparados" id="toc-modelos-comparados" class="nav-link" data-scroll-target="#modelos-comparados">Modelos comparados</a></li>
+  <li><a href="#resultados" id="toc-resultados" class="nav-link" data-scroll-target="#resultados">Resultados</a></li>
+  <li><a href="#serie-completa-de-evaluación" id="toc-serie-completa-de-evaluación" class="nav-link" data-scroll-target="#serie-completa-de-evaluación">Serie completa de evaluación</a></li>
+  <li><a href="#comparación-visual-por-período" id="toc-comparación-visual-por-período" class="nav-link" data-scroll-target="#comparación-visual-por-período">Comparación visual por período</a></li>
+  <li><a href="#desempeño-por-barrio" id="toc-desempeño-por-barrio" class="nav-link" data-scroll-target="#desempeño-por-barrio">Desempeño por barrio</a></li>
+  <li><a href="#conclusión" id="toc-conclusión" class="nav-link" data-scroll-target="#conclusión">Conclusión</a></li>
+  </ul>
+</nav>
+</div>
+<main class="content" id="quarto-document-content">
+
+<header id="title-block-header" class="quarto-title-block default">
+<div class="quarto-title">
+<h1 class="title">Pronóstico diario de clusters con reclamo COM</h1>
+<p class="subtitle lead">Resumen de modelos y resultados</p>
+</div>
+
+
+
+<div class="quarto-title-meta">
+
+    
+  
+    
+  </div>
+  
+
+</header>
+
+<section id="objetivo" class="level2">
+<h2 class="anchored" data-anchor-id="objetivo">Objetivo</h2>
+<p>El objetivo es anticipar cuántos clusters tendrán al menos un reclamo COM en cada día. Este indicador representa la extensión territorial esperada del problema; no debe confundirse con la cantidad total de reclamos, que también incluye repeticiones dentro de un mismo cluster.</p>
+<p>Durante el desarrollo se probaron múltiples estrategias: suma de probabilidades por cluster, modelos agregados por barrio y CCZ, jerarquías barrio/segmento, variables de atraso y severidad, colas extremas, propensiones históricas, ventanas temporales, feriados y correcciones con XGBoost. También se evaluaron variantes barriales, señales globales y distintas podas de variables.</p>
+<p>Este documento presenta únicamente los tres modelos necesarios para entender la decisión final. El detalle de experimentos, especificaciones descartadas y resultados intermedios está en el <a href="pronostico_diario_clusters_reclamo_com.qmd">informe técnico completo</a>.</p>
+</section>
+<section id="períodos-de-evaluación" class="level2">
+<h2 class="anchored" data-anchor-id="períodos-de-evaluación">Períodos de evaluación</h2>
+<ul>
+<li><strong>Entrenamiento:</strong> año 2025.</li>
+<li><strong>Validación:</strong> enero a marzo de 2026.</li>
+<li><strong>Test:</strong> abril y mayo de 2026.</li>
+</ul>
+<p>La evaluación es temporal. Para cada día objetivo <code>D</code>, la historia de reclamos se cierra en <code>D-2</code> y las variables de levante respetan la información disponible al inicio del día operativo.</p>
+</section>
+<section id="modelos-comparados" class="level2">
+<h2 class="anchored" data-anchor-id="modelos-comparados">Modelos comparados</h2>
+<section id="suma-de-scores" class="level3">
+<h3 class="anchored" data-anchor-id="suma-de-scores">1. Suma de scores</h3>
+<p>Es el baseline natural. Para cada día suma las probabilidades producidas por el modelo COM de cada cluster:</p>
+<p><span class="math display"><em>Ŷ</em><sub><em>d</em></sub> = ∑<sub><em>i</em></sub><em>p̂</em><sub><em>i</em>, <em>d</em></sub>.</span></p>
+<p>Si las probabilidades estuvieran perfectamente calibradas y los errores se compensaran, la suma aproximaría la cantidad de clusters con reclamo. Es una referencia directa, pero reproduce poca variación diaria y depende del modelo de probabilidad por cluster.</p>
+</section>
+<section id="modelo-estructural-a0" class="level3">
+<h3 class="anchored" data-anchor-id="modelo-estructural-a0">2. Modelo estructural A0</h3>
+<p>A0 trabaja a nivel segmento censal/día con respuesta binomial. Incluye:</p>
+<ul>
+<li>día de la semana;</li>
+<li>intercepto penalizado de barrio;</li>
+<li>intercepto penalizado de segmento censal.</li>
+</ul>
+<p>El modelo captura el patrón semanal y las diferencias territoriales persistentes. Los interceptos penalizados aplican <em>partial pooling</em>: permiten que barrios y segmentos tengan niveles propios, pero reducen estimaciones extremas cuando hay poca información.&nbsp;A0 no incorpora shocks operativos ni historia reciente.</p>
+</section>
+<section id="a0-más-corrección-dinámica-con-xgboost" class="level3">
+<h3 class="anchored" data-anchor-id="a0-más-corrección-dinámica-con-xgboost">3. A0 más corrección dinámica con XGBoost</h3>
+<p>El modelo seleccionado conserva A0 como expectativa basal y usa un XGBoost compacto para corregir su <em>logit</em>. La parte dinámica tiene cinco variables:</p>
+<ol type="1">
+<li><code>media_tiempo_levante</code>: tiempo medio desde el último levante en el segmento;</li>
+<li><code>rms_q_7</code>: intensidad y dispersión de la propensión histórica reciente de los clusters, estimada con las últimas siete observaciones y cerrada en <code>D-2</code>;</li>
+<li><code>rms_w_7</code>: carga que combina propensión reciente y severidad actual del atraso, donde <span class="math inline"><em>w</em> = <em>q</em><sub>7</sub><em>h</em></span>;</li>
+<li><code>q7 - q60</code>: cambio entre la propensión reciente y el nivel habitual;</li>
+<li><code>es_feriado</code>: indicador del calendario de feriados del proyecto.</li>
+</ol>
+<p>La severidad del atraso se define como:</p>
+<p><span class="math display"><em>h</em> = min {max (ratio−1,0), 3}.</span></p>
+<p>La corrección intenta modelar apartamientos respecto de la estructura: cambios operativos de levante, territorios más sensibles al atraso, aumentos o descensos recientes de la propensión y días feriados. No utiliza los scores del modelo de probabilidad por cluster.</p>
+<p>La versión compacta fue elegida frente a una variante de trece entradas porque reduce la corrección dinámica a cinco variables, mejora test y mantiene un desempeño combinado muy similar.</p>
+</section>
+</section>
+<section id="resultados" class="level2">
+<h2 class="anchored" data-anchor-id="resultados">Resultados</h2>
+<div class="cell">
+<div class="cell-output-display">
+<table class="table table-sm table-striped small">
+<caption>Desempeño diario de los modelos</caption>
+<colgroup>
+<col style="width: 16%">
+<col style="width: 17%">
+<col style="width: 5%">
+<col style="width: 5%">
+<col style="width: 5%">
+<col style="width: 11%">
+<col style="width: 6%">
+<col style="width: 28%">
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: left;">Modelo</th>
+<th style="text-align: left;">Período</th>
+<th style="text-align: right;">Sesgo</th>
+<th style="text-align: right;">MAE</th>
+<th style="text-align: right;">RMSE</th>
+<th style="text-align: right;">Correlación</th>
+<th style="text-align: right;">R² (%)</th>
+<th style="text-align: right;">Variabilidad reproducida (%)</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">XGBoost compacto</td>
+<td style="text-align: left;">Validación</td>
+<td style="text-align: right;">27.4</td>
+<td style="text-align: right;">110.0</td>
+<td style="text-align: right;">146.5</td>
+<td style="text-align: right;">0.729</td>
+<td style="text-align: right;">49.6</td>
+<td style="text-align: right;">86.3</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">A0 estructural</td>
+<td style="text-align: left;">Validación</td>
+<td style="text-align: right;">56.7</td>
+<td style="text-align: right;">142.2</td>
+<td style="text-align: right;">180.6</td>
+<td style="text-align: right;">0.558</td>
+<td style="text-align: right;">23.4</td>
+<td style="text-align: right;">60.0</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Suma de scores</td>
+<td style="text-align: left;">Validación</td>
+<td style="text-align: right;">75.8</td>
+<td style="text-align: right;">144.6</td>
+<td style="text-align: right;">199.7</td>
+<td style="text-align: right;">0.448</td>
+<td style="text-align: right;">6.4</td>
+<td style="text-align: right;">49.7</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">XGBoost compacto</td>
+<td style="text-align: left;">Test</td>
+<td style="text-align: right;">-42.2</td>
+<td style="text-align: right;">142.3</td>
+<td style="text-align: right;">171.2</td>
+<td style="text-align: right;">0.654</td>
+<td style="text-align: right;">36.7</td>
+<td style="text-align: right;">80.3</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">A0 estructural</td>
+<td style="text-align: left;">Test</td>
+<td style="text-align: right;">-38.4</td>
+<td style="text-align: right;">142.5</td>
+<td style="text-align: right;">174.6</td>
+<td style="text-align: right;">0.615</td>
+<td style="text-align: right;">34.2</td>
+<td style="text-align: right;">55.0</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Suma de scores</td>
+<td style="text-align: left;">Test</td>
+<td style="text-align: right;">21.3</td>
+<td style="text-align: right;">152.9</td>
+<td style="text-align: right;">202.1</td>
+<td style="text-align: right;">0.357</td>
+<td style="text-align: right;">11.8</td>
+<td style="text-align: right;">37.4</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">XGBoost compacto</td>
+<td style="text-align: left;">Validación + test</td>
+<td style="text-align: right;">1.3</td>
+<td style="text-align: right;">122.1</td>
+<td style="text-align: right;">156.2</td>
+<td style="text-align: right;">0.691</td>
+<td style="text-align: right;">45.8</td>
+<td style="text-align: right;">83.0</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">A0 estructural</td>
+<td style="text-align: left;">Validación + test</td>
+<td style="text-align: right;">21.0</td>
+<td style="text-align: right;">142.3</td>
+<td style="text-align: right;">178.4</td>
+<td style="text-align: right;">0.551</td>
+<td style="text-align: right;">29.3</td>
+<td style="text-align: right;">57.8</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Suma de scores</td>
+<td style="text-align: left;">Validación + test</td>
+<td style="text-align: right;">55.4</td>
+<td style="text-align: right;">147.7</td>
+<td style="text-align: right;">200.6</td>
+<td style="text-align: right;">0.418</td>
+<td style="text-align: right;">10.6</td>
+<td style="text-align: right;">44.8</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<p>La correlación mide cuánto acompaña cada modelo los movimientos diarios. El R² mide la reducción del error cuadrático frente a predecir siempre la media observada. La variabilidad reproducida compara el desvío estándar de la predicción con el observado; 100 % indica igual amplitud, no necesariamente predicciones perfectas.</p>
+</section>
+<section id="serie-completa-de-evaluación" class="level2">
+<h2 class="anchored" data-anchor-id="serie-completa-de-evaluación">Serie completa de evaluación</h2>
+<div class="cell">
+<div class="cell-output-display">
+<p><img src="resumen_pronostico_diario_com_files/figure-html/unnamed-chunk-3-1.png" class="img-fluid" width="1152"></p>
+</div>
+</div>
+</section>
+<section id="comparación-visual-por-período" class="level2">
+<h2 class="anchored" data-anchor-id="comparación-visual-por-período">Comparación visual por período</h2>
+<div class="cell">
+<div class="cell-output-display">
+<p><img src="resumen_pronostico_diario_com_files/figure-html/unnamed-chunk-4-1.png" class="img-fluid" width="672"></p>
+</div>
+</div>
+<div class="cell">
+<div class="cell-output-display">
+<p><img src="resumen_pronostico_diario_com_files/figure-html/unnamed-chunk-5-1.png" class="img-fluid" width="1152"></p>
+</div>
+</div>
+</section>
+<section id="desempeño-por-barrio" class="level2">
+<h2 class="anchored" data-anchor-id="desempeño-por-barrio">Desempeño por barrio</h2>
+<p>Las predicciones del modelo compacto se agregaron por barrio/día. El siguiente gráfico muestra los quince barrios con mayor RMSE absoluto en validación y test. El color indica si el barrio queda, en promedio, sobreestimado o subestimado.</p>
+<div class="cell">
+<div class="cell-output-display">
+<p><img src="resumen_pronostico_diario_com_files/figure-html/unnamed-chunk-6-1.png" class="img-fluid" width="960"></p>
+</div>
+</div>
+<p>Los errores absolutos más altos tienden a concentrarse en barrios con mayor volumen de reclamos. Para comparar barrios de tamaños muy distintos también deben revisarse el RMSE relativo, el sesgo y la correlación disponibles en <code>outputs/comparacion_poda_xgboost_com/metricas_barrio.csv</code>.</p>
+</section>
+<section id="conclusión" class="level2">
+<h2 class="anchored" data-anchor-id="conclusión">Conclusión</h2>
+<p>La suma de scores es una referencia útil, pero reproduce poca dinámica diaria. A0 incorpora una estructura semanal y territorial estable. El XGBoost compacto agrega una corrección dinámica con cinco variables y mantiene independencia respecto del modelo de scores por cluster.</p>
+<p>La especificación seleccionada para cerrar esta etapa es <strong>A0 más XGBoost compacto</strong>. La selección prioriza desempeño fuera de muestra, simplicidad y coherencia operativa. Su eventual incorporación al scoring o a la app requiere definir todavía el contrato operativo, los intervalos predictivos y el criterio de monitoreo.</p>
+</section>
+
+</main>
+<!-- /main column -->
+<script id="quarto-html-after-body" type="application/javascript">
+window.document.addEventListener("DOMContentLoaded", function (event) {
+  const toggleBodyColorMode = (bsSheetEl) => {
+    const mode = bsSheetEl.getAttribute("data-mode");
+    const bodyEl = window.document.querySelector("body");
+    if (mode === "dark") {
+      bodyEl.classList.add("quarto-dark");
+      bodyEl.classList.remove("quarto-light");
+    } else {
+      bodyEl.classList.add("quarto-light");
+      bodyEl.classList.remove("quarto-dark");
+    }
+  }
+  const toggleBodyColorPrimary = () => {
+    const bsSheetEl = window.document.querySelector("link#quarto-bootstrap");
+    if (bsSheetEl) {
+      toggleBodyColorMode(bsSheetEl);
+    }
+  }
+  toggleBodyColorPrimary();  
+  const icon = "";
+  const anchorJS = new window.AnchorJS();
+  anchorJS.options = {
+    placement: 'right',
+    icon: icon
+  };
+  anchorJS.add('.anchored');
+  const isCodeAnnotation = (el) => {
+    for (const clz of el.classList) {
+      if (clz.startsWith('code-annotation-')) {                     
+        return true;
+      }
+    }
+    return false;
+  }
+  const clipboard = new window.ClipboardJS('.code-copy-button', {
+    text: function(trigger) {
+      const codeEl = trigger.previousElementSibling.cloneNode(true);
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+    }
+  });
+  clipboard.on('success', function(e) {
+    // button target
+    const button = e.trigger;
+    // don't keep focus
+    button.blur();
+    // flash "checked"
+    button.classList.add('code-copy-button-checked');
+    var currentTitle = button.getAttribute("title");
+    button.setAttribute("title", "Copiado");
+    let tooltip;
+    if (window.bootstrap) {
+      button.setAttribute("data-bs-toggle", "tooltip");
+      button.setAttribute("data-bs-placement", "left");
+      button.setAttribute("data-bs-title", "Copiado");
+      tooltip = new bootstrap.Tooltip(button, 
+        { trigger: "manual", 
+          customClass: "code-copy-button-tooltip",
+          offset: [0, -8]});
+      tooltip.show();    
+    }
+    setTimeout(function() {
+      if (tooltip) {
+        tooltip.hide();
+        button.removeAttribute("data-bs-title");
+        button.removeAttribute("data-bs-toggle");
+        button.removeAttribute("data-bs-placement");
+      }
+      button.setAttribute("title", currentTitle);
+      button.classList.remove('code-copy-button-checked');
+    }, 1000);
+    // clear code selection
+    e.clearSelection();
+  });
+  function tippyHover(el, contentFn) {
+    const config = {
+      allowHTML: true,
+      content: contentFn,
+      maxWidth: 500,
+      delay: 100,
+      arrow: false,
+      appendTo: function(el) {
+          return el.parentElement;
+      },
+      interactive: true,
+      interactiveBorder: 10,
+      theme: 'quarto',
+      placement: 'bottom-start'
+    };
+    window.tippy(el, config); 
+  }
+  const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+  for (var i=0; i<noterefs.length; i++) {
+    const ref = noterefs[i];
+    tippyHover(ref, function() {
+      // use id or data attribute instead here
+      let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+      try { href = new URL(href).hash; } catch {}
+      const id = href.replace(/^#\/?/, "");
+      const note = window.document.getElementById(id);
+      return note.innerHTML;
+    });
+  }
+      let selectedAnnoteEl;
+      const selectorForAnnotation = ( cell, annotation) => {
+        let cellAttr = 'data-code-cell="' + cell + '"';
+        let lineAttr = 'data-code-annotation="' +  annotation + '"';
+        const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+        return selector;
+      }
+      const selectCodeLines = (annoteEl) => {
+        const doc = window.document;
+        const targetCell = annoteEl.getAttribute("data-target-cell");
+        const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+        const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+        const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+        const lineIds = lines.map((line) => {
+          return targetCell + "-" + line;
+        })
+        let top = null;
+        let height = null;
+        let parent = null;
+        if (lineIds.length > 0) {
+            //compute the position of the single el (top and bottom and make a div)
+            const el = window.document.getElementById(lineIds[0]);
+            top = el.offsetTop;
+            height = el.offsetHeight;
+            parent = el.parentElement.parentElement;
+          if (lineIds.length > 1) {
+            const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+            const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+            height = bottom - top;
+          }
+          if (top !== null && height !== null && parent !== null) {
+            // cook up a div (if necessary) and position it 
+            let div = window.document.getElementById("code-annotation-line-highlight");
+            if (div === null) {
+              div = window.document.createElement("div");
+              div.setAttribute("id", "code-annotation-line-highlight");
+              div.style.position = 'absolute';
+              parent.appendChild(div);
+            }
+            div.style.top = top - 2 + "px";
+            div.style.height = height + 4 + "px";
+            let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+            if (gutterDiv === null) {
+              gutterDiv = window.document.createElement("div");
+              gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+              gutterDiv.style.position = 'absolute';
+              const codeCell = window.document.getElementById(targetCell);
+              const gutter = codeCell.querySelector('.code-annotation-gutter');
+              gutter.appendChild(gutterDiv);
+            }
+            gutterDiv.style.top = top - 2 + "px";
+            gutterDiv.style.height = height + 4 + "px";
+          }
+          selectedAnnoteEl = annoteEl;
+        }
+      };
+      const unselectCodeLines = () => {
+        const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+        elementsIds.forEach((elId) => {
+          const div = window.document.getElementById(elId);
+          if (div) {
+            div.remove();
+          }
+        });
+        selectedAnnoteEl = undefined;
+      };
+      // Attach click handler to the DT
+      const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+      for (const annoteDlNode of annoteDls) {
+        annoteDlNode.addEventListener('click', (event) => {
+          const clickedEl = event.target;
+          if (clickedEl !== selectedAnnoteEl) {
+            unselectCodeLines();
+            const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+            if (activeEl) {
+              activeEl.classList.remove('code-annotation-active');
+            }
+            selectCodeLines(clickedEl);
+            clickedEl.classList.add('code-annotation-active');
+          } else {
+            // Unselect the line
+            unselectCodeLines();
+            clickedEl.classList.remove('code-annotation-active');
+          }
+        });
+      }
+  const findCites = (el) => {
+    const parentEl = el.parentElement;
+    if (parentEl) {
+      const cites = parentEl.dataset.cites;
+      if (cites) {
+        return {
+          el,
+          cites: cites.split(' ')
+        };
+      } else {
+        return findCites(el.parentElement)
+      }
+    } else {
+      return undefined;
+    }
+  };
+  var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+  for (var i=0; i<bibliorefs.length; i++) {
+    const ref = bibliorefs[i];
+    const citeInfo = findCites(ref);
+    if (citeInfo) {
+      tippyHover(citeInfo.el, function() {
+        var popup = window.document.createElement('div');
+        citeInfo.cites.forEach(function(cite) {
+          var citeDiv = window.document.createElement('div');
+          citeDiv.classList.add('hanging-indent');
+          citeDiv.classList.add('csl-entry');
+          var biblioDiv = window.document.getElementById('ref-' + cite);
+          if (biblioDiv) {
+            citeDiv.innerHTML = biblioDiv.innerHTML;
+          }
+          popup.appendChild(citeDiv);
+        });
+        return popup.innerHTML;
+      });
+    }
+  }
+});
+</script>
+</div> <!-- /content -->
+
+
+
+</body></html>

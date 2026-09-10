@@ -1,0 +1,2293 @@
+---
+title: "Pronóstico diario de clusters con reclamo COM"
+subtitle: "Diagnóstico y comparación incremental de modelos agregados"
+lang: es
+format:
+  html:
+    theme: cosmo
+    toc: true
+    toc-depth: 3
+    number-sections: true
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+## Objetivo y alcance
+
+Este documento registra de forma incremental el análisis para anticipar cuántos
+clusters tendrán al menos un reclamo COM en el día objetivo. El primer paso es
+evaluar una predicción que ya está implícita en el modelo operativo por cluster:
+
+$$
+\widehat{N}_D = \sum_c \widehat{P}(Y_{c,D}=1),
+$$
+
+donde $Y_{c,D}$ indica si el cluster $c$ tuvo al menos un reclamo en el día $D$.
+
+La suma representa el número esperado de clusters con reclamo si las
+probabilidades están bien calibradas. Un buen ranking espacial no garantiza que
+esta suma reproduzca la variación diaria: el modelo puede ordenar correctamente
+los clusters y, al mismo tiempo, producir probabilidades demasiado estables.
+
+Este diagnóstico no modifica ni reentrena el modelo. Utiliza las predicciones
+COM ya generadas para la aplicación y sus observados posteriormente completados.
+
+```{r}
+#| label: configuracion-y-datos
+library(arrow)
+library(data.table)
+library(ggplot2)
+library(knitr)
+
+Sys.setlocale("LC_CTYPE", "Spanish_Uruguay.utf8")
+
+project_root <- if (basename(getwd()) == "documentacion") {
+  normalizePath("..", winslash = "/", mustWork = TRUE)
+} else {
+  normalizePath(".", winslash = "/", mustWork = TRUE)
+}
+
+path_pred <- file.path(
+  project_root, "data", "processed", "app_modelos_largo",
+  "predicciones_operativas_cluster_dia", "modelo_id=com_reclamo"
+)
+
+path_modelo <- file.path(
+  project_root, "data", "processed", "modelos",
+  "logistico_cluster_dia_reducido_reclamos_d2",
+  "modelo_logistico_reducido.rds"
+)
+
+stopifnot(dir.exists(path_pred))
+stopifnot(file.exists(path_modelo))
+
+modelo_com <- readRDS(path_modelo)
+
+cols_analisis <- c(
+  "cluster_id", "dia_objetivo", "version_modelo", "version_cluster",
+  "pred_prob", "tuvo_reclamo_observado", "n_reclamos_observado",
+  "estado_observacion", "estado_periodo_app"
+)
+
+pred <- as.data.table(as.data.frame(
+  arrow::open_dataset(path_pred) |>
+    dplyr::select(dplyr::all_of(cols_analisis)) |>
+    dplyr::collect()
+))
+
+pred[, dia_objetivo := as.IDate(dia_objetivo)]
+
+serie_diaria <- pred[
+  ,
+  .(
+    n_clusters_universo = .N,
+    clusters_esperados = sum(pred_prob, na.rm = TRUE),
+    clusters_observados = sum(tuvo_reclamo_observado == 1L, na.rm = TRUE),
+    reclamos_observados = sum(n_reclamos_observado, na.rm = TRUE),
+    n_clusters_con_observado = sum(!is.na(tuvo_reclamo_observado)),
+    score_medio = mean(pred_prob, na.rm = TRUE),
+    version_modelo = paste(sort(unique(version_modelo)), collapse = " | "),
+    version_cluster = paste(sort(unique(version_cluster)), collapse = " | "),
+    estado_periodo_app = paste(sort(unique(estado_periodo_app)), collapse = " | ")
+  ),
+  by = dia_objetivo
+]
+
+serie_diaria[
+  , cobertura_observado := n_clusters_con_observado / n_clusters_universo
+]
+serie_diaria[
+  , reclamos_adicionales := reclamos_observados - clusters_observados
+]
+serie_diaria[
+  , reclamos_por_cluster_afectado := fifelse(
+    clusters_observados > 0,
+    reclamos_observados / clusters_observados,
+    NA_real_
+  )
+]
+
+serie_completa <- serie_diaria[cobertura_observado == 1]
+serie_completa[, anio_mes := year(dia_objetivo) * 100L + month(dia_objetivo)]
+serie_completa[
+  , split_modelo := fcase(
+    anio_mes %in% modelo_com$meses_train, "entrenamiento",
+    anio_mes %in% modelo_com$meses_validacion, "validacion",
+    anio_mes %in% modelo_com$meses_test, "test",
+    default = "fuera_split"
+  )
+]
+serie_completa <- serie_completa[
+  dia_objetivo >= as.IDate(modelo_com$fecha_min_modelo)
+]
+setorder(serie_completa, dia_objetivo)
+
+stopifnot(nrow(serie_completa) > 0L)
+
+serie_train <- serie_completa[split_modelo == "entrenamiento"]
+serie_evaluacion <- serie_completa[split_modelo %in% c("validacion", "test")]
+
+stopifnot(nrow(serie_train) > 0L, nrow(serie_evaluacion) > 0L)
+```
+
+## Serie observada completa
+
+```{r}
+#| label: serie-observada-completa-splits
+#| fig-width: 13
+#| fig-height: 5.2
+serie_grafico_completa <- copy(serie_completa)[
+  split_modelo %in% c("entrenamiento", "validacion", "test")
+]
+serie_grafico_completa[, período := factor(
+  split_modelo,
+  levels = c("entrenamiento", "validacion", "test"),
+  labels = c("Entrenamiento", "Validación", "Test")
+)]
+serie_grafico_completa[, media_movil_7d := frollmean(
+  clusters_observados, 7L, align = "right"
+)]
+
+ggplot(
+  serie_grafico_completa,
+  aes(x = dia_objetivo, y = clusters_observados, color = período)
+) +
+  geom_line(aes(group = período), linewidth = 0.45, alpha = 0.38) +
+  geom_line(
+    aes(y = media_movil_7d, group = período),
+    linewidth = 0.95,
+    alpha = 0.95,
+    na.rm = TRUE
+  ) +
+  scale_color_manual(values = c(
+    "Entrenamiento" = "#3b6fb6",
+    "Validación" = "#dd8452",
+    "Test" = "#c44e52"
+  )) +
+  scale_x_date(date_breaks = "2 months", date_labels = "%b\n%Y") +
+  labs(
+    x = NULL,
+    y = "Clusters con al menos un reclamo",
+    color = "Período",
+    title = "Serie diaria completa de clusters con reclamo",
+    subtitle = paste(
+      "Línea fina: observado diario.",
+      "Línea gruesa: media móvil de 7 días."
+    )
+  ) +
+  theme_minimal(base_size = 11) +
+  theme(
+    legend.position = "top",
+    panel.grid.minor = element_blank()
+  )
+```
+
+El gráfico permite inspeccionar conjuntamente cambios de nivel, amplitud y
+variabilidad entre los tres períodos antes de comparar modelos. La media móvil
+se utiliza solo como ayuda visual y no interviene en ningún ajuste.
+
+## Contrato de datos observado
+
+```{r}
+#| label: cobertura
+resumen_cobertura <- data.table(
+  metrica = c(
+    "Filas cluster-día COM",
+    "Días totales",
+    "Días con observados completos",
+    "Fecha inicial completa",
+    "Fecha final completa",
+    "Días de entrenamiento",
+    "Días de validación",
+    "Días de test",
+    "Mínimo de clusters por día",
+    "Máximo de clusters por día",
+    "Versiones de modelo"
+  ),
+  valor = c(
+    format(nrow(pred), big.mark = ".", scientific = FALSE),
+    nrow(serie_diaria),
+    nrow(serie_completa),
+    as.character(min(serie_completa$dia_objetivo)),
+    as.character(max(serie_completa$dia_objetivo)),
+    serie_completa[split_modelo == "entrenamiento", .N],
+    serie_completa[split_modelo == "validacion", .N],
+    serie_completa[split_modelo == "test", .N],
+    min(serie_completa$n_clusters_universo),
+    max(serie_completa$n_clusters_universo),
+    paste(sort(unique(pred$version_modelo)), collapse = " | ")
+  )
+)
+
+kable(resumen_cobertura, caption = "Cobertura utilizada en el diagnóstico")
+```
+
+El análisis exige observación completa del target para todos los clusters del
+día. El diagnóstico principal usa validación y test; entrenamiento se utiliza
+solo para aprender el promedio de referencia y aportar contexto. Los períodos
+abiertos, parciales o anteriores a la fecha mínima del modelo no se usan para
+medir error.
+
+## Métricas del predictor agregado
+
+```{r}
+#| label: metricas
+media_train <- mean(serie_train$clusters_observados)
+
+calcular_metricas <- function(dt, periodo) {
+  y <- dt$clusters_observados
+  p <- dt$clusters_esperados
+  pred_promedio <- rep(media_train, length(y))
+  ajuste <- lm(y ~ p)
+
+  data.table(
+    periodo = periodo,
+    dias = nrow(dt),
+    media_observada = mean(y),
+    media_suma_scores = mean(p),
+    sesgo = mean(p - y),
+    mae_suma_scores = mean(abs(p - y)),
+    rmse_suma_scores = sqrt(mean((p - y)^2)),
+    mae_promedio_train = mean(abs(pred_promedio - y)),
+    rmse_promedio_train = sqrt(mean((pred_promedio - y)^2)),
+    cor_pearson = cor(p, y, method = "pearson"),
+    cor_spearman = cor(p, y, method = "spearman"),
+    sd_observado = sd(y),
+    sd_suma_scores = sd(p),
+    razon_sd = sd(p) / sd(y),
+    pendiente_calibracion = unname(coef(ajuste)[[2]]),
+    r2_diario = summary(ajuste)$r.squared
+  )
+}
+
+metricas <- rbindlist(list(
+  calcular_metricas(serie_train, "entrenamiento"),
+  calcular_metricas(
+    serie_evaluacion[split_modelo == "validacion"],
+    "validacion"
+  ),
+  calcular_metricas(serie_evaluacion[split_modelo == "test"], "test"),
+  calcular_metricas(serie_evaluacion, "validacion + test")
+), fill = TRUE)
+
+cols_num <- setdiff(names(metricas), c("periodo", "dias"))
+metricas[, (cols_num) := lapply(.SD, round, 3), .SDcols = cols_num]
+
+met_eval <- metricas[periodo == "validacion + test"]
+met_test <- metricas[periodo == "test"]
+mejora_mae_eval <- 100 * (
+  1 - met_eval$mae_suma_scores / met_eval$mae_promedio_train
+)
+mejora_rmse_eval <- 100 * (
+  1 - met_eval$rmse_suma_scores / met_eval$rmse_promedio_train
+)
+
+kable(metricas, caption = "Desempeño diario por período del modelo")
+```
+
+El promedio de referencia se calcula solamente con los días de entrenamiento.
+No incorpora observaciones de validación o test, aunque todavía no sustituye un
+backtesting con reentrenamientos sucesivos.
+
+### Hallazgos preliminares fuera de muestra
+
+En los `r met_eval$dias` días de validación y test, la suma de scores:
+
+- sobrestima en promedio `r round(met_eval$sesgo, 1)` clusters por día;
+- obtiene MAE `r round(met_eval$mae_suma_scores, 1)`, frente a
+  `r round(met_eval$mae_promedio_train, 1)` del promedio aprendido en
+  entrenamiento;
+- reduce el MAE aproximadamente `r round(mejora_mae_eval, 1)` % y el RMSE
+  `r round(mejora_rmse_eval, 1)` % respecto de ese predictor constante;
+- alcanza correlación de Pearson `r round(met_eval$cor_pearson, 3)` y explica
+  linealmente alrededor de `r round(100 * met_eval$r2_diario, 1)` % de la
+  variación diaria;
+- presenta un desvío de `r round(met_eval$sd_suma_scores, 1)` clusters, frente a
+  `r round(met_eval$sd_observado, 1)` del observado: reproduce solo
+  `r round(100 * met_eval$razon_sd, 1)` % de la amplitud observada.
+
+La señal agregada es mejor que permanecer siempre en el promedio, pero la
+mejora es moderada y la variación pronosticada está fuertemente contraída. En
+test, la correlación baja a `r round(met_test$cor_pearson, 3)` y la razón de
+desvíos a `r round(100 * met_test$razon_sd, 1)` %, lo que refuerza la necesidad
+de revisar estabilidad temporal y señales comunes a toda la ciudad.
+
+## Evolución diaria
+
+```{r}
+#| label: serie-temporal
+#| fig-width: 11
+#| fig-height: 5.5
+serie_larga <- melt(
+  serie_evaluacion,
+  id.vars = "dia_objetivo",
+  measure.vars = c("clusters_observados", "clusters_esperados"),
+  variable.name = "serie",
+  value.name = "clusters"
+)
+
+ggplot(serie_larga, aes(dia_objetivo, clusters, color = serie)) +
+  geom_line(linewidth = 0.65, alpha = 0.9) +
+  scale_color_manual(
+    values = c(
+      clusters_observados = "#202020",
+      clusters_esperados = "#2f6fbd"
+    ),
+    labels = c(
+      clusters_observados = "Observados",
+      clusters_esperados = "Suma de scores"
+    )
+  ) +
+  labs(
+    x = NULL,
+    y = "Clusters con reclamo",
+    color = NULL,
+    title = "Clusters observados frente a suma de probabilidades"
+  ) +
+  theme_minimal(base_size = 11) +
+  theme(legend.position = "top")
+```
+
+## Capacidad para reproducir fluctuaciones
+
+```{r}
+#| label: desviaciones
+#| fig-width: 11
+#| fig-height: 5
+desviaciones <- serie_evaluacion[
+  ,
+  .(
+    dia_objetivo,
+    Observado = clusters_observados - mean(clusters_observados),
+    `Suma de scores` = clusters_esperados - mean(clusters_esperados)
+  )
+]
+
+desviaciones <- melt(
+  desviaciones,
+  id.vars = "dia_objetivo",
+  variable.name = "serie",
+  value.name = "desviacion"
+)
+
+ggplot(desviaciones, aes(dia_objetivo, desviacion, color = serie)) +
+  geom_hline(yintercept = 0, color = "grey70") +
+  geom_line(linewidth = 0.65) +
+  scale_color_manual(values = c(Observado = "#202020", `Suma de scores` = "#c44e52")) +
+  labs(
+    x = NULL,
+    y = "Desviación respecto de la media",
+    color = NULL,
+    title = "Amplitud de las fluctuaciones diarias"
+  ) +
+  theme_minimal(base_size = 11) +
+  theme(legend.position = "top")
+```
+
+La razón entre el desvío de la suma de scores y el desvío observado cuantifica
+la contracción de variabilidad. Un valor muy inferior a uno confirma que el
+predictor agregado se mueve poco frente a los cambios reales entre días.
+
+## Relación entre predicción y observado
+
+```{r}
+#| label: dispersion
+#| fig-width: 7
+#| fig-height: 6
+ggplot(
+  serie_evaluacion,
+  aes(clusters_esperados, clusters_observados)
+) +
+  geom_point(alpha = 0.55, color = "#2f6fbd") +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "grey45") +
+  geom_smooth(method = "lm", se = TRUE, color = "#c44e52") +
+  labs(
+    x = "Suma diaria de scores",
+    y = "Clusters observados con reclamo",
+    title = "Calibración agregada por día"
+  ) +
+  theme_minimal(base_size = 11)
+```
+
+La pendiente del ajuste diario no debe interpretarse como corrección definitiva:
+se estima sobre el mismo período evaluado. Funciona como diagnóstico de escala y
+permite observar si las probabilidades necesitan una calibración temporal
+adicional.
+
+## Días de mayor afectación observada
+
+```{r}
+#| label: dias-altos
+umbral_p90 <- as.numeric(quantile(
+  serie_evaluacion$clusters_observados,
+  probs = 0.90,
+  type = 8
+))
+
+dias_altos <- serie_evaluacion[
+  clusters_observados >= umbral_p90,
+  .(
+    dia = dia_objetivo,
+    clusters_observados,
+    clusters_esperados = round(clusters_esperados, 2),
+    error = round(clusters_esperados - clusters_observados, 2),
+    reclamos_observados,
+    reclamos_por_cluster_afectado = round(reclamos_por_cluster_afectado, 3)
+  )
+][order(-clusters_observados)]
+
+kable(
+  head(dias_altos, 20),
+  caption = paste0(
+    "Primeros 20 días con mayor afectación; umbral P90 = ",
+    round(umbral_p90, 1), " clusters"
+  )
+)
+```
+
+Esta tabla permite revisar si la contracción es especialmente problemática en
+los días que más interesan al negocio. En etapas posteriores se incorporarán
+métricas formales para anticipar la superación de umbrales operativos.
+
+Los días de mayor afectación muestran errores negativos importantes. Por
+ejemplo, el 13 de abril de 2026 se observaron 1.393 clusters con reclamo y la
+suma de scores anticipó aproximadamente 929. Esto es consistente con un modelo
+que conserva cierta señal de nivel, pero no reacciona con suficiente amplitud
+ante shocks diarios.
+
+## Lectura del paso 1
+
+La evaluación de este paso debe separar tres propiedades:
+
+1. **Nivel:** si la suma tiene una media parecida al total observado.
+2. **Movimiento:** si sube y baja en los mismos días que el observado.
+3. **Amplitud:** si reproduce la magnitud real de esas fluctuaciones.
+
+Un predictor puede tener poco sesgo medio y aun ser poco útil para anticipar
+días altos si permanece demasiado cerca del promedio. Las siguientes etapas
+deberán determinar si esa estabilidad proviene de calibración global, de las
+features disponibles, del objetivo de entrenamiento por cluster o de la pérdida
+de señales comunes a toda la ciudad.
+
+En este primer diagnóstico, una recalibración lineal simple no parece suficiente
+como explicación única. La pendiente agregada está cerca de uno, pero la
+correlación es moderada y queda mucha variación residual. El problema parece
+incluir falta de información para identificar qué días se apartan del nivel
+habitual, no solamente una escala incorrecta de probabilidades.
+
+## Próximos análisis
+
+- Comparar la suma de scores contra baselines temporales construidos sin mirar
+  el futuro.
+- Separar resultados por entrenamiento, validación y test si la salida permite
+  reconstruir los períodos originales.
+- Revisar calibración diaria y calibración por período.
+- Identificar qué componentes del score varían entre días y cuáles solo ordenan
+  clusters dentro de cada día.
+- Evaluar variables de nivel ciudad que no pueden ser aprendidas adecuadamente
+  por un modelo centrado en diferencias entre clusters.
+- Definir y validar la noción operativa de día complicado.
+
+## Línea de modelado territorial acordada
+
+Como siguiente línea se construirá una base `barrio/día`. El target será la
+cantidad de clusters del barrio con al menos un reclamo y la exposición será la
+cantidad de clusters activos o elegibles del barrio en ese día.
+
+La base podrá resumir, respetando el corte operativo:
+
+- cantidad de clusters y contenedores activos;
+- distribución del tiempo desde el último levante;
+- cantidad y proporción de clusters atrasados;
+- periodicidad teórica y exceso sobre esa periodicidad;
+- calidad observada o inferida del estado de contenedores;
+- historia de reclamos del barrio cerrada hasta `D-2`;
+- distribución de scores del modelo por cluster;
+- variables sociodemográficas, incluyendo NBI, densidad y vivienda.
+
+El modelo de barrio no incluirá simultáneamente CCZ ni municipio. Esas
+particiones son parcialmente redundantes y dificultarían interpretar qué nivel
+territorial está aportando la señal.
+
+En una etapa posterior se construirá una variante independiente `CCZ/día` bajo
+la misma lógica. Ambos niveles se compararán usando períodos, cortes temporales,
+familias de variables y métricas comunes. La comparación permitirá evaluar el
+equilibrio entre mayor detalle territorial en barrio y mayor estabilidad
+estadística en CCZ.
+
+## Primer experimento barrio/día y CCZ/día
+
+### Especificación
+
+Se construyeron dos bases con igual período y familias de variables:
+
+- 62 barrios y 22.578 barrio-días de entrenamiento;
+- 18 CCZ y 6.559 CCZ-días de entrenamiento.
+
+En ambos casos el target es la cantidad de clusters con al menos un reclamo y
+la cantidad de clusters del territorio funciona como exposición binomial. Los
+modelos usan:
+
+- día de semana y mes;
+- media, desvío y percentil 90 del score por cluster;
+- media y percentil 90 del tiempo desde el último levante;
+- proporción de clusters con tiempo desde levante mayor o igual a tres días;
+- contenedores activos y proporción inferida;
+- historia COM agregada a uno, siete y treinta días;
+- NBI, asentamiento, vivienda inadecuada y densidad;
+- interacciones entre NBI y tiempo desde levante, y entre NBI y score.
+
+La estructura territorial se representa mediante un intercepto aleatorio
+penalizado. Esto permite que cada territorio tenga un nivel basal propio con
+*partial pooling*. La primera prueba con pendiente aleatoria por barrio resultó
+demasiado costosa para esta etapa y se simplificó antes de generar resultados.
+
+El modelo de barrio no utiliza CCZ ni municipio. El modelo de CCZ se entrena por
+separado y no utiliza barrio.
+
+Implementación reproducible:
+
+- `scripts/modelo_agregado_territorial_diario_com.R`;
+- `outputs/modelos_agregados_territoriales_com/`.
+
+```{r}
+#| label: resultados-territoriales
+path_resultados_territoriales <- file.path(
+  project_root, "outputs", "modelos_agregados_territoriales_com"
+)
+
+metricas_territoriales <- fread(file.path(
+  path_resultados_territoriales,
+  "metricas_diarias.csv"
+))
+diagnostico_territorial <- fread(file.path(
+  path_resultados_territoriales,
+  "diagnostico_modelos.csv"
+))
+pred_territoriales <- fread(file.path(
+  path_resultados_territoriales,
+  "predicciones_diarias.csv"
+))
+pred_territoriales[, dia_objetivo := as.IDate(dia_objetivo)]
+
+metricas_test <- metricas_territoriales[
+  periodo == "test",
+  .(
+    nivel = nivel_territorial,
+    modelo,
+    dias,
+    media_observada = round(media_observada, 1),
+    media_predicha = round(media_predicha, 1),
+    sesgo = round(sesgo, 1),
+    MAE = round(mae, 1),
+    RMSE = round(rmse, 1),
+    correlacion = round(correlacion, 3),
+    variabilidad_reproducida_pct = round(100 * razon_sd, 1)
+  )
+]
+
+kable(
+  metricas_test,
+  caption = "Comparación fuera de muestra en test: abril y mayo de 2026"
+)
+```
+
+### Resultado en test
+
+Los modelos territoriales no dominan en todas las métricas, pero cambian de
+forma importante la dinámica del pronóstico:
+
+- la suma de scores alcanza correlación 0,357 y reproduce 37,4 % del desvío;
+- barrio/día alcanza correlación 0,532 y reproduce 76,3 % del desvío;
+- CCZ/día alcanza correlación 0,529 y reproduce 76,4 % del desvío;
+- el RMSE baja de 202,1 con suma de scores a 189,3 con barrio y 190,2 con CCZ;
+- el MAE de suma de scores, 152,9, continúa levemente por debajo de barrio,
+  155,7, y CCZ, 157,2.
+
+Esto indica que la agregación territorial y sus features dinámicas recuperan
+mucho mejor las subidas y bajadas entre días. La mejora se observa especialmente
+en correlación, amplitud y RMSE, pero todavía no en MAE.
+
+```{r}
+#| label: serie-modelos-territoriales
+#| fig-width: 11
+#| fig-height: 5.5
+pred_test_barrio <- pred_territoriales[
+  nivel_territorial == "barrio" & split_modelo == "test",
+  .(
+    dia_objetivo,
+    Observado = clusters_observados,
+    `Suma de scores` = clusters_esperados_suma_scores,
+    `Barrio/día` = clusters_esperados_territorial
+  )
+]
+
+pred_test_ccz <- pred_territoriales[
+  nivel_territorial == "ccz" & split_modelo == "test",
+  .(dia_objetivo, `CCZ/día` = clusters_esperados_territorial)
+]
+
+comparacion_test <- pred_test_ccz[pred_test_barrio, on = "dia_objetivo"]
+comparacion_test_larga <- melt(
+  comparacion_test,
+  id.vars = "dia_objetivo",
+  variable.name = "serie",
+  value.name = "clusters"
+)
+
+ggplot(comparacion_test_larga, aes(dia_objetivo, clusters, color = serie)) +
+  geom_line(linewidth = 0.75) +
+  scale_color_manual(values = c(
+    Observado = "#202020",
+    `Suma de scores` = "#2f6fbd",
+    `Barrio/día` = "#c44e52",
+    `CCZ/día` = "#55a868"
+  )) +
+  labs(
+    x = NULL,
+    y = "Clusters con reclamo",
+    color = NULL,
+    title = "Comparación diaria de modelos en test"
+  ) +
+  theme_minimal(base_size = 11) +
+  theme(legend.position = "top")
+```
+
+### Inestabilidad entre validación y test
+
+```{r}
+#| label: estabilidad-territorial
+metricas_estabilidad <- metricas_territoriales[
+  modelo == "territorial_jerarquico_intercepto" &
+    periodo %in% c("validacion", "test"),
+  .(
+    nivel = nivel_territorial,
+    periodo,
+    sesgo = round(sesgo, 1),
+    MAE = round(mae, 1),
+    RMSE = round(rmse, 1),
+    correlacion = round(correlacion, 3),
+    variabilidad_reproducida_pct = round(100 * razon_sd, 1)
+  )
+]
+
+kable(
+  metricas_estabilidad,
+  caption = "Estabilidad de los modelos territoriales"
+)
+```
+
+La principal advertencia es la sobreestimación en validación: aproximadamente
+192 clusters diarios para barrio y 148 para CCZ. En test el sesgo cae a 13 para
+barrio y -17 para CCZ. Esta diferencia impide atribuir toda la mejora a una
+estructura estable y obliga a estudiar calendario, cambios de nivel y
+calibración temporal.
+
+### Lectura provisional
+
+Barrio y CCZ entregan resultados muy parecidos a nivel ciudad. Barrio conserva
+mayor detalle para interpretar heterogeneidad social y operativa; CCZ ofrece una
+base más compacta y estable. En esta primera especificación no hay evidencia
+suficiente para elegir uno de forma definitiva.
+
+La interacción estimada no debe interpretarse todavía como evidencia de que el
+efecto del atraso sea mayor o menor según NBI. Comparte el modelo con historia
+COM, scores y efectos territoriales, y puede absorber correlaciones entre esas
+variables. Antes de interpretar coeficientes se requieren modelos por bloques,
+incertidumbre y análisis de sensibilidad.
+
+Los próximos pasos específicos son:
+
+1. separar el aporte incremental de calendario, score, operación y territorio;
+2. investigar la sobreestimación de enero-marzo de 2026;
+3. probar calibración aprendida en validación y aplicada exclusivamente a test;
+4. evaluar desempeño por territorio, no solamente en el total ciudad;
+5. decidir si se justifica recuperar pendientes aleatorias por territorio.
+
+## Experimento incremental acordado
+
+Para identificar de dónde proviene la mejora se compararán modelos anidados:
+
+1. **M0:** suma diaria de scores del modelo por cluster.
+2. **M1:** calendario, distribución territorial de scores e intercepto aleatorio
+   de barrio o CCZ.
+3. **M2:** M1 más los resúmenes operativos actualmente utilizados.
+4. **M3:** M2 más una descripción de la distribución del ratio entre tiempo
+   desde último levante y período teórico.
+5. **M4:** M3 más variables sociodemográficas e interacciones.
+
+La primera versión de M3 utilizará el ratio predictivo medio de cada cluster,
+`mean_ratio_tiempo_periodo_pred`, y construirá por territorio/día:
+
+- cantidad y proporción de clusters con ratio menor o igual a 1;
+- cantidad y proporción con ratio entre 1 y 1,5;
+- cantidad y proporción con ratio entre 1,5 y 2;
+- cantidad y proporción con ratio mayor que 2;
+- carga total de exceso, definida como la suma de `max(ratio - 1, 0)`;
+- carga media de exceso por cluster.
+
+Los conteos describen volumen territorial y las proporciones permiten comparar
+territorios de distinto tamaño. La carga de exceso distingue muchos atrasos
+leves de una cola con atrasos extremos.
+
+Esta primera implementación clasifica clusters usando su ratio medio. Si aporta
+señal, se construirá una segunda versión desde contenedores, incluyendo
+distribución por intervalos y clusters con al menos un contenedor extremo. Esa
+extensión evitará que algunos contenedores muy atrasados queden ocultos por el
+promedio del cluster.
+
+## Resultados de la comparación M0--M4
+
+### Implementación y cobertura
+
+La comparación acordada se implementó de forma reproducible para barrio/día y
+CCZ/día en:
+
+- `scripts/comparar_modelos_agregados_territoriales_m0_m4_com.R`;
+- `outputs/experimento_modelos_agregados_m0_m4_com/`.
+
+Todos los modelos M1--M4 convergieron. El ratio predictivo estuvo disponible
+para 99,47 % de los clusters de entrenamiento, 99,92 % de validación y 99,93 %
+de test. Por lo tanto, la comparación de M2 con M3 no está condicionada por una
+pérdida relevante de cobertura.
+
+```{r}
+#| label: resultados-m0-m4
+path_m0_m4 <- file.path(
+  project_root, "outputs", "experimento_modelos_agregados_m0_m4_com"
+)
+
+metricas_m0_m4 <- fread(file.path(path_m0_m4, "metricas_m0_m4.csv"))
+diagnostico_m0_m4 <- fread(file.path(path_m0_m4, "diagnostico_m1_m4.csv"))
+pred_m0_m4 <- fread(file.path(path_m0_m4, "predicciones_diarias_m1_m4.csv"))
+pred_m0_m4[, dia_objetivo := as.IDate(dia_objetivo)]
+
+tabla_m0_m4_test <- metricas_m0_m4[
+  periodo == "test",
+  .(
+    nivel = nivel_territorial,
+    modelo = escenario,
+    sesgo = round(sesgo, 1),
+    MAE = round(mae, 1),
+    RMSE = round(rmse, 1),
+    correlacion = round(correlacion, 3),
+    variabilidad_reproducida_pct = round(100 * razon_sd, 1)
+  )
+]
+
+kable(
+  tabla_m0_m4_test,
+  caption = "Comparación incremental fuera de muestra en test"
+)
+```
+
+### ¿Aporta la distribución del ratio?
+
+El aporte de M3 sobre M2 es **pequeño y no concluyente**:
+
+- en barrio, la correlación sube de 0,532 a 0,535 y la variabilidad reproducida
+  de 76,2 % a 77,1 %, pero el RMSE queda prácticamente igual (189,0) y el MAE
+  empeora 0,1 clusters;
+- en CCZ, la correlación sube de 0,520 a 0,523, el RMSE baja de 192,7 a 192,4 y
+  el MAE baja de 159,3 a 158,9;
+- en validación, M3 aumenta la sobreestimación y empeora MAE y RMSE frente a M2
+  en ambos niveles territoriales.
+
+En consecuencia, la forma de la distribución del ratio contiene algo de señal,
+pero esta primera versión basada en el promedio por cluster no produce una
+mejora suficientemente estable para justificar por sí sola una mayor
+complejidad. El resultado también es compatible con redundancia respecto del
+tiempo desde el último levante que ya entra en M2.
+
+### Lectura de los demás bloques
+
+El salto importante ocurre entre M1 y M2. Agregar historia COM y resúmenes
+operativos reduce en test el RMSE de 219,8 a 189,0 para barrio y de 221,7 a
+192,7 para CCZ. La estructura territorial y la distribución de scores, sin ese
+bloque dinámico, no alcanzan por sí solas.
+
+M4, que incorpora variables sociodemográficas e interacciones, mejora levemente
+la correlación en ambos niveles. En CCZ obtiene el menor RMSE territorial de
+test (190,8), mientras que en barrio queda en 189,7. Sin embargo, mantiene la
+fuerte sobreestimación de validación. No corresponde interpretar todavía estas
+mejoras como evidencia sustantiva de una interacción entre atraso y NBI.
+
+```{r}
+#| label: serie-m0-m4-test
+#| fig-width: 11
+#| fig-height: 5.5
+serie_m0_m4_test <- pred_m0_m4[
+  split_modelo == "test" & nivel_territorial == "ccz" &
+    escenario %in% c("M2", "M3", "M4"),
+  .(
+    dia_objetivo,
+    observado = clusters_observados,
+    serie = paste0(escenario, " CCZ/día"),
+    predicho = clusters_esperados
+  )
+]
+
+m0_test <- unique(pred_m0_m4[
+  split_modelo == "test" & nivel_territorial == "barrio" & escenario == "M1",
+  .(
+    dia_objetivo,
+    observado = clusters_observados,
+    serie = "M0 suma de scores",
+    predicho = suma_scores
+  )
+])
+serie_m0_m4_test <- rbindlist(list(serie_m0_m4_test, m0_test))
+
+observado_m0_m4 <- unique(
+  serie_m0_m4_test[, .(dia_objetivo, serie = "Observado", predicho = observado)]
+)
+
+ggplot(
+  rbindlist(list(
+    serie_m0_m4_test[, .(dia_objetivo, serie, predicho)],
+    observado_m0_m4
+  )),
+  aes(dia_objetivo, predicho, color = serie)
+) +
+  geom_line(linewidth = 0.75) +
+  labs(
+    x = NULL,
+    y = "Clusters con reclamo",
+    color = NULL,
+    title = "Comparación incremental en test"
+  ) +
+  theme_minimal(base_size = 11) +
+  theme(legend.position = "top")
+```
+
+### Decisión provisional y siguiente prueba
+
+M2 queda como especificación parsimoniosa de referencia: captura casi toda la
+mejora territorial observada en test. M3 se conserva como experimento, no como
+incorporación decidida. La siguiente prueba útil es construir los intervalos
+desde ratios de contenedores y medir clusters con al menos un contenedor extremo;
+esa formulación responde mejor a la hipótesis de que el promedio diluye el
+"desastre" interno. Antes de seleccionar un modelo operativo también debe
+resolverse la inestabilidad de nivel entre validación y test mediante evaluación
+temporal con más cortes y una calibración que se aprenda sin usar el período de
+test.
+
+## Segunda generación: jerarquía barrio/segmento
+
+### Motivación y especificación
+
+La comparación anterior utilizaba barrio/día o CCZ/día como unidad. Se exploró
+una estructura territorial más fina con una fila por segmento censal/día y dos
+niveles jerárquicos simultáneos:
+
+$$
+Y_{s,d}\sim\operatorname{Binomial}(N_{s,d},p_{s,d}),
+$$
+
+$$
+\operatorname{logit}(p_{s,d})=
+\text{día de semana}+f(\text{exceso}_{s,d})+
+u_{\text{barrio}(s)}+v_s.
+$$
+
+Aquí, $Y_{s,d}$ es la cantidad de clusters con reclamo y $N_{s,d}$ la cantidad
+de clusters del segmento. Los interceptos penalizados de barrio y segmento
+aplican *partial pooling*: capturan propensiones basales territoriales sin
+estimar cada zona de forma completamente independiente.
+
+La primera versión se mantuvo deliberadamente parsimoniosa:
+
+- día de la semana, sin mes, porque entrenamiento contiene un solo ciclo anual;
+- intercepto aleatorio de barrio;
+- intercepto aleatorio de segmento censal;
+- carga media de exceso del ratio tiempo desde levante/período, primero lineal y
+  después mediante una función suave;
+- resúmenes alternativos de la cola alta del score COM a nivel barrio/día.
+
+La carga media de exceso se define como:
+
+$$
+E_{s,d}=\frac{1}{N_{s,d}}\sum_c\max(r_{c,d}-1,0),
+\qquad
+r_{c,d}=\frac{\text{tiempo desde último levante}}
+{\text{período teórico}}.
+$$
+
+Los modelos evaluados fueron:
+
+1. **A0:** día de semana más jerarquía barrio/segmento;
+2. **A1:** A0 más efecto lineal del exceso;
+3. **A2:** A0 más efecto suave no lineal del exceso;
+4. **A3/A4:** A2 más media o suma de los 20 scores más altos del barrio;
+5. **A5/A6:** A2 más media o suma de los 30 scores más altos;
+6. **A7:** A2 más percentil 90 del score del barrio;
+7. **A8:** A2 más suma de todos los scores del barrio.
+
+Implementación reproducible:
+
+- `scripts/benchmark_modelo_segmento_barrio_com.R`;
+- `scripts/comparar_modelos_segmento_barrio_scores_com.R`;
+- `outputs/benchmark_modelo_segmento_barrio_com/`;
+- `outputs/comparacion_modelos_segmento_barrio_scores_com/`.
+
+### Tamaño y factibilidad computacional
+
+```{r}
+#| label: factibilidad-segmento-barrio
+path_benchmark_segmento <- file.path(
+  project_root, "outputs", "benchmark_modelo_segmento_barrio_com"
+)
+inventario_segmento <- fread(file.path(path_benchmark_segmento, "inventario.csv"))
+tiempos_segmento <- fread(file.path(path_benchmark_segmento, "tiempos.csv"))
+
+tabla_inventario_segmento <- data.table(
+  indicador = c(
+    "Filas cluster/día originales",
+    "Filas segmento/día",
+    "Días",
+    "Barrios",
+    "Segmentos",
+    "Mediana de clusters por segmento/día",
+    "Segmento/día sin reclamos (%)",
+    "Memoria de la base agregada (MB)"
+  ),
+  valor = c(
+    inventario_segmento$filas_cluster_dia,
+    inventario_segmento$filas_segmento_dia,
+    inventario_segmento$dias,
+    inventario_segmento$barrios,
+    inventario_segmento$segmentos,
+    inventario_segmento$mediana_clusters_segmento_dia,
+    round(inventario_segmento$pct_filas_target_cero, 1),
+    round(inventario_segmento$memoria_base_mb, 1)
+  )
+)
+
+kable(
+  tabla_inventario_segmento,
+  caption = "Dimensión de la base segmento/día"
+)
+
+tabla_tiempos_segmento <- tiempos_segmento[
+  grepl("ajustar_", etapa),
+  .(
+    modelo = sub("ajustar_", "", etapa),
+    segundos = round(segundos_transcurridos, 1)
+  )
+]
+
+kable(
+  tabla_tiempos_segmento,
+  caption = "Tiempo de ajuste de las especificaciones iniciales"
+)
+```
+
+La base contiene 469.566 segmento/días y 951 segmentos. Cerca de la mitad de
+las filas no presenta reclamos, pero la exposición binomial conserva la cantidad
+de clusters observados. Los primeros ajustes demoran entre 12 y 14 segundos;
+por tanto, la granularidad de segmento es computacionalmente viable con
+`mgcv::bam`.
+
+### Resultados fuera de muestra
+
+```{r}
+#| label: resultados-segmento-barrio
+path_resultados_segmento <- file.path(
+  project_root, "outputs", "comparacion_modelos_segmento_barrio_scores_com"
+)
+metricas_segmento_diarias <- fread(file.path(
+  path_resultados_segmento, "metricas_diarias.csv"
+))
+pred_segmento_diarias <- fread(file.path(
+  path_resultados_segmento, "predicciones_diarias.csv"
+))
+pred_segmento_diarias[, dia_objetivo := as.IDate(dia_objetivo)]
+
+modelos_tabla_segmento <- c(
+  "M0_suma_scores", "A0_jerarquia", "A1_exceso_lineal",
+  "A2_exceso_suave", "A3_media_top20", "A4_suma_top20",
+  "A6_suma_top30", "A7_score_p90", "A8_suma_scores"
+)
+
+tabla_resultados_segmento <- metricas_segmento_diarias[
+  periodo %in% c("validacion", "test") & escenario %in% modelos_tabla_segmento,
+  .(
+    período = periodo,
+    modelo = escenario,
+    sesgo = round(sesgo, 1),
+    MAE = round(mae, 1),
+    RMSE = round(rmse, 1),
+    correlación = round(correlacion, 3),
+    variabilidad_reproducida_pct = round(100 * razon_sd, 1)
+  )
+][order(período, RMSE)]
+
+kable(
+  tabla_resultados_segmento,
+  caption = "Modelos jerárquicos segmento/día en validación y test"
+)
+```
+
+En test, A0 obtiene el menor error y la mayor correlación: RMSE 174,6,
+correlación 0,615 y MAE 142,5. El modelo es notablemente sencillo; su principal
+limitación es que reproduce solo 55,0 % de la variabilidad diaria y subestima en
+promedio 38 clusters.
+
+La función suave del exceso aumenta la variabilidad reproducida a 71,2 % y deja
+un sesgo de 19,6 clusters, pero el RMSE sube a 176,3. La mejora muy grande del
+AIC de entrenamiento no se traduce en una mejora inequívoca fuera de muestra.
+
+En validación, las variantes top-20 son claramente superiores: A3 alcanza RMSE
+156,8, correlación 0,691 y MAE 118,2. En el período combinado de validación y
+test, A3 obtiene RMSE 164,8, correlación 0,645 y reproduce 73,2 % de la
+variabilidad, frente a RMSE 200,6 y correlación 0,418 de la suma directa de
+scores.
+
+La media y la suma top-20 producen resultados prácticamente idénticos. En 97,4
+% de los barrio/días existen al menos 20 clusters; en esos casos una variable es
+exactamente la otra dividida entre veinte. Se conserva la suma top-20 como
+formulación más interpretable: aproxima la cantidad esperada de clusters con
+reclamo dentro de los veinte de mayor riesgo. Top-30 no aporta una mejora frente
+a top-20.
+
+```{r}
+#| label: serie-segmento-barrio-test
+#| fig-width: 11
+#| fig-height: 5.5
+serie_segmento_test <- pred_segmento_diarias[
+  split_modelo == "test" & escenario %in% c("A0_jerarquia", "A4_suma_top20"),
+  .(
+    dia_objetivo,
+    observado,
+    serie = fifelse(
+      escenario == "A0_jerarquia",
+      "A0 jerarquía",
+      "A4 jerarquía + exceso + top-20"
+    ),
+    valor = predicho
+  )
+]
+
+m0_segmento_test <- unique(pred_segmento_diarias[
+  split_modelo == "test" & escenario == "A0_jerarquia",
+  .(
+    dia_objetivo,
+    observado,
+    serie = "M0 suma de scores",
+    valor = suma_scores
+  )
+])
+observado_segmento_test <- unique(serie_segmento_test[
+  , .(dia_objetivo, observado, serie = "Observado", valor = observado)
+])
+
+ggplot(
+  rbindlist(list(
+    serie_segmento_test[, .(dia_objetivo, serie, valor)],
+    m0_segmento_test[, .(dia_objetivo, serie, valor)],
+    observado_segmento_test[, .(dia_objetivo, serie, valor)]
+  )),
+  aes(dia_objetivo, valor, color = serie)
+) +
+  geom_line(linewidth = 0.75) +
+  labs(
+    x = NULL,
+    y = "Clusters con reclamo",
+    color = NULL,
+    title = "Jerarquía barrio/segmento y score top-20 en test"
+  ) +
+  theme_minimal(base_size = 11) +
+  theme(legend.position = "top")
+```
+
+### Decisión provisional
+
+La jerarquía barrio/segmento queda promovida como línea principal de
+investigación predictiva. Se conservan dos candidatos:
+
+- **A0**, como baseline territorial parsimonioso y mejor modelo en test;
+- **A4**, como candidato dinámico con jerarquía, exceso no lineal y suma top-20,
+  por su desempeño en validación y en el período combinado.
+
+No se selecciona todavía un modelo operativo. El ganador cambia entre meses:
+top-20 domina especialmente en enero y febrero, mientras A0 resulta competitivo
+o superior hacia abril y mayo. El siguiente paso es un backtesting mensual que
+permita distinguir estacionalidad, cambios de calibración y cambios operativos.
+
+## Propensión reciente del barrio e interacción con el exceso
+
+Se evaluó si el exceso produce una corrección diferente en barrios con mayor
+propensión reciente a reclamar. Se construyeron dos indicadores con una ventana
+de treinta días cerrada en `D-2`:
+
+1. **Tasa regularizada:** clusters con reclamo divididos entre cluster-días
+   observables del barrio.
+2. **Propensión relativa a A0:** logaritmo del cociente entre clusters con
+   reclamo observados y esperados por el modelo estructural A0.
+
+Ambos indicadores usan un prior equivalente a 200 cluster-días para evitar
+valores inestables. Se comparó A4 reentrenado sobre la misma muestra con cuatro
+variantes: efecto principal de cada propensión y efecto principal más interacción
+lineal con la carga media de exceso.
+
+Implementación:
+
+- `scripts/experimentar_propension_barrio_exceso_com.R`;
+- `outputs/experimento_propension_barrio_exceso_com/`.
+
+```{r}
+#| label: resultados-propension-barrio
+path_propension_barrio <- file.path(
+  project_root, "outputs", "experimento_propension_barrio_exceso_com"
+)
+metricas_propension_barrio <- fread(file.path(
+  path_propension_barrio, "metricas_periodo.csv"
+))
+
+tabla_propension_barrio <- metricas_propension_barrio[
+  split_modelo %in% c("validacion", "test"),
+  .(
+    período = split_modelo,
+    modelo = escenario,
+    sesgo = round(sesgo, 1),
+    MAE = round(mae, 1),
+    RMSE = round(rmse, 1),
+    correlación = round(correlacion, 3),
+    variabilidad_reproducida_pct = round(100 * razon_sd, 1)
+  )
+][order(período, RMSE)]
+
+kable(
+  tabla_propension_barrio,
+  caption = "Propensión reciente del barrio e interacción con el exceso"
+)
+```
+
+La tasa regularizada sin interacción reduce el sesgo de test de -21,7 a 2,2
+clusters y mejora levemente el MAE, pero el RMSE sube de 177,6 a 178,5 y la
+correlación baja de 0,592 a 0,582. En validación tampoco mejora el RMSE.
+
+Las dos interacciones empeoran RMSE y correlación en validación y test. Además,
+su signo estimado en entrenamiento es negativo: el efecto marginal del exceso
+disminuye al aumentar la propensión reciente. Este signo puede representar
+saturación, redundancia con el score COM o inestabilidad temporal; no se
+interpreta como evidencia de comportamiento territorial porque no generaliza
+fuera de muestra.
+
+El patrón mensual ayuda a explicar el resultado agregado: las propensiones
+mejoran algunos meses, especialmente febrero y abril de 2026, pero empeoran
+enero y mayo. Una ventana móvil de treinta días puede quedar rezagada cuando
+cambia rápidamente el nivel general de reclamos. Las variables se conservan
+como diagnóstico y posible instrumento de calibración, pero las interacciones
+no quedan promovidas al modelo predictivo actual.
+
+## Top-20 % e interacción entre score y exceso
+
+La definición inicial de top-20 seleccionaba veinte clusters fijos por
+barrio/día. Se evaluó la idea original de seleccionar el 20 % con mayor score,
+lo que mantiene una fracción comparable en barrios de distinto tamaño. Se usó
+la media del top-20 %, porque su suma también incorpora el tamaño del barrio.
+
+Se compararon cuatro modelos con la misma jerarquía y función suave del exceso:
+
+1. **B0:** suma top-20 fija;
+2. **B1:** media del top-20 %;
+3. **B2:** B0 más interacción lineal entre exceso y top-20 fijo;
+4. **B3:** B1 más interacción lineal entre exceso y top-20 %.
+
+Implementación:
+
+- `scripts/experimentar_top20pct_interaccion_exceso_com.R`;
+- `outputs/experimento_top20pct_interaccion_exceso_com/`.
+
+```{r}
+#| label: resultados-top20pct-interaccion
+path_top20pct <- file.path(
+  project_root, "outputs", "experimento_top20pct_interaccion_exceso_com"
+)
+metricas_top20pct <- fread(file.path(path_top20pct, "metricas_periodo.csv"))
+
+tabla_top20pct <- metricas_top20pct[
+  split_modelo %in% c("validacion", "test", "validacion + test"),
+  .(
+    período = split_modelo,
+    modelo = escenario,
+    sesgo = round(sesgo, 1),
+    MAE = round(mae, 1),
+    RMSE = round(rmse, 1),
+    correlación = round(correlacion, 3),
+    variabilidad_reproducida_pct = round(100 * razon_sd, 1)
+  )
+][order(período, RMSE)]
+
+kable(
+  tabla_top20pct,
+  caption = "Top-20 fijo, top-20 % e interacción con el exceso"
+)
+```
+
+B1 mejora levemente a B0 en validación: RMSE 156,4 frente a 156,9 y correlación
+0,694 frente a 0,691. En test quedan prácticamente empatados: B0 obtiene RMSE
+177,2 y B1 177,4. En validación más test, B1 alcanza RMSE 164,6 y correlación
+0,647, una mejora pequeña frente a 164,8 y 0,645 de B0.
+
+La media del top-20 % queda como resumen preferido por coherencia conceptual y
+comparabilidad entre barrios, aunque la evidencia predictiva muestra un empate
+práctico con el top-20 fijo.
+
+Las interacciones no mejoran los errores fuera de muestra. Ambas tienen signo
+negativo en entrenamiento y aumentan la amplitud de la predicción, pero elevan
+el RMSE combinado de aproximadamente 164,6--164,8 a 167,2. Por tanto, no se
+incorporan al candidato actual. El resultado indica que una interacción lineal
+simple no captura de forma estable la coexistencia de atraso y concentración de
+riesgo COM; no descarta que exista una relación no lineal o condicionada por un
+cambio general de régimen.
+
+La referencia dinámica pasa a ser **B1**: día de semana, jerarquía
+barrio/segmento, exceso suave y media del 20 % de clusters con mayor score del
+barrio. A0 se conserva como expectativa estructural.
+
+## Extremos locales de exceso dentro del segmento
+
+Se evaluó una representación más local del atraso: para cada segmento/día se
+ordenan los clusters por exceso sobre el período teórico y se calcula la media
+del 20 % más atrasado. Esta variable busca evitar que una situación grave en
+unos pocos clusters quede diluida por el promedio del segmento.
+
+La granularidad es exigente: el segmento/día mediano contiene ocho clusters con
+ratio válido y su top-20 % contiene dos. En 29,9 % de las filas el top representa
+un único cluster y en 72,8 % representa como máximo dos. Por eso se comparó el
+extremo contra el promedio sobre una muestra idéntica y con la misma
+regularización jerárquica.
+
+Modelos:
+
+1. **E0:** exceso medio del segmento;
+2. **E1:** top-20 % de exceso del segmento en reemplazo del promedio;
+3. **E2:** exceso medio más top-20 % local;
+4. **E3:** E2 más interacción del extremo local con propensión del barrio;
+5. **E4:** E2 más interacción del extremo local con top-20 % de scores COM.
+
+Implementación:
+
+- `scripts/experimentar_extremos_exceso_segmento_com.R`;
+- `outputs/experimento_extremos_exceso_segmento_com/`.
+
+```{r}
+#| label: resultados-extremos-segmento
+path_extremos_segmento <- file.path(
+  project_root, "outputs", "experimento_extremos_exceso_segmento_com"
+)
+metricas_extremos_segmento <- fread(file.path(
+  path_extremos_segmento, "metricas_periodo.csv"
+))
+inventario_extremos_segmento <- fread(file.path(
+  path_extremos_segmento, "inventario_top20pct.csv"
+))
+
+tabla_extremos_segmento <- metricas_extremos_segmento[
+  split_modelo %in% c("validacion", "test", "validacion + test"),
+  .(
+    período = split_modelo,
+    modelo = escenario,
+    sesgo = round(sesgo, 1),
+    MAE = round(mae, 1),
+    RMSE = round(rmse, 1),
+    correlación = round(correlacion, 3),
+    variabilidad_reproducida_pct = round(100 * razon_sd, 1)
+  )
+][order(período, RMSE)]
+
+kable(
+  tabla_extremos_segmento,
+  caption = "Exceso medio, extremo local e interacciones"
+)
+```
+
+La representación extrema aporta una mejora real en la comparación apareada.
+En test, E1 reduce el RMSE de 177,7 a 174,8, el MAE de 146,4 a 144,4 y aumenta
+la correlación de 0,590 a 0,601. En validación queda prácticamente empatado con
+E0. En el período combinado obtiene RMSE 163,2, MAE 127,7 y correlación 0,653,
+frente a 164,3, 128,5 y 0,648 del exceso medio.
+
+Usar simultáneamente promedio y extremo no mejora, lo que sugiere que ambos
+resúmenes son redundantes y que la cola local es la representación más útil. La
+mejora de E1 aparece especialmente en marzo, abril y mayo de 2026, aunque no en
+enero y febrero.
+
+Las interacciones con propensión reciente y concentración de scores vuelven a
+tener signo negativo en entrenamiento y empeoran los errores externos. Por lo
+tanto, el avance proviene de representar mejor el atraso extremo, no de una
+interacción lineal estable.
+
+**E1 pasa a ser la referencia dinámica actual:** día de semana, jerarquía
+barrio/segmento, media del top-20 % de scores COM del barrio y media del top-20 %
+de exceso dentro del segmento. La poca cantidad de clusters que integra cada
+extremo obliga a monitorear estabilidad, pero el *partial pooling* territorial y
+la función global penalizada limitan el riesgo de sobreajuste.
+
+### Comparación visual de baselines y candidatos
+
+La figura siguiente reúne los modelos que resumen la evolución del análisis:
+
+- **M0:** suma directa de scores COM;
+- **A0:** expectativa estructural basada en día de semana y jerarquía
+  barrio/segmento;
+- **B1:** A0 más exceso medio del segmento y media del top-20 % de scores del
+  barrio;
+- **E1:** reemplaza el exceso medio por el top-20 % de exceso local del segmento.
+
+```{r}
+#| label: serie-baselines-candidatos-finales
+#| fig-width: 12
+#| fig-height: 4.8
+pred_top20pct <- fread(file.path(path_top20pct, "predicciones_diarias.csv"))
+pred_top20pct[, dia_objetivo := as.IDate(dia_objetivo)]
+
+pred_extremos_segmento <- fread(file.path(
+  path_extremos_segmento, "predicciones_diarias.csv"
+))
+pred_extremos_segmento[, dia_objetivo := as.IDate(dia_objetivo)]
+
+pred_train_candidatos <- fread(file.path(
+  project_root, "outputs", "predicciones_train_candidatos_segmento_com",
+  "predicciones_train.csv"
+))
+pred_train_candidatos[, dia_objetivo := as.IDate(dia_objetivo)]
+
+serie_a0 <- pred_segmento_diarias[
+  split_modelo %in% c("entrenamiento", "validacion", "test") &
+    escenario == "A0_jerarquia",
+  .(
+    dia_objetivo,
+    período = split_modelo,
+    observado,
+    serie = "A0 estructural",
+    valor = predicho
+  )
+]
+
+serie_m0 <- pred_segmento_diarias[
+  split_modelo %in% c("entrenamiento", "validacion", "test") &
+    escenario == "A0_jerarquia",
+  .(
+    dia_objetivo,
+    período = split_modelo,
+    observado,
+    serie = "M0 suma de scores",
+    valor = suma_scores
+  )
+]
+
+serie_b1 <- pred_top20pct[
+  split_modelo %in% c("validacion", "test") &
+    escenario == "B1_media_top20pct",
+  .(
+    dia_objetivo,
+    período = split_modelo,
+    observado,
+    serie = "B1 exceso medio + top-20 % score",
+    valor = predicho
+  )
+]
+serie_b1_train <- pred_train_candidatos[
+  escenario == "B1_media_top20pct",
+  .(
+    dia_objetivo,
+    período = "entrenamiento",
+    observado,
+    serie = "B1 exceso medio + top-20 % score",
+    valor = predicho
+  )
+]
+serie_b1 <- rbindlist(list(serie_b1_train, serie_b1))
+
+serie_e1 <- pred_extremos_segmento[
+  split_modelo %in% c("validacion", "test") &
+    escenario == "E1_extremo_segmento",
+  .(
+    dia_objetivo,
+    período = split_modelo,
+    observado,
+    serie = "E1 extremo local + top-20 % score",
+    valor = predicho
+  )
+]
+serie_e1_train <- pred_train_candidatos[
+  escenario == "E1_extremo_segmento",
+  .(
+    dia_objetivo,
+    período = "entrenamiento",
+    observado,
+    serie = "E1 extremo local + top-20 % score",
+    valor = predicho
+  )
+]
+serie_e1 <- rbindlist(list(serie_e1_train, serie_e1))
+
+serie_observada_final <- unique(serie_a0[
+  , .(
+    dia_objetivo,
+    período,
+    serie = "Observado",
+    valor = observado
+  )
+])
+
+serie_final <- rbindlist(list(
+  serie_observada_final,
+  serie_m0[, .(dia_objetivo, período, serie, valor)],
+  serie_a0[, .(dia_objetivo, período, serie, valor)],
+  serie_b1[, .(dia_objetivo, período, serie, valor)],
+  serie_e1[, .(dia_objetivo, período, serie, valor)]
+))
+serie_final[, período := factor(
+  período,
+  levels = c("entrenamiento", "validacion", "test"),
+  labels = c(
+    "Entrenamiento: 2025",
+    "Validación: enero--marzo de 2026",
+    "Test: abril--mayo de 2026"
+  )
+)]
+
+graficar_periodo <- function(datos, periodo_objetivo, titulo) {
+  ggplot(
+    datos[período == periodo_objetivo],
+    aes(
+      x = dia_objetivo,
+      y = valor,
+      color = serie,
+      linewidth = serie,
+      alpha = serie,
+      linetype = serie
+    )
+  ) +
+    geom_line() +
+    scale_color_manual(values = c(
+      "Observado" = "pink",
+      "M0 suma de scores" = "#7f7f7f",
+      "A0 estructural" = "#2f6fbd",
+      "B1 exceso medio + top-20 % score" = "#dd8452",
+      "E1 extremo local + top-20 % score" = "#55a868"
+    )) +
+    scale_linewidth_manual(values = c(
+      "Observado" = 1,
+      "M0 suma de scores" = 0.55,
+      "A0 estructural" = 0.65,
+      "B1 exceso medio + top-20 % score" = 0.7,
+      "E1 extremo local + top-20 % score" = 0.85
+    )) +
+    scale_alpha_manual(values = c(
+      "Observado" = 0.8,
+      "M0 suma de scores" = 0.7,
+      "A0 estructural" = 0.85,
+      "B1 exceso medio + top-20 % score" = 0.9,
+      "E1 extremo local + top-20 % score" = 1
+    )) +
+    scale_linetype_manual(values = c(
+      "Observado" = "solid",
+      "M0 suma de scores" = "solid",
+      "A0 estructural" = "solid",
+      "B1 exceso medio + top-20 % score" = "solid",
+      "E1 extremo local + top-20 % score" = "solid"
+    )) +
+    labs(
+      x = NULL,
+      y = "Clusters con reclamo",
+      color = NULL,
+      linewidth = NULL,
+      alpha = NULL,
+      linetype = NULL,
+      title = titulo,
+      subtitle = "A0 representa la estructura; B1 y E1 incorporan señales dinámicas"
+    ) +
+    theme_minimal(base_size = 11) +
+    theme(
+      legend.position = "top",
+      legend.box = "vertical",
+      panel.grid.minor = element_blank()
+    )
+}
+
+graficar_periodo(
+  serie_final,
+  "Entrenamiento: 2025",
+  "Predicción diaria en entrenamiento"
+)
+
+graficar_periodo(
+  serie_final,
+  "Validación: enero--marzo de 2026",
+  "Predicción diaria en validación"
+)
+
+graficar_periodo(
+  serie_final,
+  "Test: abril--mayo de 2026",
+  "Predicción diaria en test"
+)
+```
+
+Los gráficos separados permiten distinguir dos propiedades. A0 repite una forma
+semanal relativamente estable y funciona como nivel estructural. B1 y E1
+recuperan más amplitud y siguen parte de las fluctuaciones diarias, aunque aún
+fallan en varios cambios de nivel. E1 mejora el error agregado frente a B1, pero
+ninguno resuelve completamente la inestabilidad temporal observada entre meses.
+
+## Registro sintético de modelos probados
+
+Esta sección funciona únicamente como inventario de referencia. Resume la
+unidad de análisis, el cambio introducido por cada especificación y el hallazgo
+principal. Las definiciones, métricas y decisiones se desarrollan en las
+secciones anteriores.
+
+### Modelos territoriales agregados iniciales
+
+| Modelo | Unidad | Especificación resumida | Hallazgo |
+|---|---|---|---|
+| Territorial barrio | Barrio/día | Calendario, scores, operación, historia COM, variables sociodemográficas, interacciones e intercepto de barrio. | Mejoró claramente la suma directa de scores, pero presentó inestabilidad entre validación y test. |
+| Territorial CCZ | CCZ/día | Mismos bloques que el modelo de barrio, agregados por CCZ e intercepto de CCZ. | Resultado parecido al de barrio; más compacto, pero sin ventaja concluyente. |
+| M0 | Ciudad/día | Suma de scores COM por cluster. | Referencia simple; varía poco y no reproduce bien las fluctuaciones diarias. |
+| M1 | Barrio/día o CCZ/día | Calendario, distribución de scores e intercepto territorial. | Captura estructura territorial, pero no alcanza a explicar la dinámica diaria. |
+| M2 | Barrio/día o CCZ/día | M1 más historia COM y resúmenes operativos. | Produjo el mayor salto frente a M1. |
+| M3 | Barrio/día o CCZ/día | M2 más distribución del ratio tiempo desde levante/período y cargas de exceso. | El bloque de ratio agregó poca mejora sobre M2 en esta representación. |
+| M4 | Barrio/día o CCZ/día | M3 más variables sociodemográficas e interacciones. | Mejora marginal; no aportó evidencia estable sobre las interacciones. |
+
+### Jerarquía barrio/segmento y resúmenes del score
+
+Todos los modelos A se ajustaron con una fila por segmento/día, respuesta
+binomial, día de semana e interceptos penalizados de barrio y segmento.
+
+| Modelo | Cambio respecto de A0 | Hallazgo |
+|---|---|---|
+| M0 suma de scores | Referencia no jerárquica: suma diaria de scores COM. | Queda claramente por debajo de los modelos territoriales. |
+| A0 jerarquía | Solo día de semana y jerarquía barrio/segmento. | Mejor resultado en test dentro de la primera comparación; reproduce poca amplitud diaria. |
+| A1 exceso lineal | A0 más exceso medio lineal del segmento. | No produjo una mejora consistente. |
+| A2 exceso suave | A0 más función suave del exceso medio. | Recuperó más variabilidad, sin mejorar inequívocamente el RMSE externo. |
+| A3 media top-20 | A2 más media de los 20 scores más altos del barrio. | Muy buen desempeño en validación. |
+| A4 suma top-20 | A2 más suma de los 20 scores más altos del barrio. | Candidato dinámico inicial; mejoró amplitud, pero no todos los cambios de nivel. |
+| A5 media top-30 | A2 más media de los 30 scores más altos. | No superó de forma estable a las variantes top-20. |
+| A6 suma top-30 | A2 más suma de los 30 scores más altos. | Sin ventaja estable frente a top-20. |
+| A7 score p90 | A2 más percentil 90 del score del barrio. | No mejoró a las mejores variantes de cola alta. |
+| A8 suma de scores | A2 más suma de todos los scores del barrio. | La agregación total volvió a diluir la señal dinámica. |
+
+### Propensión reciente del barrio
+
+Estas pruebas conservaron la fila segmento/día y agregaron indicadores de
+propensión barrial calculados con treinta días cerrados en `D-2`.
+
+| Modelo | Especificación resumida | Hallazgo |
+|---|---|---|
+| P0 | A4 reentrenado sobre la muestra común. | Referencia para aislar el aporte de la propensión. |
+| P1 | P0 más tasa regularizada de reclamo del barrio. | Corrigió parte del sesgo en test, pero no mejoró RMSE ni correlación. |
+| P2 | P1 más interacción entre exceso medio y tasa regularizada. | Interacción negativa en entrenamiento y peor desempeño externo. |
+| R1 | P0 más propensión relativa a la expectativa estructural A0. | Sin mejora estable fuera de muestra. |
+| R2 | R1 más interacción entre exceso medio y propensión relativa. | Tampoco generalizó; se descartó la interacción lineal. |
+
+### Top-20 % del score e interacciones con exceso
+
+| Modelo | Especificación resumida | Hallazgo |
+|---|---|---|
+| B0 top-20 fijo | Exceso medio suave más suma de los 20 scores más altos del barrio. | Referencia de cola alta fija. |
+| B1 top-20 % | Exceso medio suave más media del 20 % de scores más altos del barrio. | Empate práctico con B0 y mejor coherencia entre barrios de distinto tamaño; referencia preferida. |
+| B2 interacción top-20 fijo | B0 más interacción lineal entre exceso y suma top-20. | Aumentó amplitud, pero empeoró el error externo. |
+| B3 interacción top-20 % | B1 más interacción lineal entre exceso y media top-20 %. | Tampoco mejoró fuera de muestra. |
+
+### Extremos locales de exceso por segmento
+
+| Modelo | Especificación resumida | Hallazgo |
+|---|---|---|
+| E0 exceso medio | Jerarquía, top-20 % del score y exceso medio del segmento. | Referencia apareada. |
+| E1 extremo de segmento | E0 reemplazando el promedio por la media del 20 % de clusters con mayor exceso del segmento. | Mejoró RMSE y correlación; referencia dinámica actual. |
+| E2 medio más extremo | Incluye simultáneamente exceso medio y extremo. | No mejoró E1; ambos resúmenes resultaron redundantes. |
+| E3 extremo por propensión | E2 más interacción entre extremo del segmento y propensión del barrio. | Interacción negativa y peor desempeño externo. |
+| E4 extremo por score | E2 más interacción entre extremo del segmento y top-20 % del score barrial. | Tampoco generalizó. |
+
+### Extremo e interacción calculados a nivel barrio
+
+La primera familia mantuvo una fila por segmento/día, aunque las variables de
+extremo, propensión e interacción variaban por barrio/día y se repetían en los
+segmentos del barrio.
+
+| Modelo | Especificación resumida | Hallazgo |
+|---|---|---|
+| E1 referencia común | Extremo por segmento, reestimado sobre la muestra comparable. | Conservó la mejor precisión de esta familia. |
+| H0 extremo barrial | Reemplaza el extremo del segmento por el top-20 % de exceso del barrio. | Perdió precisión: la agregación barrial diluyó focos locales. |
+| H1 extremo más propensión | H0 más propensión histórica del barrio. | Aumentó sobreestimación y error. |
+| H2 interacción barrial | H1 más interacción entre extremo y propensión del barrio. | Interacción negativa, muy fuerte en entrenamiento y claramente peor fuera de muestra. |
+
+Finalmente se repitió la hipótesis con una unidad genuina barrio/día: una fila
+por barrio y día, sin repetir predictores barriales entre segmentos.
+
+| Modelo | Especificación resumida | Hallazgo combinado en validación y test |
+|---|---|---|
+| BD0 extremo barrial | Día de semana, top-20 % del score, extremo de exceso e intercepto de barrio. | RMSE 171,3; correlación 0,643; sesgo +43,2. |
+| BD1 más propensión | BD0 más propensión histórica del barrio. | RMSE 174,5; no mejoró correlación y aumentó el sesgo. |
+| BD2 interacción | BD1 más interacción entre extremo de exceso y propensión del barrio. | RMSE 182,9; correlación 0,645; sesgo +70,6. La interacción aumentó amplitud, pero deterioró la calibración. |
+
+La repetición a nivel barrio/día confirmó que la falta de generalización no se
+explicaba principalmente por repetir el predictor barrial entre segmentos. La
+evidencia acumulada favorece representar mejor los extremos locales antes que
+agregar interacciones lineales. Este registro no promueve automáticamente cada
+ensayo al modelo vigente: **E1 extremo de segmento** continúa como referencia
+dinámica y **A0** como referencia estructural.
+
+## Próxima línea: carga de atraso ponderada por propensión
+
+Se acuerda detener la incorporación sucesiva de interacciones agregadas y
+organizar el siguiente desarrollo en tres componentes explícitos:
+
+1. **Estructura:** calendario y propensión territorial relativamente estable,
+   que producen la expectativa basal y los ciclos semanales.
+2. **Shock operativo:** una medida por cluster de cuánto se excede el tiempo de
+   levante respecto de su período esperado.
+3. **Sensibilidad:** composición entre el atraso del cluster y su propensión
+   basal a generar reclamos.
+
+La hipótesis es que dos días pueden tener el mismo atraso medio y distinto riesgo
+agregado. No debería generar el mismo shock atrasar clusters que históricamente
+casi no reclaman que atrasar clusters con alta propensión basal.
+
+### Construcción propuesta
+
+Para cada cluster ($i$) y día ($d$), se definirán:
+
+- ($q_{i,d}$): propensión basal a reclamar, estimada sin variables
+  contemporáneas de levante y respetando los cortes temporales;
+- ($x_{i,d}$): ratio entre tiempo desde el último levante y período teórico;
+- ($h(x_{i,d})$): intensidad de atraso, monótona, con posibilidad de umbral y
+  saturación;
+- ($w_{i,d}=q_{i,d}h(x_{i,d})$): carga de atraso ponderada por propensión.
+
+La carga será aditiva:
+
+$$
+W_{g,d}=\sum_{i\in g}w_{i,d},
+$$
+
+donde (g) podrá ser segmento, barrio o toda la ciudad. Esto garantiza que el
+indicador de ciudad sea la suma de sus componentes territoriales y permite
+mostrar dónde se concentra el shock esperado.
+
+La propensión (q_{i,d}) no se tomará directamente del score COM vigente,
+porque ese score ya incluye variables relacionadas con levante. Usarlo como
+propensión y volver a multiplicarlo por atraso mezclaría estructura y shock y
+podría contar dos veces la misma información. La primera versión será una
+propensión histórica o estructural con *shrinkage* para clusters con poca
+historia y predicciones temporales fuera de muestra.
+
+### Contraste mínimo acordado
+
+Se compararán solamente tres bloques sobre los mismos períodos:
+
+1. expectativa estructural;
+2. estructura más atraso agregado sin ponderar;
+3. estructura más carga de atraso ponderada por propensión.
+
+La evaluación priorizará RMSE, MAE, sesgo, calibración y desempeño en días de
+volumen alto. También verificará estabilidad mensual y coherencia entre ciudad,
+barrio y segmento. Como sensibilidad se considerará una formulación en escala
+logit, donde el atraso modifica la probabilidad basal y el shock agregado es la
+suma de los incrementos de probabilidad. No se incorporarán nuevas familias de
+variables hasta resolver este contraste.
+
+### Primer contraste de momentos y pendientes barriales
+
+Sobre una muestra común segmento/día se compararon la estructura sola, atraso
+medio sin ponderar, media de la carga ponderada, RMS de la carga ponderada y los
+dos momentos ponderados juntos. Todos los indicadores de atraso mejoran
+claramente la estructura. En validación obtiene menor RMSE el atraso sin
+ponderar (158,3) y en test el RMS ponderado (170,1). En el período combinado
+quedan prácticamente empatados, con RMSE entre 164,4 y 164,8.
+
+La media y el RMS ponderados presentan una correlación de 0,974 en
+entrenamiento. Incorporarlos simultáneamente no mejora el desempeño, por lo que
+no se justifica conservar ambos en la especificación actual.
+
+También se probaron dos pendientes aleatorias por barrio, centradas respecto
+del atraso habitual del barrio:
+
+| Modelo | Sin pendiente: RMSE combinado | Con pendiente: RMSE combinado | Lectura |
+|---|---:|---:|---|
+| Atraso medio sin ponderar | 164,4 | 167,5 | La pendiente mejora mucho el ajuste interno, pero empeora validación y test. |
+| Carga media ponderada | 164,7 | 167,9 | Se repite el mismo patrón y tampoco generaliza. |
+
+Las pendientes utilizan cerca de 58 grados de libertad para 62 barrios y
+reducen fuertemente el AIC de entrenamiento. Sin embargo, aumentan el error y
+el sesgo externo. No quedan promovidas; cualquier nueva heterogeneidad
+territorial deberá imponer mayor estructura o sustentarse en una hipótesis que
+pueda validarse temporalmente.
+
+### XGBoost como corrección de la expectativa estructural
+
+Se evaluó un modelo flexible sin eliminar la estructura territorial. A0 genera
+una probabilidad basal por segmento/día y XGBoost recibe su logit como
+`base_margin` para aprender únicamente una corrección dinámica:
+
+$$
+\operatorname{logit}(p_{s,d})=
+\operatorname{logit}(p^{A0}_{s,d})+f_{\mathrm{XGB}}(X_{s,d}).
+$$
+
+Las probabilidades A0 usadas para entrenar XGBoost son OOF temporales: se
+ajustaron ventanas mensuales expansivas para abril--diciembre de 2025. Para
+validación y test, A0 utiliza todo el entrenamiento permitido de 2025. XGBoost
+usa árboles de profundidad 3 y una cantidad de iteraciones seleccionada dentro
+de noviembre--diciembre de 2025, sin ajustar hiperparámetros sobre validación o
+test.
+
+Se compararon:
+
+| Modelo | Especificación | RMSE validación | RMSE test | RMSE combinado |
+|---|---|---:|---:|---:|
+| A0 | Día de semana y jerarquía barrio/segmento. | 178,3 | **172,6** | 176,2 |
+| X0 | XGBoost desde cero, sin margen estructural. | 196,8 | 186,7 | 193,1 |
+| X1 | A0 más corrección con calendario y levante. | 154,9 | 173,0 | 161,9 |
+| X2 | X1 más propensión histórica y momentos de carga. | **153,2** | 173,9 | **161,3** |
+
+El mal resultado de X0 indica que las variables dinámicas no reemplazan la
+estructura territorial. En cambio, X1 y X2 aumentan sustancialmente la
+variabilidad reproducida y mejoran el período combinado. X2 agrega una mejora
+pequeña frente a X1, concentrada en validación; en test no supera a A0.
+
+En X2, tiempo desde el último levante y atraso medio concentran la mayor
+importancia. La propensión media aporta 6,5 % del *gain*. Un diagnóstico SHAP de
+interacciones sobre 10.000 filas externas muestra como par más fuerte de todo el
+modelo **atraso medio × propensión media**. También aparece entre los primeros
+cruces **tiempo desde último levante × propensión media**. Esto demuestra que el
+modelo utiliza predictivamente la composición planteada, pero todavía no
+establece su dirección, interpretación causal ni estabilidad temporal.
+
+X2 queda como candidato para diagnóstico, no como modelo seleccionado. Antes de
+promoverlo corresponde visualizar la forma de las interacciones, verificarla
+por período y estudiar por qué la mejora de validación no se sostiene con igual
+magnitud en test.
+
+```{r}
+#| label: serie-a0-e1-x2
+#| fig-width: 13
+#| fig-height: 8.2
+path_xgb_correccion <- file.path(
+  project_root, "outputs", "prueba_xgboost_correccion_estructural_com"
+)
+pred_xgb_correccion <- fread(file.path(
+  path_xgb_correccion, "predicciones_diarias.csv"
+))
+pred_xgb_correccion[, dia_objetivo := as.IDate(dia_objetivo)]
+
+base_carga_segmento <- fread(file.path(
+  project_root, "outputs",
+  "exploracion_carga_atraso_ponderada_propension_com",
+  "indicadores_segmento_dia.csv"
+), select = c("dia_objetivo", "split_modelo", "n_clusters"))
+base_carga_segmento[, dia_objetivo := as.IDate(dia_objetivo)]
+cobertura_xgb_dia <- base_carga_segmento[
+  split_modelo %in% c("validacion", "test"),
+  .(n_clusters_xgb = sum(n_clusters)),
+  by = .(dia_objetivo, split_modelo)
+]
+cobertura_xgb_dia[serie_completa, on = "dia_objetivo", `:=`(
+  n_clusters_completo = i.n_clusters_universo
+)]
+cobertura_xgb_dia[, factor_cobertura :=
+  n_clusters_completo / n_clusters_xgb]
+
+serie_xgb_grafico <- pred_xgb_correccion[
+  split_modelo %in% c("validacion", "test") &
+    escenario %in% c("A0_estructura", "X2_a0_levante_propension"),
+  .(dia_objetivo, split_modelo, escenario, predicho)
+]
+serie_xgb_grafico[cobertura_xgb_dia,
+  on = c("dia_objetivo", "split_modelo"),
+  factor_cobertura := i.factor_cobertura]
+serie_xgb_grafico[, valor := predicho * factor_cobertura]
+serie_xgb_grafico[, serie := fifelse(
+  escenario == "A0_estructura", "A0 estructural", "X2 original (W90)"
+)]
+
+path_xgb_delta <- file.path(
+  project_root, "outputs", "comparacion_delta_propension_xgboost_com"
+)
+pred_xgb_delta <- fread(file.path(path_xgb_delta, "predicciones_diarias.csv"))
+pred_xgb_delta[, dia_objetivo := as.IDate(dia_objetivo)]
+serie_delta_grafico <- pred_xgb_delta[
+  split_modelo %in% c("validacion", "test") &
+    escenario %in% c("X2_W7", "X2_W7_D60"),
+  .(dia_objetivo, split_modelo, escenario, predicho)
+]
+serie_delta_grafico[cobertura_xgb_dia,
+  on = c("dia_objetivo", "split_modelo"),
+  factor_cobertura := i.factor_cobertura]
+serie_delta_grafico[, valor := predicho * factor_cobertura]
+serie_delta_grafico[, serie := fifelse(
+  escenario == "X2_W7",
+  "X2 ventana W7",
+  "X2 W7 + (q7 - q60)"
+)]
+
+serie_e1_grafico <- pred_extremos_segmento[
+  split_modelo %in% c("validacion", "test") &
+    escenario == "E1_extremo_segmento",
+  .(
+    dia_objetivo,
+    split_modelo,
+    serie = "E1 candidato anterior",
+    valor = predicho
+  )
+]
+
+serie_observada_grafico <- serie_completa[
+  split_modelo %in% c("validacion", "test"),
+  .(
+    dia_objetivo,
+    split_modelo,
+    serie = "Observado",
+    valor = clusters_observados
+  )
+]
+
+env_feriados <- new.env(parent = baseenv())
+sys.source(
+  file.path(project_root, "data", "reference", "feriados", "feriados.R"),
+  envir = env_feriados
+)
+dias_feriados <- as.IDate(env_feriados$diasDesc)
+serie_observada_feriados <- serie_observada_grafico[
+  dia_objetivo %in% dias_feriados
+]
+
+serie_comparacion_xgb <- rbindlist(list(
+  serie_observada_grafico,
+  serie_e1_grafico,
+  serie_xgb_grafico[, .(dia_objetivo, split_modelo, serie, valor)],
+  serie_delta_grafico[, .(dia_objetivo, split_modelo, serie, valor)]
+))
+
+serie_comparacion_xgb[, panel := fifelse(
+  split_modelo == "validacion", "Validación", "Test"
+)]
+
+ggplot(
+  serie_comparacion_xgb,
+  aes(
+    x = dia_objetivo,
+    y = valor,
+    color = serie,
+    linewidth = serie,
+    linetype = serie
+  )
+) +
+  geom_line(aes(group = interaction(serie, split_modelo)), alpha = 0.9) +
+  geom_point(
+    data = serie_observada_feriados,
+    aes(x = dia_objetivo, y = valor),
+    inherit.aes = FALSE,
+    shape = 21,
+    size = 2.6,
+    stroke = 0.7,
+    color = "#7a4e00",
+    fill = "#f2c14e"
+  ) +
+  facet_wrap(~panel, ncol = 1, scales = "free_x") +
+  scale_color_manual(values = c(
+    "Observado" = "#b0b0b0",
+    "A0 estructural" = "#3b6fb6",
+    "E1 candidato anterior" = "#55a868",
+    "X2 original (W90)" = "#8c5fb5",
+    "X2 ventana W7" = "#dd8452",
+    "X2 W7 + (q7 - q60)" = "#c44e52"
+  )) +
+  scale_linewidth_manual(values = c(
+    "Observado" = 0.55,
+    "A0 estructural" = 0.65,
+    "E1 candidato anterior" = 0.75,
+    "X2 original (W90)" = 0.7,
+    "X2 ventana W7" = 0.8,
+    "X2 W7 + (q7 - q60)" = 0.95
+  )) +
+  scale_linetype_manual(values = c(
+    "Observado" = "dotted",
+    "A0 estructural" = "solid",
+    "E1 candidato anterior" = "solid",
+    "X2 original (W90)" = "solid",
+    "X2 ventana W7" = "solid",
+    "X2 W7 + (q7 - q60)" = "solid"
+  )) +
+  labs(
+    x = NULL,
+    y = "Clusters con al menos un reclamo",
+    color = NULL,
+    linewidth = NULL,
+    linetype = NULL,
+    title = "Comparación diaria de los mejores modelos de cada etapa",
+    subtitle = paste(
+      "A0 como referencia estructural; E1, X2 original, W7 y",
+      "W7 + (q7 - q60) como avances sucesivos; puntos: feriados"
+    )
+  ) +
+  theme_minimal(base_size = 11) +
+  theme(
+    legend.position = "top",
+    panel.grid.minor = element_blank()
+  )
+```
+
+La figura separa validación y test para evitar comprimir las series. El observado
+se presenta con una línea punteada y más suave; los puntos amarillos identifican
+feriados según el calendario de referencia del proyecto. A0 y las variantes X2 se
+expanden por la razón diaria entre el universo completo y la muestra con
+propensión disponible; la cobertura externa media es cercana a 98,8 %. Este
+ajuste se usa únicamente para alinear visualmente los totales con E1 y el
+observado completo. Las métricas anteriores permanecen calculadas sobre la
+muestra común y no utilizan esta expansión.
+
+### Sensibilidad a la ventana de propensión
+
+La propensión inicial de X2 utilizaba 90 observaciones previas. Se compararon
+cinco horizontes —7, 15, 30, 60 y 90— manteniendo idénticos A0, muestra,
+variables operativas, parámetros de XGBoost y selección interna de iteraciones.
+Todas las ventanas se cierran en `D-2`, permiten historia parcial y aplican
+*shrinkage* desde cluster hacia barrio y desde barrio hacia la tasa global.
+
+| Ventana | RMSE validación | RMSE test | RMSE combinado | Correlación combinada |
+|---:|---:|---:|---:|---:|
+| 7 | **151,9** | **174,5** | **160,7** | **0,667** |
+| 15 | 153,5 | 177,3 | 162,8 | 0,657 |
+| 30 | 155,3 | 176,9 | 163,7 | 0,650 |
+| 60 | 155,1 | 177,3 | 163,8 | 0,649 |
+| 90 | 153,8 | 176,4 | 162,7 | 0,651 |
+
+La ventana de siete observaciones obtiene el mejor resultado en los tres
+períodos agregados y reproduce mayor variabilidad. Frente a W90, mejora febrero,
+marzo y abril de 2026; W90 conserva ventaja en enero y mayo. Esto sugiere que la
+propensión reciente ayuda a que la corrección responda con mayor rapidez, pero
+no elimina la inestabilidad mensual.
+
+W7 queda como mejor ventana individual. No se incorporan simultáneamente los
+cinco horizontes. Si se continúa esta línea, el siguiente contraste será una
+combinación parsimoniosa entre nivel habitual y cambio reciente, por ejemplo
+una propensión larga junto con la diferencia entre W7 y esa referencia.
+
+### Cambio reciente respecto de la propensión habitual
+
+Se realizó ese contraste manteniendo W7 como nivel reciente y agregando una
+sola variable: la diferencia entre W7 y una referencia de 30 o 60
+observaciones. No se agregó el nivel largo como predictor independiente. A0,
+la muestra, las variables restantes y el procedimiento de ajuste permanecen
+idénticos.
+
+| Especificación | RMSE validación | RMSE test | RMSE combinado | Correlación combinada |
+|---|---:|---:|---:|---:|
+| W7 | 151,9 | 174,5 | 160,7 | 0,667 |
+| W7 + (q7 − q30) | 150,3 | 172,2 | 158,9 | 0,675 |
+| W7 + (q7 − q60) | **148,4** | **170,5** | **157,1** | **0,685** |
+
+La diferencia respecto de 60 observaciones produce la mejora más clara. En
+test supera a W7 en enero, febrero, abril y mayo; marzo queda prácticamente
+empatado y levemente favorable a W7. La nueva variable explica 19,4 % del
+*gain* de ese modelo, por lo que no parece una adición ignorada por los árboles.
+
+El resultado sugiere que no importa solamente la propensión reciente de cada
+cluster, sino también cuánto se aparta de su nivel habitual de mediano plazo.
+W7 + (q7 − q60) queda como candidato preferido para continuar la evaluación,
+pero todavía no como modelo final seleccionado.
+
+### Feriados y días posteriores
+
+Se evaluaron los feriados como parte de la corrección dinámica de A0, sin
+modificar el baseline estructural. El calendario utilizado es
+`data/reference/feriados/feriados.R`. En ese calendario Carnaval comprende dos
+días y Turismo comprende los cinco días laborables de la semana. No se extendió
+el indicador a otros días de esas semanas.
+
+El indicador `post_feriado` identifica el día calendario inmediatamente
+posterior al final de cada bloque consecutivo, siempre que ese día no sea
+también feriado. Se compararon el candidato vigente, el agregado de feriado y
+el agregado conjunto de feriado y postferiado sobre la misma muestra y con el
+mismo procedimiento de ajuste.
+
+```{r}
+#| label: resultados-feriados-xgboost
+path_xgb_feriados <- file.path(
+  project_root, "outputs", "comparacion_feriados_xgboost_com"
+)
+metricas_xgb_feriados <- fread(file.path(
+  path_xgb_feriados, "metricas_periodo.csv"
+))
+
+tabla_xgb_feriados <- metricas_xgb_feriados[
+  split_modelo %in% c("validacion", "test", "validacion + test"),
+  .(
+    especificación = fcase(
+      escenario == "X2_W7_D60", "W7 + (q7 - q60)",
+      escenario == "X2_W7_D60_F", "Más feriado",
+      escenario == "X2_W7_D60_FP", "Más feriado y postferiado",
+      escenario == "X2_W7_D60_F_H20", "Más feriado y top-20 % de h",
+      escenario == "X2_W7_D60_F_DCOM", "Más cambio global COM 7-60",
+      escenario == "X2_W7_D60_F_RCOM", "Más ratio global COM 7/60",
+      escenario == "X2_W7_D60_F_BQ7", "Más q7 barrial",
+      escenario == "X2_W7_D60_F_BQ7D", "Más q7 y cambio 7-60 barrial"
+    ),
+    período = split_modelo,
+    sesgo = round(sesgo, 1),
+    MAE = round(mae, 1),
+    RMSE = round(rmse, 1),
+    correlación = round(correlacion, 3)
+  )
+]
+
+kable(
+  tabla_xgb_feriados,
+  caption = "Feriados y postferiados en la corrección dinámica de A0"
+)
+```
+
+Agregar solo `es_feriado` reduce el RMSE de validación de 148,4 a 143,8 y el
+RMSE combinado de 157,1 a 155,0. También deja el sesgo combinado prácticamente
+en cero. En los doce feriados de validación y test, la sobreestimación media
+baja de 126,0 a 85,3 clusters, aunque sigue siendo alta.
+
+Agregar además `post_feriado` no mejora la variante con feriado: el RMSE
+combinado queda en 156,0. En los siete postferiados disponibles reduce algo la
+subestimación media, pero la muestra es pequeña y no mejora el desempeño total.
+Por ahora, `es_feriado` queda como variante prometedora y `post_feriado` como
+hipótesis no confirmada. Ninguna de las dos se promueve todavía al scoring.
+
+### Severidad extrema mediante top 20 %
+
+Se agregó `media_top20_h`, definida como la media del 20 % de clusters con
+mayor severidad dentro de cada segmento/día. La severidad conserva la misma
+definición saturada del modelo:
+
+$$
+h=\min\{\max(\text{ratio tiempo/período}-1,0),3\}.
+$$
+
+La feature se construyó dentro de la misma agregación que genera el target y
+las demás variables del XGBoost, con cobertura de 100 % sobre las 380.565 filas
+segmento/día. Se comparó el modelo con feriado contra la misma especificación
+más `media_top20_h`.
+
+| Especificación | RMSE validación | RMSE test | RMSE combinado | Correlación combinada |
+|---|---:|---:|---:|---:|
+| W7 + (q7 − q60) + feriado | **143,8** | **172,0** | **155,0** | **0,697** |
+| Más top-20 % de `h` | 147,5 | 170,8 | 156,6 | 0,685 |
+
+El top 20 % de severidad no mejora el candidato con feriado. En los días por
+debajo del percentil 10 aumenta la sobreestimación media de 191,8 a 201,4
+clusters; en los días por encima del percentil 90 aumenta la subestimación de
+104,0 a 122,9 clusters. Aunque `media_top20_h` representa 10,1 % del *gain*, su
+uso no generaliza en la dirección buscada. La variable queda como experimento
+descartado en esta forma y no se incorpora al candidato vigente.
+
+### Cambio reciente del volumen global COM
+
+Se evaluó si el nivel reciente de reclamos de toda la ciudad ayuda a anticipar
+cambios de régimen que no estén capturados por las propensiones territoriales.
+Para cada día objetivo se calcularon, con información cerrada en `D-2`:
+
+- la diferencia entre el promedio diario de clusters con reclamo de los últimos
+  7 y 60 días;
+- el cociente entre esos mismos promedios.
+
+Cada señal se agregó por separado al candidato con feriado.
+
+| Especificación | RMSE validación | RMSE test | RMSE combinado | Correlación combinada |
+|---|---:|---:|---:|---:|
+| W7 + (q7 − q60) + feriado | **143,8** | **172,0** | **155,0** | **0,697** |
+| Más diferencia COM 7−60 | 155,4 | 174,8 | 162,9 | 0,671 |
+| Más ratio COM 7/60 | 148,7 | 178,2 | 160,4 | 0,666 |
+
+Las dos variables son utilizadas intensamente por XGBoost, pero empeoran la
+generalización. La diferencia representa 37,7 % del *gain* de su variante y el
+ratio 25,9 %, sin traducirse en menor error. El resultado es compatible con
+una corrección excesiva hacia el nivel reciente. Ambas formulaciones quedan
+descartadas y no modifican el candidato vigente.
+
+### Propensión dinámica a nivel barrio
+
+Para cubrir explícitamente el nivel territorial intermedio se agregaron dos
+señales barrio/día, repetidas en todos sus segmentos:
+
+- `q_barrio_7`: promedio de las propensiones W7 de los clusters del barrio,
+  ponderado por la exposición de cada segmento;
+- `delta_q_barrio_7_60`: diferencia entre las propensiones barriales W7 y W60.
+
+Ambas respetan el cierre histórico en `D-2`. Se comparó primero el nivel W7
+barrial solo y luego el bloque conjunto de nivel y cambio.
+
+| Especificación | RMSE validación | RMSE test | RMSE combinado | Correlación combinada |
+|---|---:|---:|---:|---:|
+| W7 + (q7 − q60) + feriado | **143,8** | 172,0 | **155,0** | 0,697 |
+| Más `q_barrio_7` | 147,7 | **169,5** | 156,2 | 0,685 |
+| Más `q_barrio_7` y cambio barrial | 143,8 | 184,1 | 160,1 | **0,698** |
+
+El nivel W7 barrial mejora test, pero pierde en validación y no supera el RMSE
+combinado del candidato. Agregar también el cambio W7−W60 barrial mejora la
+amplitud y la correlación combinada, pero requiere 616 iteraciones y deteriora
+fuertemente test. Esto indica una señal territorial aprovechable pero inestable,
+con riesgo claro de sobreajuste. Ninguna variante barrial se incorpora al
+candidato vigente.
+
+### Evaluación territorial por barrio
+
+Las predicciones segmento/día de A0, X2 W7 + `q7 - q60` y la variante con
+feriado se agregaron por barrio/día. La evaluación utiliza conjuntamente
+validación y test y conserva métricas absolutas y relativas al volumen medio.
+
+```{r}
+#| label: resultados-barrio-xgboost
+metricas_barrio_xgb <- fread(file.path(
+  path_xgb_feriados, "metricas_barrio.csv"
+))
+comparacion_barrio_xgb <- fread(file.path(
+  path_xgb_feriados, "comparacion_barrio.csv"
+))
+
+resumen_barrio_xgb <- metricas_barrio_xgb[
+  split_modelo == "validacion + test" & escenario == "X2_W7_D60_F",
+  .(
+    barrios = .N,
+    `RMSE mediano` = round(median(rmse), 2),
+    `RMSE relativo mediano` = round(median(rmse_rel_media), 3),
+    `Correlación mediana` = round(median(correlacion, na.rm = TRUE), 3),
+    `Sesgo positivo` = sum(sesgo > 0),
+    `Sesgo negativo` = sum(sesgo < 0)
+  )
+]
+kable(resumen_barrio_xgb, caption = "Resumen territorial del candidato con feriado")
+
+tabla_peor_rmse_barrio <- metricas_barrio_xgb[
+  split_modelo == "validacion + test" & escenario == "X2_W7_D60_F"
+][order(-rmse)][1:10, .(
+  barrio,
+  `Media observada` = round(media_observada, 1),
+  sesgo = round(sesgo, 1),
+  RMSE = round(rmse, 1),
+  `RMSE relativo` = round(rmse_rel_media, 3),
+  correlación = round(correlacion, 3)
+)]
+kable(tabla_peor_rmse_barrio, caption = "Barrios con mayor RMSE absoluto")
+```
+
+El candidato con feriado obtiene un RMSE mediano de 5,1 clusters por barrio,
+un RMSE relativo mediano de 0,440 y una correlación temporal mediana de 0,485.
+Los sesgos quedan equilibrados: 31 barrios presentan sobreestimación media y
+31 subestimación media.
+
+X2 sin feriado mejora el RMSE de A0 en 53 de 62 barrios. Agregar feriado mejora
+frente a X2 sin feriado en 35 barrios y el candidato final supera a A0 en 53.
+Los nueve barrios donde A0 conserva menor RMSE son Prado--Nueva Savona, Cordón,
+Pocitos, Atahualpa, Centro, Barrio Sur, Capurro--Bella Vista, Casabó--Pajas
+Blancas y Parque Rodó.
+
+Los mayores errores absolutos del candidato se concentran en barrios de volumen
+alto: Pocitos, Parque Batlle--Villa Dolores, Unión, Cordón y Buceo. Las métricas
+relativas deben interpretarse con cautela en barrios de volumen casi nulo; por
+ejemplo, Casabó--Pajas Blancas tiene una media observada inferior a 0,1 clusters
+por día y por eso un error absoluto pequeño produce un cociente elevado.
+
+### Poda de variables del XGBoost
+
+Antes de cerrar la especificación se evaluó si las variables dinámicas podían
+reducirse sin perder desempeño. La auditoría mostró redundancias fuertes entre
+`media_q_7` y `rms_q_7`, entre `media_w_7` y `rms_w_7`, y entre ratio, severidad
+y carga ponderada. También se probó quitar día de semana de la corrección,
+porque ya forma parte de A0.
+
+Se compararon cinco tamaños, desde las trece entradas conceptuales del modelo
+vigente hasta una versión mínima con tiempo desde levante, `rms_w_7`,
+`q7 - q60` y feriado.
+
+| Especificación | Variables conceptuales | RMSE validación | RMSE test | RMSE combinado | Correlación combinada | Variabilidad reproducida |
+|---|---:|---:|---:|---:|---:|---:|
+| Completa | 13 | **143,8** | 172,0 | **155,0** | **0,697** | **84,3 %** |
+| Sin redundantes | 7 | 146,5 | 171,0 | 156,1 | 0,689 | 81,9 % |
+| Compacta con `h` | 6 | 147,0 | **170,5** | 156,2 | 0,684 | 78,8 % |
+| Compacta | 5 | 146,3 | 171,0 | 156,0 | 0,691 | 83,0 % |
+| Mínima | 4 | 145,5 | 171,2 | 155,6 | 0,685 | 77,3 % |
+
+La versión completa obtiene el menor RMSE en validación y en el período
+combinado. Sin embargo, la versión compacta de cinco variables queda a solo 1,0
+cluster de RMSE combinado, pierde apenas 0,006 de correlación, conserva 83,0 %
+de la variabilidad y mejora test. Dado que reduce las entradas dinámicas de 13 a
+5, se selecciona la versión compacta como mejor equilibrio entre desempeño,
+estabilidad y parsimonia para el cierre de esta etapa.
+
+```{r}
+#| label: serie-feriados-xgboost
+#| fig-width: 13
+#| fig-height: 7.5
+pred_xgb_feriados <- fread(file.path(
+  path_xgb_feriados, "predicciones_diarias.csv"
+))
+pred_xgb_feriados[, dia_objetivo := as.IDate(dia_objetivo)]
+pred_xgb_feriados[, panel := fifelse(
+  split_modelo == "validacion", "Validación", "Test"
+)]
+pred_xgb_feriados[, serie := fcase(
+  escenario == "X2_W7_D60", "Candidato actual",
+  escenario == "X2_W7_D60_F", "Más feriado",
+  escenario == "X2_W7_D60_FP", "Más feriado y postferiado",
+  escenario == "X2_W7_D60_F_H20", "Más feriado y top-20 % de h",
+  escenario == "X2_W7_D60_F_DCOM", "Más cambio global COM 7-60",
+  escenario == "X2_W7_D60_F_RCOM", "Más ratio global COM 7/60",
+  escenario == "X2_W7_D60_F_BQ7", "Más q7 barrial",
+  escenario == "X2_W7_D60_F_BQ7D", "Más q7 y cambio 7-60 barrial"
+)]
+
+observado_xgb_feriados <- unique(pred_xgb_feriados[
+  split_modelo %in% c("validacion", "test"),
+  .(dia_objetivo, panel, observado, es_feriado)
+])
+serie_xgb_feriados <- pred_xgb_feriados[
+  split_modelo %in% c("validacion", "test"),
+  .(dia_objetivo, panel, serie, valor = predicho)
+]
+
+ggplot() +
+  geom_line(
+    data = observado_xgb_feriados,
+    aes(dia_objetivo, observado),
+    color = "#9a9a9a",
+    linewidth = 0.6,
+    linetype = "dotted"
+  ) +
+  geom_line(
+    data = serie_xgb_feriados,
+    aes(dia_objetivo, valor, color = serie),
+    linewidth = 0.8
+  ) +
+  geom_point(
+    data = observado_xgb_feriados[es_feriado == 1L],
+    aes(dia_objetivo, observado),
+    shape = 21,
+    size = 2.8,
+    stroke = 0.7,
+    color = "#7a4e00",
+    fill = "#f2c14e"
+  ) +
+  facet_wrap(~panel, ncol = 1, scales = "free_x") +
+  scale_color_manual(values = c(
+    "Candidato actual" = "#c44e52",
+    "Más feriado" = "#2f6fbd",
+    "Más feriado y postferiado" = "#55a868",
+    "Más feriado y top-20 % de h" = "#8c5fb5",
+    "Más cambio global COM 7-60" = "#8172b2",
+    "Más ratio global COM 7/60" = "#937860",
+    "Más q7 barrial" = "#64b5cd",
+    "Más q7 y cambio 7-60 barrial" = "#da8bc3"
+  )) +
+  labs(
+    x = NULL,
+    y = "Clusters con al menos un reclamo",
+    color = NULL,
+    title = "Efecto de incorporar feriados a la corrección dinámica",
+    subtitle = "Línea punteada: observado; puntos: feriados"
+  ) +
+  theme_minimal(base_size = 11) +
+  theme(legend.position = "top", panel.grid.minor = element_blank())
+```

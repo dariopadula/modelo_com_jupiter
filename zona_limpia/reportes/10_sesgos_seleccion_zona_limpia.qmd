@@ -1,0 +1,601 @@
+---
+title: "Sesgos de selección de Zona Limpia"
+subtitle: "Cobertura territorial, criterio asociado a levantes y correspondencia con COM"
+format:
+  html:
+    theme: cosmo
+    toc: true
+    toc-depth: 2
+    embed-resources: true
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+## Objetivo
+
+Este reporte documenta sesgos y patrones de selección observados en los registros
+de Zona Limpia disponibles para el proyecto.
+
+El objetivo no es concluir que la selección operativa sea correcta o incorrecta,
+sino dejar explicito que la fuente observada no representa una muestra uniforme
+de todos los clusters. Esto importa para:
+
+- interpretar la comparación entre COM y Zona Limpia;
+- entrenar modelos con target observado por Zona Limpia;
+- evaluar rankings contrafactuales;
+- estudiar posibles problemas no reclamados.
+
+```{r}
+library(data.table)
+library(ggplot2)
+library(scales)
+library(knitr)
+library(kableExtra)
+
+resolver_path <- function(path) {
+  if (file.exists(path)) {
+    return(path)
+  }
+  path_parent <- file.path("..", path)
+  if (file.exists(path_parent)) {
+    return(path_parent)
+  }
+  path_grandparent <- file.path("..", "..", path)
+  if (file.exists(path_grandparent)) {
+    return(path_grandparent)
+  }
+  stop("No existe el archivo: ", path)
+}
+
+path_municipio <- resolver_path("zona_limpia/outputs/diagnostico_levante_zl_municipio.csv")
+path_ccz <- resolver_path("zona_limpia/outputs/diagnostico_levante_zl_ccz.csv")
+path_bin_exceso <- resolver_path("zona_limpia/outputs/diagnostico_levante_zl_bin_exceso_mean_trunc_7.csv")
+path_resumen_vars <- resolver_path("zona_limpia/outputs/diagnostico_levante_zl_resumen_variables.csv")
+path_corr_global <- resolver_path("zona_limpia/outputs/correspondencia_com_zl_territorio_global.csv")
+path_corr_municipio <- resolver_path("zona_limpia/outputs/correspondencia_com_zl_territorio_municipio.csv")
+path_corr_ccz <- resolver_path("zona_limpia/outputs/correspondencia_com_zl_territorio_ccz.csv")
+path_corr_ipw_global <- resolver_path("zona_limpia/outputs/correspondencia_com_zl_ipw_global.csv")
+path_corr_ipw_municipio <- resolver_path("zona_limpia/outputs/correspondencia_com_zl_ipw_municipio.csv")
+path_propension_metricas <- resolver_path("zona_limpia/outputs/propension_visita_zl_metricas.csv")
+
+diag_municipio <- fread(path_municipio)
+diag_ccz <- fread(path_ccz)
+diag_bin_exceso <- fread(path_bin_exceso)
+diag_vars <- fread(path_resumen_vars)
+corr_global <- fread(path_corr_global)
+corr_municipio <- fread(path_corr_municipio)
+corr_ccz <- fread(path_corr_ccz)
+corr_ipw_global <- fread(path_corr_ipw_global)
+corr_ipw_municipio <- fread(path_corr_ipw_municipio)
+propension_metricas <- fread(path_propension_metricas)
+
+col_zl <- "#16817A"
+col_modelo <- "#2F5AA8"
+col_alerta <- "#B84A4A"
+col_neutro <- "#6B7280"
+
+theme_zl <- function(base_size = 11) {
+  theme_minimal(base_size = base_size) +
+    theme(
+      plot.title.position = "plot",
+      plot.title = element_text(face = "bold", size = base_size + 3),
+      plot.subtitle = element_text(color = "#4B5563"),
+      panel.grid.minor = element_blank(),
+      panel.grid.major.y = element_blank(),
+      legend.position = "top",
+      legend.title = element_blank(),
+      strip.text = element_text(face = "bold"),
+      axis.title = element_text(color = "#374151")
+    )
+}
+
+fmt_num <- function(x) format(x, big.mark = ".", decimal.mark = ",", scientific = FALSE)
+fmt_pct <- function(x) percent(x, accuracy = 0.1, decimal.mark = ",")
+```
+
+## Advertencia Sobre Municipio B
+
+Los registros de Zona Limpia del Municipio B no aparecen completos en la fuente
+actual usada por este análisis. Existen en otra tabla pendiente de integracion.
+
+Por lo tanto:
+
+- la baja cobertura observada en Municipio B refleja un faltante de fuente;
+- no debe interpretarse como baja prioridad real, ausencia de visitas o decisión
+  operativa de no cubrir ese territorio;
+- cualquier diagnóstico territorial debe marcar Municipio B como cobertura
+  incompleta hasta integrar la fuente adicional.
+
+## Cobertura Territorial
+
+La tabla siguiente resume, por municipio, la tasa de visita observada en los
+meses usados para el análisis de Zona Limpia observado.
+
+```{r}
+tabla_municipio <- copy(diag_municipio)
+tabla_municipio[, cobertura := fifelse(
+  municipio == "B",
+  "Incompleta por fuente faltante",
+  "Fuente actual"
+)]
+
+tabla_municipio[
+  order(-tasa_visita_zl),
+  .(
+    Municipio = municipio,
+    Cobertura = cobertura,
+    `Cluster-dias` = fmt_num(n_cluster_dia),
+    `Visitas ZL` = fmt_num(visitas_zl),
+    `Tasa visita` = fmt_pct(tasa_visita_zl),
+    `Exceso medio` = round(exceso_mean_medio, 2),
+    `Tasa problema en visitas` = fmt_pct(tasa_problema_zl_en_visitas)
+  )
+] |>
+  kable(
+    format = "html",
+    align = "llrrrrr",
+    caption = "Cobertura observada de Zona Limpia por municipio"
+  ) |>
+  kable_styling(
+    full_width = FALSE,
+    bootstrap_options = c("striped", "hover", "condensed")
+  )
+```
+
+```{r}
+ggplot(
+  tabla_municipio[order(tasa_visita_zl)],
+  aes(x = reorder(municipio, tasa_visita_zl), y = tasa_visita_zl, fill = cobertura)
+) +
+  geom_col(width = 0.68) +
+  geom_text(
+    aes(label = percent(tasa_visita_zl, accuracy = 0.1, decimal.mark = ",")),
+    hjust = -0.08,
+    size = 3.2
+  ) +
+  coord_flip() +
+  scale_fill_manual(
+    values = c(
+      "Fuente actual" = col_zl,
+      "Incompleta por fuente faltante" = col_alerta
+    )
+  ) +
+  scale_y_continuous(
+    labels = percent_format(accuracy = 1, decimal.mark = ","),
+    expand = expansion(mult = c(0, 0.12))
+  ) +
+  labs(
+    title = "La cobertura observada no es uniforme por territorio",
+    subtitle = "Municipio B debe leerse como cobertura incompleta por fuente faltante",
+    x = NULL,
+    y = "Visitas efectivas / cluster-dias"
+  ) +
+  theme_zl()
+```
+
+## CCZ Con Mayor Y Menor Cobertura
+
+```{r}
+ccz_plot <- copy(diag_ccz)
+ccz_plot[, etiqueta := paste0("M", municipio, " - CCZ ", ccz)]
+ccz_plot[, cobertura := fifelse(municipio == "B", "Incompleta por fuente faltante", "Fuente actual")]
+
+ccz_extremos <- rbindlist(list(
+  ccz_plot[order(-tasa_visita_zl)][1:8][, grupo := "Mayor cobertura"],
+  ccz_plot[order(tasa_visita_zl)][1:8][, grupo := "Menor cobertura"]
+), fill = TRUE)
+
+ggplot(
+  ccz_extremos,
+  aes(x = reorder(etiqueta, tasa_visita_zl), y = tasa_visita_zl, fill = cobertura)
+) +
+  geom_col(width = 0.68) +
+  facet_wrap(~ grupo, scales = "free_y") +
+  coord_flip() +
+  scale_fill_manual(
+    values = c(
+      "Fuente actual" = col_zl,
+      "Incompleta por fuente faltante" = col_alerta
+    )
+  ) +
+  scale_y_continuous(labels = percent_format(accuracy = 1, decimal.mark = ",")) +
+  labs(
+    title = "CCZ con coberturas extremas",
+    subtitle = "La lectura de CCZ del Municipio B queda condicionada por fuente faltante",
+    x = NULL,
+    y = "Tasa de visita"
+  ) +
+  theme_zl()
+```
+
+## Correspondencia Entre Problemas ZL Y Reclamos COM
+
+Esta sección mira otra fuente de sesgo: no ya donde observa Zona Limpia, sino
+en que territorios los problemas observados por Zona Limpia aparecen también
+como reclamos COM.
+
+La métrica principal es:
+
+```text
+tasa_com_dado_zl_problema = ambos / problemas observados por Zona Limpia
+```
+
+Es decir, de todos los cluster-días donde Zona Limpia registro un problema
+comparable, que proporcion tuvo además reclamo COM en el mismo cluster-día.
+Municipio B se excluye de este calculo por la fuente faltante ya documentada.
+
+```{r}
+global <- corr_global[1]
+
+indicadores_globales <- data.table(
+  Indicador = c(
+    "Cluster-dias observados",
+    "Problemas ZL comparables",
+    "Reclamos COM",
+    "Ambos",
+    "COM dado problema ZL",
+    "Problema ZL sin COM"
+  ),
+  Valor = c(
+    fmt_num(global$cluster_dia_observados),
+    fmt_num(global$zl_problema),
+    fmt_num(global$com),
+    fmt_num(global$ambos),
+    fmt_pct(global$tasa_com_dado_zl_problema),
+    fmt_pct(global$tasa_no_com_dado_zl_problema)
+  )
+)
+
+indicadores_globales |>
+  kable(
+    format = "html",
+    align = "lr",
+    caption = "Correspondencia global entre problemas observados por Zona Limpia y COM, excluyendo Municipio B"
+  ) |>
+  kable_styling(
+    full_width = FALSE,
+    bootstrap_options = c("striped", "hover", "condensed")
+  )
+```
+
+```{r}
+corr_municipio[
+  order(tasa_com_dado_zl_problema),
+  .(
+    Municipio = municipio,
+    `Problemas ZL` = fmt_num(zl_problema),
+    COM = fmt_num(com),
+    Ambos = fmt_num(ambos),
+    `COM dado problema ZL` = fmt_pct(tasa_com_dado_zl_problema),
+    `Problema ZL sin COM` = fmt_pct(tasa_no_com_dado_zl_problema),
+    `Problemas ZL / COM` = round(ratio_zl_problema_com, 2)
+  )
+] |>
+  kable(
+    format = "html",
+    align = "lrrrrrr",
+    caption = "Correspondencia COM-Zona Limpia por municipio"
+  ) |>
+  kable_styling(
+    full_width = FALSE,
+    bootstrap_options = c("striped", "hover", "condensed")
+  )
+```
+
+```{r}
+ggplot(
+  corr_municipio[order(tasa_com_dado_zl_problema)],
+  aes(x = reorder(municipio, tasa_com_dado_zl_problema), y = tasa_com_dado_zl_problema)
+) +
+  geom_col(width = 0.68, fill = col_zl) +
+  geom_hline(
+    yintercept = global$tasa_com_dado_zl_problema,
+    color = col_alerta,
+    linetype = "dashed",
+    linewidth = 0.7
+  ) +
+  geom_text(
+    aes(label = percent(tasa_com_dado_zl_problema, accuracy = 0.1, decimal.mark = ",")),
+    hjust = -0.08,
+    size = 3.2
+  ) +
+  coord_flip() +
+  scale_y_continuous(
+    labels = percent_format(accuracy = 1, decimal.mark = ","),
+    expand = expansion(mult = c(0, 0.16))
+  ) +
+  labs(
+    title = "La correspondencia entre problemas observados y COM varia por municipio",
+    subtitle = "Linea punteada: promedio global sin Municipio B",
+    x = NULL,
+    y = "COM dado problema observado por ZL"
+  ) +
+  theme_zl()
+```
+
+```{r}
+corr_ccz_filtrada <- corr_ccz[zl_problema >= 100]
+corr_ccz_filtrada[, etiqueta := paste0("M", municipio, " - CCZ ", ccz)]
+
+ccz_correspondencia_extremos <- rbindlist(list(
+  corr_ccz_filtrada[order(-tasa_com_dado_zl_problema)][1:8][, grupo := "Mayor correspondencia COM"],
+  corr_ccz_filtrada[order(tasa_com_dado_zl_problema)][1:8][, grupo := "Menor correspondencia COM"]
+), fill = TRUE)
+
+ggplot(
+  ccz_correspondencia_extremos,
+  aes(x = reorder(etiqueta, tasa_com_dado_zl_problema), y = tasa_com_dado_zl_problema, fill = grupo)
+) +
+  geom_col(width = 0.68, show.legend = FALSE) +
+  facet_wrap(~ grupo, scales = "free_y") +
+  coord_flip() +
+  scale_fill_manual(values = c("Mayor correspondencia COM" = col_modelo, "Menor correspondencia COM" = col_alerta)) +
+  scale_y_continuous(labels = percent_format(accuracy = 1, decimal.mark = ",")) +
+  labs(
+    title = "CCZ con mayor y menor correspondencia entre COM y problemas ZL",
+    subtitle = "Se muestran CCZ con al menos 100 problemas ZL comparables observados",
+    x = NULL,
+    y = "COM dado problema observado por ZL"
+  ) +
+  theme_zl()
+```
+
+La lectura inicial es que COM captura una fraccion pequena de los problemas que
+Zona Limpia observa en campo. Además, esa fraccion no es territorialmente
+uniforme: municipios como F, G, A y D muestran menor correspondencia relativa,
+mientras CH, C y E muestran mayor correspondencia. Esto sugiere que entrenar o
+evaluar modelos solo contra COM puede mezclar riesgo real de problema con
+propensión territorial a reclamar.
+
+### Ajuste Exploratorio Por Propensión De Visita
+
+La lectura anterior está condicionada por la selección de Zona Limpia: los puntos
+visitados no son una muestra aleatoria. Para explorar cuanto cambia el resultado
+al corregir por la selección observable, se entrena un modelo liviano de
+propensión de visita ZL.
+
+Target:
+
+```text
+P(visita efectiva ZL | features previas de levante, territorio y calendario)
+```
+
+El modelo excluye Municipio B, usa todas las visitas ZL y una muestra de no
+visitados como controles. Las probabilidades se corrigen por la prevalencia real
+de visita y se usan pesos estabilizados:
+
+```text
+peso = prevalencia observada de visita / propension estimada de visita
+```
+
+Este ajuste no transforma el resultado en una verdad poblacional definitiva,
+pero permite revisar si el ratio COM-ZL depende fuertemente de la regla de
+selección observable.
+
+```{r}
+propension_metricas[
+  ,
+  .(
+    Escenario = escenario,
+    N = fmt_num(n),
+    `Visitas ZL` = fmt_num(visitas),
+    `Prevalencia muestra` = fmt_pct(prevalencia_muestra),
+    `Prevalencia real` = fmt_pct(prevalencia_real),
+    AUC = round(auc, 3),
+    `Logloss ajustada` = round(logloss_ajustada_prior, 3)
+  )
+] |>
+  kable(
+    format = "html",
+    align = "lrrrrrr",
+    caption = "Desempeno del modelo exploratorio de propension de visita"
+  ) |>
+  kable_styling(
+    full_width = FALSE,
+    bootstrap_options = c("striped", "hover", "condensed")
+  )
+```
+
+```{r}
+metodos_mostrar <- c("crudo_observado", "ipw_propension_muestreo_cap20")
+
+tabla_ipw_global <- corr_ipw_global[
+  metodo %in% metodos_mostrar
+]
+tabla_ipw_global[, metodo_label := fifelse(
+  metodo == "crudo_observado",
+  "Crudo observado",
+  "Ajustado por propension"
+)]
+
+tabla_ipw_global[
+  ,
+  .(
+    Metodo = metodo_label,
+    `Problemas ZL / COM` = round(ratio_zl_problema_com, 2),
+    `Solo ZL problema / COM` = round(ratio_solo_zl_problema_com, 2),
+    `COM dado problema ZL` = fmt_pct(tasa_com_dado_zl_problema),
+    `Problema ZL sin COM` = fmt_pct(tasa_no_com_dado_zl_problema)
+  )
+] |>
+  kable(
+    format = "html",
+    align = "lrrrr",
+    caption = "Correspondencia global cruda y ajustada por propension de visita"
+  ) |>
+  kable_styling(
+    full_width = FALSE,
+    bootstrap_options = c("striped", "hover", "condensed")
+  )
+```
+
+```{r}
+ipw_municipio_plot <- corr_ipw_municipio[
+  metodo %in% metodos_mostrar
+]
+ipw_municipio_plot[, metodo_label := fifelse(
+  metodo == "crudo_observado",
+  "Crudo observado",
+  "Ajustado por propension"
+)]
+
+ggplot(
+  ipw_municipio_plot,
+  aes(x = reorder(municipio, ratio_solo_zl_problema_com), y = ratio_solo_zl_problema_com, fill = metodo_label)
+) +
+  geom_col(position = position_dodge(width = 0.72), width = 0.64) +
+  coord_flip() +
+  scale_fill_manual(values = c("Crudo observado" = col_neutro, "Ajustado por propension" = col_zl)) +
+  labs(
+    title = "El ajuste por propension mantiene la lectura territorial",
+    subtitle = "Ratio: problemas observados solo por ZL por cada reclamo COM",
+    x = NULL,
+    y = "Solo ZL problema / COM"
+  ) +
+  theme_zl()
+```
+
+Resultado inicial: el ajuste por propensión no reduce la hipotesis de subreclamo.
+Globalmente, el ratio `problemas ZL / COM` pasa de `5,44` crudo a `5,65`
+ajustado; el ratio `solo ZL problema / COM` pasa de `4,86` a `5,07`. Por
+municipio, F sigue siendo el caso más extremo y queda alrededor de `10,2`
+problemas observados solo por ZL por cada reclamo COM.
+
+## Criterio Asociado A Levantes
+
+Se explora si la selección de Zona Limpia se asocia con el atraso respecto al
+período teórico de levante.
+
+Variable principal:
+
+```text
+exceso_mean_tiempo_periodo_pred_trunc_7 =
+  min(max(mean_tiempo_desde_ultimo_levante_pred - mean_levante_periodo, 0), 7)
+```
+
+Interpretación:
+
+- `0`: el tiempo desde último levante no supera el período teórico promedio;
+- `1`: el cluster está aproximadamente un día por encima del período teórico;
+- `7`: el exceso se trunca para no dejar que extremos dominen el análisis.
+
+```{r}
+diag_bin_exceso[
+  ,
+  .(
+    `Exceso medio truncado` = bin_exceso_mean_trunc_7,
+    `Cluster-dias` = fmt_num(n_cluster_dia),
+    `Visitas ZL` = fmt_num(visitas_zl),
+    `Tasa visita` = fmt_pct(tasa_visita_zl),
+    `Tasa problema en visitas` = fmt_pct(tasa_problema_zl_en_visitas),
+    `Problemas observados COM/ZL` = fmt_num(problemas_reales),
+    `Tasa problema real` = fmt_pct(tasa_problema_real)
+  )
+] |>
+  kable(
+    format = "html",
+    align = "lrrrrrr",
+    caption = "Visitas y problemas por exceso sobre periodo teorico"
+  ) |>
+  kable_styling(
+    full_width = FALSE,
+    bootstrap_options = c("striped", "hover", "condensed")
+  )
+```
+
+```{r}
+exceso_long <- melt(
+  diag_bin_exceso,
+  id.vars = "bin_exceso_mean_trunc_7",
+  measure.vars = c("tasa_visita_zl", "tasa_problema_zl_en_visitas"),
+  variable.name = "metrica",
+  value.name = "valor"
+)
+exceso_long[, metrica := fcase(
+  metrica == "tasa_visita_zl", "Tasa de visita",
+  metrica == "tasa_problema_zl_en_visitas", "Tasa de problema en visitas"
+)]
+
+ggplot(
+  exceso_long,
+  aes(x = bin_exceso_mean_trunc_7, y = valor, group = metrica, color = metrica)
+) +
+  geom_line(linewidth = 0.9) +
+  geom_point(size = 2.2) +
+  scale_color_manual(values = c("Tasa de visita" = col_modelo, "Tasa de problema en visitas" = col_zl)) +
+  scale_y_continuous(labels = percent_format(accuracy = 1, decimal.mark = ",")) +
+  labs(
+    title = "El exceso sobre periodo teorico parece incidir en la seleccion",
+    subtitle = "La visita aumenta con excesos moderados y cae en valores altos",
+    x = "Exceso medio truncado",
+    y = "Tasa"
+  ) +
+  theme_zl()
+```
+
+## Comparación Visitados vs No Visitados
+
+```{r}
+vars_interes <- c(
+  "mean_tiempo_desde_ultimo_levante_pred",
+  "mean_ratio_tiempo_periodo_pred",
+  "exceso_mean_tiempo_periodo_pred_trunc_7"
+)
+
+tabla_vars <- diag_vars[
+  variable %in% vars_interes,
+  .(
+    variable,
+    hay_zl_visita_efectiva,
+    media,
+    mediana,
+    p75,
+    p90
+  )
+]
+tabla_vars[, grupo := fifelse(hay_zl_visita_efectiva, "Visitado por ZL", "No visitado")]
+
+tabla_vars[
+  order(variable, -hay_zl_visita_efectiva),
+  .(
+    Variable = variable,
+    Grupo = grupo,
+    Media = round(media, 2),
+    Mediana = round(mediana, 2),
+    P75 = round(p75, 2),
+    P90 = round(p90, 2)
+  )
+] |>
+  kable(
+    format = "html",
+    align = "llrrrr",
+    caption = "Variables de levante en cluster-dias visitados y no visitados"
+  ) |>
+  kable_styling(
+    full_width = FALSE,
+    bootstrap_options = c("striped", "hover", "condensed")
+  )
+```
+
+## Lectura
+
+Los datos sugieren tres sesgos/patrones relevantes:
+
+- **Territorio:** la cobertura observada no es uniforme. Municipio B debe
+  marcarse como cobertura incompleta hasta integrar la fuente adicional.
+- **Reclamo COM:** la proporcion de problemas observados por Zona Limpia que
+  también aparece como COM es baja y varia por territorio.
+- **Levante:** las visitas de Zona Limpia se concentran más en clusters con
+  exceso positivo moderado respecto al período teórico de levante.
+
+Esto no prueba causalidad ni reconstruye exactamente la regla operativa usada
+por Zona Limpia, pero sí indica que las visitas efectivas no son una muestra
+aleatoria de clusters. Por eso los modelos basados en Zona Limpia deben evaluarse
+teniendo en cuenta cobertura territorial, cambios temporales de criterio y
+posibles reglas operativas asociadas a levantes.
+
+En paralelo, los modelos o evaluaciones basados solo en COM deben leerse con
+cuidado porque pueden reflejar diferencias territoriales de propensión a
+reclamar, no solo diferencias de riesgo real.

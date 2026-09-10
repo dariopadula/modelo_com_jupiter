@@ -1,0 +1,135 @@
+---
+title: "Contrato de datos de la app operativa v2"
+format:
+  html:
+    toc: true
+---
+
+## Objetivo
+
+La app debe consultar el histórico sin cargar en memoria el detalle completo por
+cluster y día. Para eso se publican dos tablas con granularidades diferentes en
+`app_operativa_v2/data/historico/`.
+
+El script reproducible es
+`scripts/construir_tablas_historicas_app_v2.R`. La app continúa siendo una capa
+de solo lectura: no calcula predicciones, features ni observados.
+
+Todos los datos específicos de ejecución se ubican dentro de
+`app_operativa_v2/data/`. Las predicciones se publican en `operacional/`, las
+tablas históricas en `historico/` y los insumos territoriales mínimos en
+`referencia/`. Estas rutas se excluyen de Git, salvo su `README.md`.
+
+## Serie histórica COM
+
+Ruta: `serie_historica_com/`.
+
+Unidad: `dia_objetivo` / `nivel_territorial` / `territorio_id` / `escenario`.
+
+Contiene el escenario agregado `P3_compacto` para dos niveles:
+
+- `montevideo`: una fila por día;
+- `barrio`: una fila por barrio y día.
+
+Columnas principales:
+
+- `clusters_estimados`: pronóstico de clusters con reclamo;
+- `clusters_observados`: clusters que efectivamente tuvieron reclamo;
+- `clusters_evaluados`: universo territorial de clusters de ese día;
+- `split_modelo`: partición temporal usada en la evaluación;
+- `estado_observacion`: indica si el observado está cerrado.
+
+La suma de las estimaciones y observados barriales se valida contra el total de
+Montevideo. La tabla es pequeña y puede cargarse completa para construir series,
+filtros y tablas históricas.
+
+## Detalle por cluster y día
+
+Ruta: `detalle_cluster_dia/`.
+
+Unidad: `cluster_id` / `dia_objetivo` / `modelo_id` / `version_modelo`.
+
+La tabla conserva solo las columnas necesarias para selección, mapa y evaluación
+retrospectiva. Está particionada físicamente por:
+
+1. `dia_objetivo`;
+2. `modelo_id`.
+
+La aplicación debe abrir el dataset declarando el tipo de las particiones y
+filtrar antes de `collect()`:
+
+```{r}
+#| eval: false
+detalle <- arrow::open_dataset(
+  file.path(path_base, "detalle_cluster_dia"),
+  partitioning = arrow::hive_partition(
+    dia_objetivo = arrow::date32(),
+    modelo_id = arrow::utf8()
+  )
+)
+
+dia_com <- detalle |>
+  dplyr::filter(
+    dia_objetivo == fecha_seleccionada,
+    modelo_id == "com_reclamo"
+  ) |>
+  dplyr::collect()
+```
+
+No se repiten coordenadas ni nombres de barrio en cada fila. La app debe unir el
+`cluster_id` del día consultado al maestro territorial vigente. Esto evita
+duplicar atributos estables millones de veces.
+
+El maestro compacto se publica en
+`app_operativa_v2/data/referencia/maestro_clusters/` mediante
+`scripts/construir_maestro_clusters_app_v2.R`. El shape
+`app_operativa_v2/data/referencia/barrios_mvd_23_pg.gpkg` es una copia de un
+insumo de referencia que no se genera en el proyecto.
+
+Para la evaluación histórica de Zona Limpia se utilizan las particiones con
+`modelo_id == "zl_problema"` y las columnas `hay_zl_visita_efectiva`,
+`problema_zl_observado` y `estado_observacion_zl`. Los clusters sin visita
+efectiva no se interpretan como casos sin problema. Las métricas de precisión y
+lift se calculan dentro de la selección visitada; la cobertura se calcula sobre
+todos los problemas observados en las visitas efectivas del día.
+
+Las evaluaciones diarias COM y Zona Limpia ofrecen únicamente fechas con
+`estado_periodo_app == "historico_cerrado"`. La construcción deja por defecto
+los dos últimos días como `pendiente_validacion`, de acuerdo con el rezago
+operativo `D-2`. La cantidad puede configurarse con `DIAS_VALIDACION_APP`.
+
+## Construcción
+
+Desde la raíz del proyecto:
+
+```powershell
+& "C:\Program Files\R\R-4.5.1\bin\Rscript.exe" scripts/construir_tablas_historicas_app_v2.R
+```
+
+Para reemplazar una publicación existente de forma explícita:
+
+```powershell
+$env:SOBRESCRIBIR = "1"
+& "C:\Program Files\R\R-4.5.1\bin\Rscript.exe" scripts/construir_tablas_historicas_app_v2.R
+```
+
+La escritura se realiza primero en una ruta de staging y se publica solamente
+después de validar el contenido y una lectura selectiva diaria.
+
+## Validación inicial
+
+La primera publicación contiene:
+
+- `serie_historica_com`: 26.280 filas, 418 días, desde 2025-04-02 hasta
+  2026-05-24;
+- `detalle_cluster_dia`: 7.902.058 filas, 509 días, desde 2025-01-01 hasta
+  2026-05-24;
+- 1.018 particiones diarias por modelo;
+- aproximadamente 0,26 MB para la serie y 170,44 MB para el detalle.
+
+Prueba reproducible:
+
+```powershell
+Set-Location app_operativa_v2/tests
+& "C:\Program Files\R\R-4.5.1\bin\Rscript.exe" test_datos_historicos.R
+```

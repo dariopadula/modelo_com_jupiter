@@ -1,0 +1,447 @@
+---
+title: "Flujo de datos"
+format:
+  html:
+    theme: cosmo
+    toc: true
+    toc-depth: 3
+    number-sections: true
+execute:
+  echo: true
+  warning: false
+  message: false
+---
+
+## Objetivo
+
+Documentar el pipeline de integracion de datos hasta la construcción de la base `cluster_id`/`dia`.
+
+## Orden de ejecución
+
+1. `scripts/get_datos_levante.R`
+2. `scripts/get_datos_COM.R`
+3. `scripts/check_espacial_com_levante.R`
+4. `scripts/gen_cluster_referencia_unicos.R`
+5. `scripts/asignar_clusters_posiciones_nuevas.R`
+6. `scripts/construir_cluster_territorial_segmento_censal.R`
+7. `scripts/asignar_com_contenedores_clusters.R`
+8. `scripts/construir_base_cluster_dia.R`
+9. `scripts/construir_features_historicas_cluster_dia.R`
+
+## Levantes
+
+::: {.callout-note}
+### Tabla generada: `data/parquet/levante/`
+
+Esta tabla representa la historia diaria de cada contenedor. Cada fila corresponde a un contenedor en un día donde se considera activo o inferido como activo.
+
+**Objetivo:** construir una base temporal que permita saber que contenedores estaban disponibles cada día, cuanto tiempo paso desde el último levante y que tan confiable es la información imputada.
+
+**Fundamento:** los reclamos COM solo pueden asignarse razonablemente a contenedores que existian o estaban operativos en esa fecha. Por eso la tabla diaria de levantes es el eje del pipeline.
+:::
+
+Insumos:
+
+- servidor o `data/paraprobar/datos_levante.parquet`
+
+Salida:
+
+- `data/parquet/levante/`
+
+Funciones principales:
+
+- `cargar_datos_levante()`
+- `preparar_datos_levante()`
+- `definir_intervalos_actividad_contenedor()`
+- `meses_lectura_con_contexto()`
+
+Decisiones principales:
+
+- `fecha_levante` representa el levante real.
+- `fecha_fact` representa el registro administrativo o cambio de estado.
+- Los intervalos activos se construyen con `fecha_fact`, `levante_activo`, gaps largos y censura derecha.
+- Los tiempos desde último levante se calculan con `fecha_levante`.
+- La grilla diaria se expande solo dentro de intervalos activos.
+- Se agrega `contenedor_dia_elegible_modelo` como capa de elegibilidad para asignación/modelado.
+- Se agregan variables predictivas con corte `dia + 1 hora`, usando sufijo `_pred`.
+
+### Elegibilidad para asignación y modelo
+
+La tabla diaria de levantes conserva la información activa e inferida, pero agrega una capa adicional:
+
+- `contenedor_dia_elegible_modelo`
+
+Regla actual:
+
+- `contenedor_activo_dia == TRUE`; y
+- actividad `observada`; o
+- actividad `inferida`, `dias_desde_ultima_observacion_estado <= 8` y `dias_total_tramo_inferido_estado <= 15`.
+
+Esta regla evita usar contenedores con evidencia debil de actividad. Es especialmente importante antes de asignar reclamos COM, porque un contenedor inferido durante un hueco largo podría atraer reclamos y contaminar el target.
+
+### Alternativa pendiente: actividad basada en levantes recientes
+
+Se identifico una alternativa más rigida para definir si un contenedor debe
+considerarse operativo en un día `D`.
+
+Regla candidata:
+
+```text
+tuvo_levante_ultimos_7d =
+  existe al menos un levante entre D-7 y D 01:00
+```
+
+Bajo este criterio, un contenedor podría conservarse en la tabla diaria, pero
+solo seria elegible para asignación de reclamos y construcción de features si
+tuvo evidencia de levante dentro de la ventana reciente.
+
+La propuesta inicial es crear un indicador:
+
+- `tuvo_levante_ultimos_7d`
+
+Antes de reemplazar la regla actual se deberia comparar:
+
+- cantidad de contenedores elegibles por día;
+- contenedores excluidos por cada criterio;
+- reclamos COM que cambian de contenedor, cluster o quedan sin asignar;
+- cantidad y composicion de clusters activos;
+- distribución de `mean_tiempo_desde_ultimo_levante_pred`;
+- proporcion de casos con más de 7 días desde el último levante;
+- desempeño y estabilidad temporal de los modelos;
+- impacto sobre la cobertura operativa del mapa.
+
+Este criterio no está implementado actualmente. La regla vigente sigue usando
+estado activo observado o inferido, junto con los limites de 8 días desde la
+última observacion y 15 días de tramo inferido.
+
+El experimento deberia probar al menos tres variantes:
+
+1. Mantener la elegibilidad actual y agregar
+   `tuvo_levante_ultimos_7d` como feature.
+2. Excluir de la asignación y del modelo los contenedores sin levantes en los
+   últimos 7 días.
+3. Usar ventanas alternativas, por ejemplo 5, 7 y 10 días, para comprobar la
+   sensibilidad de la regla.
+
+La fecha de corte debe mantenerse en `D 01:00`. No deben incorporarse levantes
+posteriores dentro del mismo día objetivo.
+
+### Tiempo desde último levante predictivo
+
+Para modelado operativo no alcanza con calcular el tiempo desde último levante al cierre del día. Si el modelo se corre al inicio del día, no debe usar levantes que ocurren más tarde ese mismo día.
+
+Por eso se crean variables predictivas con sufijo `_pred`:
+
+- `fecha_corte_prediccion`
+- `fecha_ultimo_levante_pred`
+- `horas_desde_ultimo_levante_pred`
+- `tiempo_desde_ultimo_levante_pred`
+- `tiempo_desde_ultimo_levante_pred_v2`
+
+Regla actual:
+
+```text
+fecha_corte_prediccion = dia + 1 hora
+fecha_ultimo_levante_pred = ultimo levante con fecha_levante <= fecha_corte_prediccion
+```
+
+Ejemplo:
+
+```text
+dia objetivo: D
+hora de prediccion: D 01:00
+levante anterior: D-3 05:00
+levante del mismo dia: D 15:00
+```
+
+Para predecir en `D 01:00`, el levante de `D 15:00` no existe todavía desde el punto de vista del modelo. La feature predictiva usa `D-3 05:00`.
+
+Esta decisión evita leakage temporal.
+
+### Diagnóstico de tiempos negativos
+
+Se observaron tiempos negativos en las variables históricas originales:
+
+- filas con tiempo negativo: 71818
+- porcentaje aproximado: 4.916%
+- minimo: aproximadamente -3 horas
+- concentrados en levantes del mismo día entre las 21:00 y 23:00
+
+Esto es compatible con un desfase horario de hasta 3 horas y refuerza la necesidad de usar variables `_pred` para modelado.
+
+## COM
+
+::: {.callout-note}
+### Tabla generada: `data/parquet/com/`
+
+Esta tabla contiene reclamos COM preparados para integrarse espacialmente con levantes.
+
+**Objetivo:** filtrar incidentes relevantes, excluir repetidos y transformar coordenadas a un sistema metrico comun.
+
+**Fundamento:** antes de asignar reclamos a contenedores o clusters, los puntos COM deben estar limpios y en el mismo CRS que los levantes.
+:::
+
+Insumos:
+
+- servidor o `data/paraprobar/datos_com.parquet`
+
+Salida:
+
+- `data/parquet/com/`
+
+Funciones principales:
+
+- `cargar_datos_com()`
+- `preparar_datos_com()`
+
+Decisiones principales:
+
+- Se conservan incidentes objetivo.
+- Se excluyen repetidos.
+- Las coordenadas se transforman a EPSG:32721.
+
+## Clusters
+
+::: {.callout-note}
+### Tablas generadas: `data/reference/clusters/`
+
+Estas tablas guardan una referencia espacial estable de posiciones de contenedores agrupadas en clusters.
+
+**Objetivo:** definir unidades espaciales consistentes en el tiempo.
+
+**Fundamento:** si los clusters se recalculan en cada corrida sin referencia fija, los IDs pueden cambiar y romper comparaciones históricas. Por eso se entrena una referencia versionada y luego las posiciones nuevas se asignan contra esa referencia.
+:::
+
+Salida de referencia:
+
+- `data/reference/clusters/`
+
+Salida de actualizacion:
+
+- `data/processed/cluster_update_check/`
+
+Funciones principales:
+
+- `entrenar_clusters_referencia()`
+- `asignar_posiciones_levante_a_clusters()`
+- `asignar_puntos_a_clusters_referencia()`
+
+Decisiones principales:
+
+- DBSCAN entrena una referencia espacial estable.
+- Los puntos ruido reciben cluster propio.
+- Las posiciones nuevas se asignan contra la referencia sin modificarla.
+
+## Territorio por cluster
+
+::: {.callout-note}
+### Tabla generada: `data/processed/cluster_territorial/cluster_segmento_censal/`
+
+Esta tabla asigna variables territoriales y demograficas fijas a cada `cluster_id` para una versión de clusters.
+
+**Objetivo:** disponer de atributos estables por cluster para modelos COM, modelos Zona Limpia, análisis de sesgo de reclamo, propensión de visita y mapas.
+
+**Fundamento:** las variables territoriales no dependen del día. Conviene calcularlas una vez por `version_cluster` y reutilizarlas, en lugar de recalcularlas dentro de cada tabla diaria.
+:::
+
+Insumos:
+
+- `data/processed/cluster_update_check/contenedor_posicion_cluster_actual/`
+- `shp/Marco2011_SEG_Montevideo_Total/Marco2011_SEG_Montevideo_Total.shp`
+
+Salida:
+
+- `data/processed/cluster_territorial/cluster_segmento_censal/`
+- `data/processed/cluster_territorial/resumen/`
+
+Función principal:
+
+- `scripts/construir_cluster_territorial_segmento_censal.R`
+
+Decisiones principales:
+
+- El segmento censal de referencia del cluster se asigna usando el centroide operativo del cluster, calculado como promedio de sus posiciones.
+- Se guardan variables de población, hogares, viviendas, porcentaje de hogares con NBI y densidades por km2.
+- Se calcula también el segmento principal por cantidad de posiciones del cluster.
+- Los clusters que tienen posiciones en más de un segmento quedan marcados con `cluster_multisegmento`.
+- La salida queda particionada por `version_cluster`.
+
+## COM a clusters
+
+::: {.callout-note}
+### Tabla generada: `data/processed/com_contenedor_cluster/asignaciones_com/`
+
+Esta tabla asigna cada reclamo COM al contenedor activo/elegible más cercano en el mismo día y recupera el `cluster_id` asociado.
+
+**Objetivo:** convertir reclamos puntuales en eventos asociados a una unidad espacial estable.
+
+**Fundamento:** la asignación a contenedor es un paso tecnico. Para modelar se usa el cluster, porque en zonas con varios contenedores cercanos un reclamo puede reflejar un problema compartido por la zona y no solo por el contenedor más cercano.
+:::
+
+Salida:
+
+- `data/processed/com_contenedor_cluster/`
+
+Función principal:
+
+- `asignar_com_a_contenedores_activos()`
+
+Reglas:
+
+- COM se asigna al contenedor activo/elegible más cercano del mismo día.
+- `asignado`: distancia <= 50 m.
+- `revision`: 50 m < distancia <= 100 m.
+- `pendiente`: distancia > 100 m.
+- Para targets de modelo se conservan `asignado` y `revision`; `pendiente` queda fuera.
+
+## Base cluster-día
+
+::: {.callout-note}
+### Tabla generada: `data/processed/modelo_cluster_dia/base_cluster_dia/`
+
+Esta tabla contiene una fila por `cluster_id` y `dia`, con targets COM y features contemporaneas de levantes.
+
+**Objetivo:** construir la unidad base de entrenamiento.
+
+**Fundamento:** el modelo debe predecir riesgo por zona/cluster. Agregar a cluster reduce ruido de asignación puntual y evita crear falsos ceros en contenedores vecinos.
+
+Para tiempos desde último levante se conservan agregados históricos y agregados predictivos. Para modelado operativo deben priorizarse las columnas con sufijo `_pred`, por ejemplo:
+
+- `mean_tiempo_desde_ultimo_levante_pred`
+- `max_tiempo_desde_ultimo_levante_pred`
+- `mean_ratio_tiempo_periodo_pred`
+- `max_ratio_tiempo_periodo_pred`
+:::
+
+Salida:
+
+- `data/processed/modelo_cluster_dia/base_cluster_dia/`
+- `data/processed/modelo_cluster_dia/com_cluster_dia/`
+- `data/processed/modelo_cluster_dia/resumen/`
+
+Función principal:
+
+- `construir_base_cluster_dia()`
+
+Decisiones principales:
+
+- La unidad de entrenamiento pasa a ser `cluster_id`/`dia`.
+- La base se limita al rango temporal con cobertura COM.
+- Los reclamos se agregan por cluster/día.
+- Las features de levante se agregan desde contenedores activos/elegibles del cluster.
+
+## Features históricas
+
+::: {.callout-note}
+### Tabla generada: `data/processed/modelo_cluster_dia/features_cluster_dia/`
+
+Esta es la tabla principal para modelado. Extiende `base_cluster_dia` con features históricas de reclamos.
+
+**Objetivo:** incorporar memoria temporal del cluster sin usar información del día objetivo.
+
+**Fundamento:** los reclamos tienden a tener persistencia espacial y temporal. Las ventanas históricas capturan esa persistencia, pero excluyen el día actual para evitar leakage.
+:::
+
+Salida:
+
+- `data/processed/modelo_cluster_dia/features_cluster_dia/`
+- `data/processed/modelo_cluster_dia/resumen_features/`
+
+Función principal:
+
+- `construir_features_historicas_cluster_dia()`
+
+Features creadas:
+
+- `n_reclamos_lag1`
+- `tuvo_reclamo_lag1`
+- ventanas de 7 y 30 días.
+- días validos de existencia del cluster por ventana.
+- `dias_desde_ultimo_reclamo`
+- `sin_reclamo_previo_observado`
+- `dias_historia_observada_cluster`
+- `dias_desde_ultimo_reclamo_o_inicio`
+
+Reglas:
+
+- Todas las ventanas excluyen el día objetivo.
+- La existencia del cluster se define como `n_contenedores_activos >= 1`.
+- `dias_historia_observada_cluster` cuenta días previos donde el cluster existia.
+- `sin_reclamo_previo_observado` indica que no hay reclamos previos observados para ese cluster.
+- `dias_desde_ultimo_reclamo_o_inicio` usa `dias_desde_ultimo_reclamo` cuando existe reclamo previo; si no existe, usa `dias_historia_observada_cluster`.
+
+Está separacion evita que el modelo trate igual a un cluster sin reclamo previo en su primer día observado y a un cluster sin reclamo previo luego de muchos días de historia.
+
+## Interpretación de `_pred` e inferencia de actividad
+
+Las variables con sufijo `_pred` y las variables de inferencia describen dos
+aspectos distintos de la construcción de features de levantes.
+
+### Variables con sufijo `_pred`
+
+El sufijo `_pred` no indica que el valor haya sido estimado por el modelo. Indica
+que la variable fue calculada usando solo la información disponible al corte
+operativo de predicción, actualmente `D 01:00`.
+
+Por ejemplo, para predecir el día `D`, `fecha_ultimo_levante_pred` conserva el
+último levante ocurrido hasta `D 01:00`. Si existe un levante posterior durante
+el mismo día, no se incorpora porque todavía no era conocido al momento de
+predecir. A partir de ese corte se calculan los tiempos desde el último levante
+y los ratios respecto al período teórico, que luego se agregan a nivel
+`cluster_id`/`dia` mediante minimo, media, mediana y maximo.
+
+Las versiones sin `_pred` pueden ser útiles para análisis retrospectivos, pero
+no deben usarse como features de un modelo operativo ejecutado al comienzo del
+día. La finalidad de las versiones `_pred` es evitar leakage temporal.
+
+### Actividad observada e inferida
+
+La inferencia de actividad no estima la fecha de un levante. Indica si el estado
+activo del contenedor fue observado explicitamente ese día o si fue completado
+dentro de un intervalo considerado activo:
+
+- `observada`: existe un registro administrativo de estado para el contenedor
+  ese día;
+- `inferida`: el día pertenece a un intervalo activo, pero no existe una
+  observacion explicita de estado ese día.
+
+La confiabilidad de esa inferencia se representa mediante variables como
+`dias_desde_ultima_observacion_estado`,
+`dias_hasta_siguiente_observacion_estado`,
+`dias_total_tramo_inferido_estado` y `actividad_inferida_lejana`. Estas variables
+no forman una probabilidad ni un score formal de confianza: son indicadores de
+la distancia y extension de la imputacion. En general, una actividad observada
+tiene evidencia más fuerte que una actividad inferida, y una inferencia se
+considera más debil cuanto más lejos queda de la última observacion o cuanto más
+largo es el tramo inferido.
+
+La regla vigente refleja está diferencia mediante
+`contenedor_dia_elegible_modelo`: se admite un contenedor activo con estado
+observado, o con estado inferido cuando han pasado como maximo 8 días desde la
+última observacion y el tramo inferido total no supera 15 días. A nivel cluster,
+está calidad de información también se resume en variables como
+`n_contenedores_observados`, `n_contenedores_inferidos`,
+`n_contenedores_inferencia_lejana`, `mean_dias_total_tramo_inferido_estado` y
+`max_dias_total_tramo_inferido_estado`.
+
+En sintesis, `_pred` controla **que información temporal podia conocer el
+modelo**, mientras que la inferencia de actividad describe **si el estado del
+contenedor fue observado o imputado y cuan extensa es esa imputacion**. Las
+variables `_pred` se construyen a partir de `fecha_levante`; la inferencia de
+actividad se construye principalmente a partir de los registros de estado y
+`fecha_fact`.
+## Capa histórica optimizada para la app v2
+
+Para evitar que la interfaz cargue el detalle histórico completo, el script
+`scripts/construir_tablas_historicas_app_v2.R` deriva dos salidas en
+`app_operativa_v2/data/historico/`:
+
+- `serie_historica_com/`: estimaciones y observados por día para Montevideo y
+  cada barrio;
+- `detalle_cluster_dia/`: columnas mínimas para selección y evaluación del mapa,
+  particionadas por `dia_objetivo` y `modelo_id`.
+
+La primera tabla puede cargarse completa. La segunda debe filtrarse por fecha y
+modelo antes de materializarse en memoria. Los atributos territoriales estables
+se obtienen del maestro de clusters y no se duplican en cada fila histórica. El
+contrato se documenta en `documentacion/contrato_datos_app_operativa_v2.qmd`.

@@ -1,5 +1,14 @@
-port <- as.integer(Sys.getenv("APP_PORT", unset = "3839"))
-host <- Sys.getenv("APP_HOST", unset = "127.0.0.1")
+# port <- as.integer(Sys.getenv("APP_PORT", unset = "3839"))
+# host <- Sys.getenv("APP_HOST", unset = "127.0.0.1")
+
+port <- as.integer(
+  Sys.getenv(
+    "CDSW_APP_PORT",
+    unset = Sys.getenv("APP_PORT", unset = "3839")
+  )
+)
+
+host <- "127.0.0.1"
 
 args <- commandArgs(trailingOnly = FALSE)
 file_arg <- grep("^--file=", args, value = TRUE)

@@ -39,6 +39,9 @@ agregado diario de reclamos COM (T028):
 - Historico ampliado el 2026-09-08: puntos de seleccion/observacion y tabla de
   estrategias para COM; evaluacion diaria ZL con seleccion, visitas y problemas;
   y lunes destacados en la serie temporal. La revision visual sigue pendiente.
+- preparacion del flujo local -> Git -> Cloudera: configuracion sensible fuera
+  del codigo, lista de inclusion para el repositorio publico y datos de la app
+  concentrados bajo `app_operativa_v2/data/`.
 
 ## Lectura Actual
 
@@ -86,6 +89,9 @@ promocion al scoring ni a la app.
   `app_operativa_v2/data/historico/` y `app_operativa_v2/data/referencia/`.
   Los generadores publican directamente en esas rutas para evitar copias
   desactualizadas.
+- El repositorio publico en GitHub y su clon en Cloudera ya existen. Sigue
+  pendiente revisar y subir el primer commit, transferir los datos por fuera de
+  Git y validar la ejecucion en Cloudera; ver T031.
 
 ## Documentos Clave Para Retomar
 
@@ -103,9 +109,13 @@ promocion al scoring ni a la app.
 12. `documentacion/pronostico_diario_clusters_reclamo_com.qmd`
 13. `documentacion/resumen_pronostico_diario_com.qmd`
 14. `tareas/T030_refactorizar_app_operativa_shiny.md`
+15. `tareas/T031_publicar_proyecto_y_replicar_en_cloudera.md`
 
 ## Proximos Pasos Probables
 
+- Completar T031: rotar las credenciales anteriores, auditar el primer commit,
+  publicarlo, cargar los datos en Cloudera por fuera de Git y validar alli
+  `app_operativa_v2`.
 - Completar la fuente faltante de Zona Limpia para Municipio B cuando este disponible; hasta entonces T013 sigue pendiente y la cobertura debe marcarse como incompleta.
 - Definir el contrato conceptual conjunto COM/ZL y una visualizacion que muestre coincidencias y divergencias sin crear implicitamente un unico target (T024).
 - Definir que accion operativa soportara la app: seleccion de clusters, dibujo de zonas, agrupacion sugerida o recorridos, junto con restricciones y metricas de campo (T025).

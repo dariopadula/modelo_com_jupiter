@@ -1108,3 +1108,36 @@ Las pruebas finalizaron con `SESSION_OK`, `HISTORICO_OK`, `DIA_COM_OK`,
 - `scripts/construir_tablas_historicas_app_v2.R`
 - `scripts/construir_maestro_clusters_app_v2.R`
 - `tareas/T030_refactorizar_app_operativa_shiny.md`
+
+## 2026-09-10 - Preparacion del flujo local a Git y Cloudera
+
+Area: versionado / portabilidad
+
+### Resumen
+
+El proyecto queda preparado para publicar su codigo en un repositorio publico
+y cargar los datos en Cloudera por fuera de Git. El usuario confirma que creo
+el repositorio en GitHub y que ya existe un clon en Cloudera.
+
+### Decisiones
+
+- Versionar solo el codigo y la documentacion acordados mediante una lista de
+  inclusion en `.gitignore`.
+- Excluir credenciales, datos pesados, outputs, archivos de RStudio,
+  `AGENTS.md` y la app anterior.
+- Conservar la estructura general de `data/` mediante `README.md` y `.gitkeep`.
+- Mantener los datos de ejecucion de la app fuera de Git y bajo rutas relativas
+  dentro de `app_operativa_v2/data/`.
+
+### Pendiente
+
+Revisar y publicar el primer commit, transferir los datos a Cloudera y validar
+la app en ese entorno. El seguimiento queda en T031.
+
+### Archivos relacionados
+
+- `.gitignore`
+- `Renviron.example`
+- `data/README.md`
+- `app_operativa_v2/data/README.md`
+- `tareas/T031_publicar_proyecto_y_replicar_en_cloudera.md`

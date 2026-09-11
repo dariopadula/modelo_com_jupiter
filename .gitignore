@@ -50,6 +50,9 @@ skills/
 # Recursos generados al renderizar documentos.
 **/*_files/
 
+# Codigos de R
+/app_operativa_v2/ejecuta_app.R
+
 # Temporales y registros.
 *.log
 *.tmp

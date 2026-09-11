@@ -13,6 +13,7 @@ en `tareas/`; abrir solo las fichas necesarias para el trabajo actual.
 
 ## En proceso
 
+- [T031 - Publicar el proyecto y completar la replica en Cloudera](tareas/T031_publicar_proyecto_y_replicar_en_cloudera.md) - prioridad alta. El repositorio publico y su clon en Cloudera ya existen; falta revisar, crear y subir el primer commit, cargar los datos por fuera de Git y validar la app en destino.
 - [T028 - Pronosticar el volumen diario de clusters con reclamo COM](tareas/T028_pronosticar_y_explicar_volumen_diario_reclamos_com.md) — prioridad alta. Validar el candidato predictivo agregado, definir su contrato operativo e integrarlo en la app sin mezclarlo con el ranking espacial.
 - [T030 - Refactorizar la app operativa Shiny](tareas/T030_refactorizar_app_operativa_shiny.md) - prioridad alta. Evaluaciones diarias COM y ZL implementadas; revisar visualmente Historico y sincronizacion, luego definir metricas territoriales adicionales.
 
@@ -30,7 +31,7 @@ en `tareas/`; abrir solo las fichas necesarias para el trabajo actual.
 
 ## Finalizadas
 
-- [T001 - Organizar memoria estable del proyecto](tareas/T001_organizar_memoria_estable_del_proyecto.md) — prioridad alta. El proyecto todavia no esta formalmente versionado y se viene trabajando con bastante contexto acumulado en sesiones de Codex.
+- [T001 - Organizar memoria estable del proyecto](tareas/T001_organizar_memoria_estable_del_proyecto.md) — prioridad alta. Se organizo una memoria estable para retomar el proyecto sin depender del contexto conversacional.
 - [T004 - Base ampliada COM para analisis Zona Limpia](tareas/T004_base_ampliada_com_para_analisis_zona_limpia.md) — prioridad alta. Los datos COM incluyen incidentes que comienzan con `Zona limpia`.
 - [T005 - Primer descriptivo de Zona Limpia](tareas/T005_primer_descriptivo_de_zona_limpia.md) — prioridad alta. Luego de generar `data/parquet/com_completo/` y definir el mapeo canonico de etiquetas Zona Limpia, se necesita una primera lectura agregada para entender composicion, visitas e...
 - [T006 - Comparacion COM vs Zona Limpia por cluster-dia](tareas/T006_comparacion_com_vs_zona_limpia_por_cluster_dia.md) — prioridad alta. Se quiere comparar, dia a dia y a nivel `cluster_id`, los reclamos COM asignados al target del modelo con los resultados reportados por Zona Limpia.

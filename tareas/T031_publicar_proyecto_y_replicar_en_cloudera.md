@@ -37,6 +37,17 @@ Cloudera por fuera de Git.
    rutas relativas.
 7. Configurar las variables de entorno en Cloudera y validar la app v2.
 
+## Avance 2026-09-11
+
+La validacion de datos y sesion en Cloudera finalizo con `HISTORICO_OK` y
+`SESSION_OK`. El primer despliegue fallo porque Cloudera ejecuto
+`app_operativa_v2/run_app.R` desde la raiz sin pasar `--file`; el lanzador
+interpretaba entonces la raiz como `appDir`.
+
+Se ajusto el lanzador para localizar `app_operativa_v2/app.R` tanto desde la
+raiz del proyecto como desde la propia carpeta de la app. La prueba local desde
+la raiz inicio correctamente en `127.0.0.1` y el puerto configurado.
+
 ## Criterio De Finalizacion
 
 - El codigo acordado esta publicado en el repositorio sin secretos ni datos

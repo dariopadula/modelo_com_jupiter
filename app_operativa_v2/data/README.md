@@ -14,3 +14,8 @@ publican aquí las salidas que consume `app_operativa_v2`.
 Los constructores de historico y del maestro territorial validan en staging
 antes de publicar. En Cloudera debe conservarse exactamente esta estructura
 relativa.
+
+La misma estructura puede alojarse fuera del proyecto bajo el prefijo S3
+`dario/modelo_com_app/data/`. La selección entre la copia local y el Object
+Store se realiza mediante `APP_DATA_SOURCE`; el contrato de carpetas y columnas
+no cambia.

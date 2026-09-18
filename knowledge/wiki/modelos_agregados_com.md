@@ -11,6 +11,8 @@ la evidencia. No reemplaza las fuentes primarias:
 - gestion y pendientes: `tareas/T028_pronosticar_y_explicar_volumen_diario_reclamos_com.md`;
 - resultados, metricas y graficos: `documentacion/pronostico_diario_clusters_reclamo_com.qmd`.
 - resumen para compartir: `documentacion/resumen_pronostico_diario_com.qmd`.
+- modelo inferencial y bootstrap:
+  `documentacion/informe_diagnostico_temporal_modelo_inferencial_com.qmd`.
 
 ## Problema
 
@@ -72,6 +74,12 @@ interpretacion causal.
 15. **Poda.** Se selecciona la version compacta de cinco variables: RMSE
     combinado 156,0, correlacion 0,691 y 83,0% de variabilidad reproducida.
     Reduce las entradas dinamicas de 13 a 5 y mejora test frente a la completa.
+16. **Modelo inferencial final.** Se fija una especificacion lineal
+    `segmento/dia` con densidad, NBI, atraso, `q60`, `q7 - q60`, atraso por
+    cambio reciente y atraso por dia de semana. Se elimina atraso por feriado.
+    El RMSE combinado es 153,8. Un bootstrap conjunto de 50 replicas remuestrea
+    semanas y segmentos completos: densidad conserva signo positivo y NBI signo
+    negativo en 50/50; atraso por cambio incluye cero.
 
 ## Lectura Conceptual Actual
 
@@ -87,6 +95,58 @@ El pronostico se entiende en tres capas:
 `q7 - q60` resume esa tercera idea: distingue un territorio habitualmente
 reclamador de uno cuya propension aumento recientemente.
 
+Para la reevaluacion con datos hasta septiembre de 2026, `q30 + ciclo anual`
+queda como candidato inferencial principal provisorio. Esta decision permite
+usar un año completo de entrenamiento; no reemplaza todavia la referencia
+anterior ni implica haber abierto el nuevo test.
+
+La capa compartida ya esta construida hasta `2026-09-14`. La tabla
+`data/processed/features_compartidas/segmento_dia/` incluye q7, q30, w7, w30,
+atraso, ciclo anual, densidad y NBI, con COM cerrado en D-2. No contiene splits
+ni clima; estos se definen o unen despues de congelar el diseno temporal.
+
+El diseno temporal ya esta congelado como `reevaluacion_2026_v1`: un año de
+train entre abril de 2025 y marzo de 2026, validacion abril-junio de 2026 y test
+sellado desde julio hasta el 14 de septiembre de 2026. La seleccion de modelos
+se hara solo con validacion.
+
+El paso 5 ya entreno `pronostico_a0`,
+`pronostico_a0_xgb_compacto_q30` e `inferencial_q30_ciclo`. La correccion
+compacta usa `q7-q30` para alinearse con la historia compartida de 30 dias. Los
+hiperparametros quedaron fijos, no hubo bootstrap y no se leyo el test.
+
+En validacion, la correccion compacta reduce el RMSE de A0 de `164,44` a
+`149,70` y mejora en abril, mayo y junio. El candidato inferencial logra
+correlacion `0,690`, pero su RMSE es `187,85` y su sesgo `-125,24`; se conserva
+por su finalidad explicativa y debe juzgarse tambien por la claridad y
+estabilidad de sus efectos. El test sigue sellado hasta congelar finalistas.
+
+La prueba de reemplazar q30 y `q7-q30` por q7 sola eleva la correlacion a
+`0,710`, pero empeora RMSE a `191,00`, MAE a `159,94` y sesgo a `-133,59`. El
+coeficiente de q7 tambien queda negativo. No corresponde agregar q7 junto con
+q30 y su diferencia porque existe dependencia lineal exacta. Se conserva q30
+mas cambio reciente como referencia provisoria.
+
+Dos extensiones de esa referencia mejoran validacion: agregar el cuadrado de
+`q7-q30` reduce el RMSE a `184,57`, y agregar `q30 * (q7-q30)` lo reduce a
+`183,82`. Ambas mejoran en abril, mayo y junio, pero sus predicciones tienen
+correlacion `0,9999`. Esto sugiere una forma no lineal omitida, sin permitir
+distinguir todavia curvatura de interaccion. Ninguna variante fue promovida y
+el test permanece sellado.
+
+Retirar `atraso * (q7-q30)` del modelo cuadratico deja RMSE `185,49`: conserva
+una mejora de `2,36` frente a la referencia lineal, con una perdida de `0,92`
+frente al cuadratico completo. La simplificacion es interpretable, pero la
+interaccion retirada aporta una ganancia predictiva pequena.
+
+El bootstrap conjunto de 50 replicas del cuadratico completo respalda la
+convexidad: el cuadrado de `q7-q30` es positivo en 50/50 y tiene intervalo
+`[0,0110; 0,0202]`. El cambio lineal cruza cero. `Atraso * cambio` es negativo en
+50/50 (`[-0,0090; -0,0038]`), por lo que en esta especificacion no aparece como
+inestable. Densidad queda negativa y estable, mientras NBI cruza cero. Esta
+lectura territorial difiere del modelo anterior con q60 y debe resolverse antes
+de congelar un finalista inferencial.
+
 ## Decisiones Y Limites
 
 - Mantener A0 como referencia estructural.
@@ -95,6 +155,9 @@ reclamador de uno cuya propension aumento recientemente.
   tiempo desde levante, `rms_q_7`, `rms_w_7`, `q7 - q60` y feriado. No fue
   promovido aun al scoring ni a la app.
 - No interpretar SHAP o interacciones de XGBoost como efectos causales.
+- En el modelo inferencial, interpretar densidad y NBI como asociaciones con
+  reclamos registrados. El bootstrap respalda estabilidad dentro de la muestra,
+  no identificacion causal.
 - No reabrir variantes descartadas sin una hipotesis nueva o un cambio de datos.
 - Evaluar siempre con cortes temporales y respetar COM hasta `D-2`.
 - Algunos experimentos iniciales basados en scores COM no fueron OOF de extremo
@@ -108,8 +171,12 @@ reclamador de uno cuya propension aumento recientemente.
 Validar la logica del prototipo retrospectivo de app y definir el contrato
 operativo, los intervalos predictivos y el monitoreo antes de promover el modelo
 compacto al scoring diario. En paralelo, definir el umbral de dia complicado.
-En T029 queda pendiente disenar el modelo inferencial con variables claras e
-interpretables.
+En T029 queda pendiente acordar la presentacion sustantiva de los efectos. La
+exploracion con clima `D-1` ya se realizo: no produjo una mejora estable y el
+viento maximo conservo una asociacion negativa dificil de interpretar incluso
+al controlar el ciclo anual. En T032 corresponde congelar ahora los finalistas
+a partir de la validacion; cualquier nueva prueba climatica requiere
+completar la cobertura de temperatura y precipitacion.
 
 ## Donde Buscar Detalle
 

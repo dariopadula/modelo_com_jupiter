@@ -21,7 +21,7 @@ separado, porque sus scores corresponden a objetivos distintos.
 
 ## Datos de ejecucion
 
-La app usa exclusivamente rutas relativas dentro de `app_operativa_v2/data/`:
+Por defecto, la app usa rutas relativas dentro de `app_operativa_v2/data/`:
 
 - `operacional/`: predicciones y controles publicados por
   `scripts/construir_app_modelos_largo_historico.R`;
@@ -50,8 +50,48 @@ evaluacion. El entrenamiento no se muestra. `APP_HISTORICO_PATH` permite
 configurar la ruta base de estas tablas.
 
 `APP_DATA_PATH`, `APP_HISTORICO_PATH`, `APP_CLUSTER_PATH` y `APP_BARRIOS_PATH`
-permiten reemplazar las rutas por defecto. En Cloudera se debe replicar la misma
-estructura interna y cargar los datos por fuera de Git.
+permiten reemplazar las rutas por defecto. En Cloudera se puede conservar esa
+copia dentro del proyecto o usar la misma estructura desde el Object Store.
+
+### Fuente local o Cloudera S3
+
+La fuente predeterminada continúa siendo el sistema de archivos local:
+
+```text
+APP_DATA_SOURCE=local
+```
+
+Para consumir la misma estructura desde la conexión administrada de Cloudera:
+
+```text
+APP_DATA_SOURCE=cloudera_s3
+APP_S3_CONNECTION=S3 Object Store
+APP_S3_BUCKET=bucket
+APP_S3_PREFIX=dario/modelo_com_app/data
+```
+
+El modo S3 usa `reticulate` para reutilizar desde R el cliente autenticado de
+`cml.data_v1`. Las dependencias Python `boto3` y `raz-client` se declaran
+mediante `reticulate::py_require()` para que el entorno administrado por `uv`
+las resuelva sin depender de `pip`. Los objetos se descargan en una caché temporal y los lectores
+Arrow y `sf` conservan el mismo contrato que en modo local. La ubicación de la
+caché puede fijarse con `APP_S3_CACHE_PATH`; `APP_S3_REFRESH=1` fuerza una nueva
+descarga al reiniciar la app.
+
+La serie COM, el maestro territorial y el GeoPackage se materializan como
+insumos pequeños. Las predicciones operativas se limitan al mes que contiene el
+último día informado por `control_scoring`. Para el histórico, la app lista las
+particiones disponibles y descarga únicamente la combinación
+`dia_objetivo/modelo_id` elegida por el usuario.
+
+La estructura esperada bajo el prefijo es:
+
+```text
+dario/modelo_com_app/data/
+  operacional/
+  historico/
+  referencia/
+```
 
 La serie temporal marca con puntos solamente los lunes, sobre las lineas de
 observados y estimados, para identificar visualmente el comienzo de cada semana.
@@ -59,9 +99,10 @@ observados y estimados, para identificar visualmente el comienzo de cada semana.
 La guia Shiny se aplica mediante un modulo independiente con UI y servidor
 separados. Prueba especifica: `tests/test_evolucion.R` (desde `tests/`).
 
-La carga usa Arrow para detectar la fecha maxima y materializa solamente las
-predicciones de ese dia. Esto evita cargar el historico completo en memoria para
-una pantalla exclusivamente operativa.
+En modo local, Arrow detecta la fecha máxima y materializa solamente las
+predicciones de ese día. En modo S3, `control_scoring` identifica el mes que se
+debe descargar y Arrow aplica luego el mismo filtro diario. Esto evita cargar
+el histórico completo en memoria para una pantalla exclusivamente operativa.
 
 Ejecucion desde la raiz del proyecto:
 
@@ -81,6 +122,12 @@ Prueba de datos historicos, desde `app_operativa_v2/tests`:
 
 ```powershell
 & "C:\Program Files\R\R-4.5.1\bin\Rscript.exe" test_datos_historicos.R
+```
+
+Prueba de selección del backend, sin conectarse a S3:
+
+```powershell
+& "C:\Program Files\R\R-4.5.1\bin\Rscript.exe" test_fuente_datos.R
 ```
 ## Evaluacion del dia COM
 

@@ -41,7 +41,8 @@ secundaria para leer la relacion entre problemas observados ZL y reclamos.
 - Meses `202510`, `202511`, `202512`, `202603`, `202604`, `202605`.
 - `202508`, `202509`, `202601` y `202602` excluidos por cobertura anomala.
 - `Voluminosos` excluido del target principal.
-- Municipio B con cobertura incompleta en la fuente actual.
+- Municipio asignado espacialmente por cluster; el campo municipal original es
+  incompleto y no debe usarse para resumir cobertura.
 
 ## Archivos Principales
 
@@ -104,11 +105,20 @@ capas territoriales y categorias nominales. `operativo_segmento` usa menos
 columnas, evita municipio/CCZ/barrio nominal y queda muy competitivo en temporal;
 por ahora es el candidato parsimonioso mas razonable para seguir explorando.
 
+Para T032 se entrenaron nuevamente `zl_operativo_segmento` y
+`zl_amplio_actual` con el split `reevaluacion_2026_v1`. Luego se agrego
+`zl_operativo_segmento_demografia`, con poblacion, hogares y viviendas del
+segmento, sin territorio nominal. En validacion mejora al operativo basico en
+AUC (`0,6107` contra `0,6065`), logloss y Brier, con ventaja de AUC en los tres
+meses. El amplio conserva el mayor AUC (`0,6263`), pero usa territorio nominal.
+Todos subestiman la prevalencia observada y el test permanece sellado.
+
 ## Riesgos Antes De Cambiarlo
 
 - Usar COM como feature y contaminar un modelo que busca estar limpio de COM.
 - Generalizar desde visitas de Zona Limpia a toda la ciudad sin explicitar sesgo de seleccion.
-- Olvidar que Municipio B tiene fuente incompleta.
+- Excluir Municipio B por usar el campo municipal original en lugar de la
+  asignacion espacial del cluster.
 - Mezclar `Voluminosos` con problemas comparables.
 - Evaluar solo con split random por fila y no mirar random por dia ni estabilidad temporal.
 - Usar territorio nominal amplio como si fuera senal operativa generalizable.
@@ -123,7 +133,10 @@ por ahora es el candidato parsimonioso mas razonable para seguir explorando.
 
 ## Pendiente De Confirmar
 
-- Como cambia el modelo cuando se integre la fuente faltante de Municipio B.
+- Como cambia el modelo al recalcular sus insumos con Municipio B asignado
+  espacialmente.
 - Como comparar el modelo ZL puro contra ajustes por propension de visita.
 - Como integrar el score ZL puro junto al score COM en la app operativa.
+- Profundizar el candidato operativo con demografia y definir una estrategia de
+  calibracion antes de uso operativo.
 - Si se insiste con clima, evaluar con repeticiones random por dia, sensibilidad sin `mes_calendario` e interacciones/umbrales.

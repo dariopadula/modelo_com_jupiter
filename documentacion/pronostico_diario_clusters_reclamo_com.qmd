@@ -1756,8 +1756,8 @@ pequeña frente a X1, concentrada en validación; en test no supera a A0.
 En X2, tiempo desde el último levante y atraso medio concentran la mayor
 importancia. La propensión media aporta 6,5 % del *gain*. Un diagnóstico SHAP de
 interacciones sobre 10.000 filas externas muestra como par más fuerte de todo el
-modelo **atraso medio × propensión media**. También aparece entre los primeros
-cruces **tiempo desde último levante × propensión media**. Esto demuestra que el
+modelo **atraso medio $\times$ propensión media**. También aparece entre los
+primeros cruces **tiempo desde último levante $\times$ propensión media**. Esto demuestra que el
 modelo utiliza predictivamente la composición planteada, pero todavía no
 establece su dirección, interpretación causal ni estabilidad temporal.
 
@@ -2217,6 +2217,68 @@ de la variabilidad y mejora test. Dado que reduce las entradas dinámicas de 13 
 5, se selecciona la versión compacta como mejor equilibrio entre desempeño,
 estabilidad y parsimonia para el cierre de esta etapa.
 
+### Día de semana en la corrección XGBoost
+
+Se evaluó reincorporar `dia_semana` al XGBoost compacto. A0 ya contiene el
+efecto estructural del día de semana y `es_feriado` ya estaba incluido entre las
+cinco variables de la corrección. Por lo tanto, la única entrada nueva de esta
+prueba es `dia_semana`.
+
+Al incluirla, los árboles pueden aprender tanto una corrección residual del
+efecto principal como interacciones entre día de semana, feriado y las señales
+dinámicas (`media_tiempo_levante`, `rms_q_7`, `rms_w_7` y `q7 - q60`). La
+comparación no identifica por separado cuánto corresponde a efectos principales
+y cuánto a interacciones; evalúa su aporte predictivo conjunto.
+
+Para evitar interpretar una diferencia dependiente del muestreo aleatorio de
+XGBoost, se repitió el ajuste con cinco semillas. En la tabla, un delta negativo
+indica menor error al agregar día de semana.
+
+```{r}
+#| label: sensibilidad-dia-semana-xgboost
+path_xgb_calendario <- file.path(
+  "..", "outputs", "evaluacion_dia_semana_xgboost_com"
+)
+resumen_calendario <- fread(file.path(
+  path_xgb_calendario, "resumen_deltas.csv"
+))
+
+tabla_calendario <- resumen_calendario[, .(
+  Período = fifelse(
+    split_modelo == "validacion", "Validación",
+    fifelse(split_modelo == "test", "Test", "Validación + test")
+  ),
+  Semillas = semillas,
+  `Delta MAE medio` = round(delta_mae_media, 2),
+  `Delta RMSE medio` = round(delta_rmse_media, 2),
+  `Rango delta RMSE` = sprintf(
+    "%.2f a %.2f", delta_rmse_min, delta_rmse_max
+  ),
+  `Semillas con mejora RMSE` = sprintf(
+    "%d de %d", mejora_rmse_semillas, semillas
+  ),
+  `Delta correlación medio` = round(delta_correlacion_media, 3)
+)]
+
+kable(
+  tabla_calendario,
+  caption = "Compacto con día de semana menos compacto actual"
+)
+```
+
+El agregado mejora el RMSE de validación en cuatro de cinco semillas, con una
+reducción media de 1,43 clusters. En test mejora solo en dos semillas y el RMSE
+medio aumenta 0,73. En validación y test combinados, la reducción media es de
+0,53 y aparece en tres de cinco semillas. Las columnas indicadoras del día de
+semana concentran, en promedio, 1,64 % de la ganancia total de los árboles
+(rango 1,02 % a 2,10 %).
+
+La prueba sugiere una señal pequeña en validación, pero no una mejora temporal
+estable. La variante queda registrada para futuros backtests y no desplaza al
+compacto actual. Los resultados reproducibles están en
+`outputs/evaluacion_dia_semana_xgboost_com/` y el script es
+`scripts/evaluar_dia_semana_xgboost_com.R`.
+
 ```{r}
 #| label: serie-feriados-xgboost
 #| fig-width: 13
@@ -2291,3 +2353,24 @@ ggplot() +
   theme_minimal(base_size = 11) +
   theme(legend.position = "top", panel.grid.minor = element_blank())
 ```
+
+## Reevaluación 2026 con validación congelada
+
+Para T032 se entrenaron nuevamente A0 y su corrección XGBoost compacta con
+historia de 30 días. La comparación usa únicamente abril-junio de 2026; el test
+de julio al 14 de septiembre permanece sellado.
+
+| Modelo | RMSE | MAE | Sesgo | Correlación |
+|---|---:|---:|---:|---:|
+| A0 | 164,44 | 130,04 | -65,87 | 0,626 |
+| A0 + XGBoost compacto q30 | 149,70 | 121,77 | -43,41 | 0,681 |
+| Inferencial q30 + ciclo | 187,85 | 155,75 | -125,24 | 0,690 |
+
+La corrección compacta reduce el RMSE 9,0 % y el MAE 6,4 % frente a A0. La
+ventaja en RMSE aparece en abril, mayo y junio, aunque ambos modelos subestiman
+especialmente abril. El modelo inferencial conserva una correlación similar,
+pero no reproduce bien el nivel y no debe elegirse por desempeño predictivo.
+
+Las salidas reproducibles están en
+`outputs/reevaluacion_2026/validacion/metricas_agregados.csv` y
+`outputs/reevaluacion_2026/validacion/metricas_agregados_mes.csv`.

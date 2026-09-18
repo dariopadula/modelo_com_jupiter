@@ -1,0 +1,194 @@
+---
+title: "Cobertura municipal de Zona Limpia"
+subtitle: "Visitas efectivas y problemas detectados según la ubicación del cluster"
+date: "2026-09-17"
+format:
+  html:
+    theme: cosmo
+    toc: true
+    toc-depth: 2
+    embed-resources: false
+    html-math-method: plain
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+## Objetivo
+
+Este informe verifica la presencia de visitas de Zona Limpia por municipio y
+corrige una lectura anterior del Municipio B. La fuente original tiene el campo
+`municipio` vacío en una proporción importante de los registros. Por eso, el
+municipio se determina mediante el `cluster_id` asignado y la capa territorial
+`cluster_admin_territorial`, que es el mismo criterio espacial utilizado por la
+aplicación.
+
+La unidad de análisis es el **cluster-día**:
+
+- un visitado es un cluster-día con al menos una visita efectiva;
+- un problema detectado es un cluster-día visitado con basura fuera o
+  contenedor desbordado;
+- si existen varios registros sobre un mismo cluster y día, se cuentan como un
+  único visitado, de acuerdo con la visualización de la aplicación.
+
+```{r}
+library(arrow)
+library(dplyr)
+library(data.table)
+library(ggplot2)
+library(scales)
+library(knitr)
+library(kableExtra)
+
+resolver_path <- function(path) {
+  candidatos <- c(path, file.path("..", path), file.path("..", "..", path))
+  encontrado <- candidatos[file.exists(candidatos) | dir.exists(candidatos)]
+  if (!length(encontrado)) stop("No existe la ruta requerida: ", path)
+  encontrado[[1]]
+}
+
+path_zl <- resolver_path("data/processed/zona_limpia/zona_limpia_cluster_dia")
+path_admin <- resolver_path("data/processed/cluster_territorial/cluster_admin_territorial")
+
+zl <- open_dataset(path_zl, format = "parquet") |>
+  collect() |>
+  as.data.table()
+
+admin <- open_dataset(path_admin, format = "parquet") |>
+  collect() |>
+  as.data.table()
+
+admin <- unique(admin[, .(version_cluster, cluster_id, municipio)])
+zl <- admin[zl, on = c("version_cluster", "cluster_id")]
+zl[, dia := as.IDate(dia)]
+
+visitas <- zl[
+  hay_zl_visita_efectiva == TRUE & !is.na(municipio),
+  .(
+    problema = any(hay_zl_problema_comparable == TRUE)
+  ),
+  by = .(municipio, cluster_id, dia)
+]
+visitas[, mes := as.IDate(format(dia, "%Y-%m-01"))]
+
+resumen_municipio <- visitas[, .(
+  visitados = .N,
+  con_problema = sum(problema),
+  porcentaje_problemas = mean(problema),
+  primera_visita = min(dia),
+  ultima_visita = max(dia)
+), by = municipio][order(municipio)]
+
+resumen_mensual <- visitas[, .(
+  visitados = .N,
+  con_problema = sum(problema),
+  porcentaje_problemas = mean(problema)
+), by = .(mes, municipio)]
+
+resumen_mensual_grafico <- resumen_mensual[visitados > 1000]
+
+fmt_num <- function(x) format(x, big.mark = ".", decimal.mark = ",", scientific = FALSE)
+fmt_pct <- function(x) percent(x, accuracy = 0.1, decimal.mark = ",")
+```
+
+## Resultado puntual del 21 de mayo de 2026
+
+En el Municipio B, la aplicación muestra correctamente visitas para ese día:
+
+```{r}
+dia_b <- visitas[municipio == "B" & dia == as.IDate("2026-05-21")]
+
+data.table(
+  Medida = c("Clusters visitados", "Clusters visitados con problemas"),
+  Cantidad = c(nrow(dia_b), sum(dia_b$problema))
+) |>
+  kable(format = "html", align = c("l", "r")) |>
+  kable_styling(full_width = FALSE, bootstrap_options = c("striped", "condensed"))
+```
+
+El campo `municipio` de la fuente original está vacío para los registros
+asignados espacialmente a B ese día. Esto explica por qué una agregación directa
+de ese campo omitía las visitas que sí aparecen en el mapa.
+
+## Visitados por municipio y mes
+
+El gráfico conserva solamente combinaciones municipio-mes con más de 1.000
+cluster-días visitados. El filtro se aplica a cada municipio dentro de cada mes.
+
+```{r}
+#| label: grafico-visitas-municipio
+#| fig-width: 11
+#| fig-height: 7
+ggplot(
+  resumen_mensual_grafico,
+  aes(x = mes, y = visitados, fill = municipio)
+) +
+  geom_col(width = 24) +
+  facet_wrap(~ municipio, ncol = 4, scales = "free_y") +
+  scale_x_date(
+    date_breaks = "2 months",
+    date_labels = "%b\n%Y",
+    expand = expansion(mult = c(0.03, 0.06))
+  ) +
+  scale_y_continuous(
+    labels = label_number(big.mark = ".", decimal.mark = ","),
+    expand = expansion(mult = c(0.02, 0.10))
+  ) +
+  scale_fill_brewer(palette = "Dark2", guide = "none") +
+  labs(
+    title = "Visitas efectivas de Zona Limpia por municipio y mes",
+    subtitle = "Se muestran los municipio-mes con m\u00e1s de 1.000 cluster-d\u00edas visitados",
+    x = NULL,
+    y = "Clusters-d\u00eda visitados"
+  ) +
+  theme_minimal(base_size = 11) +
+  theme(
+    plot.title = element_text(face = "bold"),
+    panel.grid.minor = element_blank(),
+    strip.text = element_text(face = "bold")
+  )
+```
+
+El Municipio B supera el umbral desde mayo de 2026. La serie diaria muestra que
+la cobertura intensa y continua comienza el 14 de mayo; existían antecedentes
+anteriores, pero con otra intensidad y continuidad.
+
+## Porcentaje de problemas entre visitados
+
+El porcentaje se calcula como la cantidad de cluster-días visitados con
+problema comparable dividida por la cantidad de cluster-días con visita
+efectiva, multiplicada por 100.
+
+```{r}
+resumen_municipio[, .(
+  Municipio = municipio,
+  `Visitados` = fmt_num(visitados),
+  `Con problemas` = fmt_num(con_problema),
+  `% con problemas` = fmt_pct(porcentaje_problemas),
+  `Primera visita` = format(primera_visita, "%d/%m/%Y"),
+  `Ultima visita` = format(ultima_visita, "%d/%m/%Y")
+)] |>
+  kable(
+    format = "html",
+    align = c("l", "r", "r", "r", "r", "r"),
+    caption = "Problemas detectados entre los cluster-días visitados"
+  ) |>
+  kable_styling(
+    full_width = FALSE,
+    bootstrap_options = c("striped", "hover", "condensed")
+  )
+```
+
+Estas tasas describen los puntos seleccionados y visitados por Zona Limpia. No
+son una estimación de la prevalencia de problemas en todos los clusters de cada
+municipio, porque las visitas no constituyen una muestra aleatoria de la ciudad.
+
+## Conclusión sobre el Municipio B
+
+La primera visita espacialmente asignada al Municipio B aparece el 11 de
+septiembre de 2025. La fuente contiene actividad posterior en ese municipio y
+la cobertura diaria fuerte comienza el 14 de mayo de 2026. La afirmación previa
+de que los registros de B no estaban en la fuente surgió de usar el campo
+`municipio` original, que está incompleto; para los análisis territoriales debe
+usarse la asignación espacial del cluster.

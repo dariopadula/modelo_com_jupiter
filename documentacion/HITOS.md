@@ -2,6 +2,266 @@
 
 Este archivo registra avances importantes y decisiones estables del proyecto. Sirve como memoria cronologica para retomar el trabajo en futuras sesiones.
 
+## 2026-09-17 - Bootstrap conjunto del candidato inferencial cuadratico
+
+Area: inferencia COM / incertidumbre
+
+### Resultado
+
+Se completaron 50 replicas por semanas y segmentos completos para
+`inferencial_delta_cuadratico`; todas convergieron. Los errores bootstrap son
+entre `2,2` y `4,6` veces los convencionales en los terminos principales.
+
+El cambio cuadratico conserva signo positivo en 50/50 replicas, con intervalo
+percentil `[0,0110; 0,0202]`. El cambio lineal cruza cero. La interaccion entre
+atraso y cambio conserva signo negativo en 50/50, con intervalo
+`[-0,0090; -0,0038]`. Densidad queda negativa y estable; NBI cruza cero. Estos
+resultados modifican la lectura territorial de la especificacion anterior y
+deben revisarse antes de congelar el modelo. El test permanece sellado.
+
+### Archivos relacionados
+
+- `scripts/bootstrap_inferencial_delta_cuadratico_2026.R`
+- `scripts/validar_bootstrap_inferencial_delta_cuadratico_2026.R`
+- `outputs/reevaluacion_2026/exploracion_inferencia_curvatura_interaccion_q30_delta/bootstrap_cuadratico_completo/`
+- `documentacion/versiones/2026-09-17_bootstrap_inferencial_cuadratico.md`
+
+## 2026-09-17 - Curvatura e interaccion mejoran de forma casi indistinguible
+
+Area: inferencia COM / validacion
+
+### Resultado
+
+Se agrego por separado un termino cuadratico para `q7-q30` y la interaccion
+`q30 * (q7-q30)` al candidato inferencial. Ambas variantes mejoran RMSE, MAE,
+sesgo, correlacion y R2 en validacion, y reducen RMSE en abril, mayo y junio.
+
+La interaccion obtiene RMSE `183,82` y el termino cuadratico `184,57`, frente a
+`187,85` de la referencia lineal. Las predicciones de las dos extensiones
+tienen correlacion `0,9999`, por lo que la evidencia no permite distinguir con
+claridad curvatura de interaccion. No se promueve una variante, no se ejecuta
+bootstrap y el test sigue sellado.
+
+Una simplificacion adicional retira `atraso * (q7-q30)` del modelo cuadratico.
+Su RMSE es `185,49`: pierde `0,92` puntos frente al cuadratico completo y
+conserva una mejora de `2,36` frente a la referencia. La ganancia de claridad
+tiene por tanto un costo predictivo pequeno pero observable.
+
+### Archivos relacionados
+
+- `scripts/explorar_curvatura_interaccion_q30_delta_inferencia_2026.R`
+- `scripts/validar_exploracion_curvatura_interaccion_q30_delta_2026.R`
+- `outputs/reevaluacion_2026/exploracion_inferencia_curvatura_interaccion_q30_delta/`
+- `documentacion/versiones/2026-09-17_curvatura_interaccion_q30_delta.md`
+
+## 2026-09-16 - q7 sola no reemplaza la descomposicion q30 mas cambio
+
+Area: inferencia COM / validacion
+
+### Resultado
+
+Se evaluo `inferencial_q7_sola` sin bootstrap y sin abrir el test. No se agrego
+q7 al modelo vigente porque q7, q30 y `q7-q30` son linealmente dependientes. La
+prueba reemplaza q30, el cambio y su interaccion con atraso por q7 como unico
+resumen de propension.
+
+La correlacion sube de `0,690` a `0,710`, pero el RMSE empeora de `187,85` a
+`191,00`, el MAE de `155,75` a `159,94` y el sesgo de `-125,24` a `-133,59`.
+El RMSE empeora en los tres meses. El coeficiente estandarizado de q7 tambien es
+negativo (`-0,0368`). Se conserva q30 mas cambio reciente como referencia
+provisoria.
+
+### Archivos relacionados
+
+- `scripts/probar_q7_sola_inferencia_reevaluacion_2026.R`
+- `scripts/validar_exploracion_q7_sola_inferencia_2026.R`
+- `outputs/reevaluacion_2026/exploracion_inferencia_q7_sola/`
+- `documentacion/versiones/2026-09-16_prueba_q7_sola_inferencia.md`
+
+## 2026-09-16 - Informe preliminar de validacion con test reservado
+
+Area: modelos COM / pronostico agregado / inferencia / Zona Limpia
+
+### Resultado
+
+Se consolido un informe interno con la comparacion de los candidatos usando
+solo entrenamiento y validacion. El test aparece como una franja temporal
+reservada, sin observaciones, predicciones ni metricas. No se congelaron
+finalistas y el paso 8 queda pospuesto.
+
+El informe compara XGBoost y logistico reducido COM; suma de scores, A0 y A0
+mas correccion XGBoost para el volumen diario; parametros del inferencial sin
+bootstrap; y los candidatos ZL. Para ZL, la variante operativa con poblacion,
+hogares y viviendas del segmento queda como opcion principal mas transportable,
+y `amplio_actual` como benchmark territorial, con la falta de cobertura de
+Municipio B explicitada.
+
+### Archivos relacionados
+
+- `documentacion/informe_preliminar_validacion_modelos_2026.qmd`
+- `documentacion/informe_preliminar_validacion_modelos_2026.html`
+- `scripts/validar_informe_preliminar_validacion_2026.R`
+- `documentacion/versiones/2026-09-16_informe_preliminar_validacion_modelos.md`
+- `tareas/T032_actualizar_datos_y_reevaluar_modelos_2026.md`
+
+## 2026-09-16 - Demografia agregada al candidato ZL operativo
+
+Area: Zona Limpia / validacion
+
+### Resultado
+
+Se entreno `zl_operativo_segmento_demografia` con las 36 variables del operativo
+basico mas poblacion, hogares y viviendas del segmento. No incorpora municipio,
+CCZ, barrio, mes calendario ni agregados territoriales amplios.
+
+En validacion mejora el AUC de `0,6065` a `0,6107`, el logloss de `0,6826` a
+`0,6816` y el Brier de `0,2446` a `0,2441`. La ventaja de AUC aparece en abril,
+mayo y junio. La ganancia es pequena pero consistente, por lo que queda como
+candidato operativo preliminar y el modelo amplio como benchmark territorial.
+El test permanece sellado.
+
+### Archivos relacionados
+
+- `zona_limpia/15_entrenar_candidatos_zl_reevaluacion_2026.R`
+- `documentacion/informe_preliminar_validacion_modelos_2026.qmd`
+- `documentacion/versiones/2026-09-16_zl_operativo_demografia.md`
+
+## 2026-09-16 - Candidatos 2026 comparados solo en validacion
+
+Area: modelos COM / pronostico agregado / inferencia / Zona Limpia
+
+### Resultado
+
+Se completo el paso 6 de T032 sobre abril-junio de 2026, sin leer el test ni
+ejecutar bootstrap. XGBoost COM supera al logistico reducido en AUC, logloss y
+Brier, con mejora mensual consistente. A0 mas XGBoost compacto reduce el RMSE
+de `164,44` a `149,70` y mejora en los tres meses. El modelo inferencial
+conserva correlacion, pero subestima el nivel y tiene mayor error.
+
+En Zona Limpia, `amplio_actual` supera a `operativo_segmento` en las tres
+metricas probabilisticas y en cada AUC mensual. Ambos modelos subestiman la
+prevalencia observada, por lo que la calibracion queda como condicion para una
+eventual promocion operativa.
+
+### Archivos relacionados
+
+- `scripts/comparar_validacion_candidatos_reevaluacion_2026.R`
+- `scripts/validar_comparacion_validacion_reevaluacion_2026.R`
+- `outputs/reevaluacion_2026/validacion/`
+- `documentacion/versiones/2026-09-16_comparacion_validacion_candidatos.md`
+- `tareas/T032_actualizar_datos_y_reevaluar_modelos_2026.md`
+
+## 2026-09-16 - Candidatos 2026 entrenados sin abrir el test
+
+Area: modelos COM / pronostico agregado / inferencia / Zona Limpia
+
+### Resultado
+
+Se completo el paso 5 de T032. Quedaron entrenados siete candidatos: logistico
+y XGBoost para COM cluster/dia; A0 y A0 mas XGBoost compacto para pronostico
+agregado; q30 con ciclo anual para inferencia; y las variantes
+`operativo_segmento` y `amplio_actual` para Zona Limpia.
+
+Los hiperparametros se fijaron desde decisiones anteriores. No se uso la nueva
+validacion para tuning, no se ejecuto bootstrap y no se leyeron datos del test.
+Se guardaron predicciones de validacion para el paso 6, sin calcular todavia
+metricas comparativas.
+
+### Archivos relacionados
+
+- `scripts/entrenar_candidatos_com_cluster_reevaluacion_2026.R`
+- `scripts/entrenar_candidatos_agregados_inferencia_reevaluacion_2026.R`
+- `zona_limpia/15_entrenar_candidatos_zl_reevaluacion_2026.R`
+- `scripts/validar_candidatos_reevaluacion_2026.R`
+- `documentacion/versiones/2026-09-16_candidatos_reevaluacion_2026.md`
+- `tareas/T032_actualizar_datos_y_reevaluar_modelos_2026.md`
+
+## 2026-09-16 - Split temporal 2026 congelado
+
+Area: modelos COM / inferencia / Zona Limpia / validacion
+
+### Resultado
+
+Se completo el paso 4 de T032 con el contrato `reevaluacion_2026_v1`. El
+calendario reserva enero-marzo de 2025 como contexto, usa abril de 2025 a marzo
+de 2026 para entrenamiento, abril-junio de 2026 para validacion y julio al 14 de
+septiembre de 2026 para test.
+
+El test queda sellado hasta el paso 8. No puede usarse para ajuste, seleccion de
+candidatos ni reporte de metricas. Las fronteras temporales son comunes a COM
+predictivo, inferencia y Zona Limpia; cada familia conserva sus filtros de
+universo.
+
+### Archivos relacionados
+
+- `config/splits_reevaluacion_2026.csv`
+- `funciones/splits_temporales.R`
+- `scripts/congelar_splits_reevaluacion_2026.R`
+- `scripts/validar_splits_reevaluacion_2026.R`
+- `documentacion/versiones/2026-09-16_splits_reevaluacion_2026.md`
+- `tareas/T032_actualizar_datos_y_reevaluar_modelos_2026.md`
+
+## 2026-09-16 - Features compartidas actualizadas para la reevaluacion 2026
+
+Area: datos / modelos COM / inferencia / Zona Limpia
+
+### Resultado
+
+Se completo el paso 3 de T032 con corte al 14 de septiembre de 2026. La base
+cluster/dia y sus features historicas contienen 4.815.357 filas para 9.168
+clusters y 622 dias. Se agrego una capa compartida normalizada con calendario,
+territorio y una tabla segmento/dia de 571.954 filas para los modelos diarios e
+inferenciales.
+
+La tabla segmento/dia incluye q7, q30, w7 y w30 con rezago COM de dos dias,
+ademas de atraso, exceso sobre periodo teorico, densidad y NBI. No contiene
+splits ni clima. El target de Zona Limpia tambien se actualizo hasta el mismo
+corte y quedo listo para unir a las features cluster/dia.
+
+### Decision
+
+Las familias de modelos comparten fuentes canonicas y reglas temporales, pero no
+una tabla ancha unica. Los modelos COM predictivos usan cluster/dia; los modelos
+inferenciales usan segmento/dia; Zona Limpia conserva su target separado. Los
+splits se definiran en el paso 4 antes de cualquier entrenamiento o evaluacion.
+
+### Archivos relacionados
+
+- `scripts/construir_features_compartidas_modelos.R`
+- `scripts/validar_features_compartidas_modelos.R`
+- `documentacion/versiones/2026-09-16_features_compartidas_modelos.md`
+- `tareas/T032_actualizar_datos_y_reevaluar_modelos_2026.md`
+
+## 2026-09-15 - Fuentes actualizadas para la reevaluacion 2026
+
+Area: datos / modelos COM / inferencia / Zona Limpia
+
+### Resultado
+
+Se auditaron los nuevos snapshots locales y se actualizaron las fuentes
+preparadas hasta el 14 de septiembre de 2026 sin reconstruir los meses que no
+cambiaron. COM y COM ampliado reemplazaron abril-septiembre; levantes uso abril
+como contexto y reemplazo mayo-septiembre. Los 2.184 registros de levantes del
+15 de septiembre quedaron fuera por corresponder a un dia incompleto.
+
+La auditoria detecto un cambio de tipo en las fechas COM: el nuevo parquet usa
+`timestamp` sin zona. La rutina de actualizacion conserva la hora civil del
+snapshot antes de interpretarla en `America/Montevideo`, evitando un corrimiento
+de tres horas.
+
+Se acordo que el futuro test puro incluira julio, agosto y 1-14 de septiembre de
+2026. Todavia no se congelaron los splits, no se definio la lista de candidatos,
+no se reconstruyeron features y no se consultaron metricas del test.
+
+### Archivos relacionados
+
+- `scripts/auditar_fuentes_actualizacion_202609.R`
+- `scripts/actualizar_particiones_fuentes_202609.R`
+- `documentacion/versiones/2026-09-15_actualizacion_fuentes_modelos_2026.md`
+- `tareas/T032_actualizar_datos_y_reevaluar_modelos_2026.md`
+- `knowledge/wiki/estado_actual.md`
+- `knowledge/wiki/modelos_agregados_com.md`
+
 ## 2026-08-28 - Prototipo funcional del pronostico agregado en la app
 
 Area: app / modelos / COM / Zona Limpia
@@ -60,8 +320,6 @@ con alta afectacion territorial pasa a T029 como tarea pendiente independiente.
 - `TAREAS.md`
 - `tareas/T028_pronosticar_y_explicar_volumen_diario_reclamos_com.md`
 - `tareas/T029_explicar_dias_alta_afectacion_territorial_com.md`
-- `knowledge/wiki/estado_actual.md`
-- `knowledge/wiki/modelos_agregados_com.md`
 
 ## 2026-08-27 - Feriados en la correccion dinamica del pronostico COM
 
@@ -1141,3 +1399,87 @@ la app en ese entorno. El seguimiento queda en T031.
 - `data/README.md`
 - `app_operativa_v2/data/README.md`
 - `tareas/T031_publicar_proyecto_y_replicar_en_cloudera.md`
+
+## 2026-09-11 - App operativa v2 desplegada en Cloudera
+
+Area: app / despliegue / portabilidad
+
+### Resultado
+
+El repositorio publico se replico en Cloudera, los datos se cargaron por fuera
+de Git y las dependencias R quedaron disponibles en la biblioteca persistente
+del proyecto. Las pruebas en destino finalizaron con `HISTORICO_OK` y
+`SESSION_OK`.
+
+La aplicacion quedo en estado `Running`. El usuario verifico en navegador que
+la interfaz carga y que los mapas se muestran correctamente.
+
+### Ajuste de despliegue
+
+`app_operativa_v2/run_app.R` usa el puerto `CDSW_APP_PORT` cuando Cloudera lo
+provee y localiza la carpeta de la app tanto si se inicia desde la raiz como
+desde `app_operativa_v2/`.
+
+### Archivos relacionados
+
+- `app_operativa_v2/run_app.R`
+- `tareas/T031_publicar_proyecto_y_replicar_en_cloudera.md`
+- `tareas/T030_refactorizar_app_operativa_shiny.md`
+
+## 2026-09-14 - Referencia inferencial diaria COM fijada
+
+Area: modelos / COM / inferencia / incertidumbre
+
+### Resultado
+
+Se fijo un modelo binomial `mgcv::bam()` a nivel segmento/dia para explicar la
+cantidad diaria de clusters con reclamo. La especificacion incluye calendario,
+densidad, NBI, atraso, propension historica, cambio reciente, interacciones
+seleccionadas y efectos penalizados de barrio y segmento.
+
+El RMSE diario es 137,22 en validacion, 178,01 en test y 153,79 en el periodo
+combinado. Con la formula congelada se completaron 50 replicas de bootstrap
+conjunto, remuestreando semanas y segmentos completos. Densidad y NBI conservan
+el signo en las 50 replicas; la interaccion entre atraso y cambio reciente
+incluye cero y no se considera un efecto inferencial estable.
+
+El modelo describe asociaciones dentro de los barrios observados. No identifica
+efectos causales ni generaliza por si solo a barrios nuevos. Como proximo paso
+se evaluara si lluvia, temperatura y viento explican shocks diarios residuales,
+distinguiendo clima observado de informacion disponible al puntuar.
+
+### Archivos relacionados
+
+- `scripts/estimar_modelo_inferencial_final_com.R`
+- `documentacion/informe_diagnostico_temporal_modelo_inferencial_com.qmd`
+- `documentacion/versiones/2026-09-14_modelo_inferencial_final_com.md`
+- `tareas/T029_explicar_dias_alta_afectacion_territorial_com.md`
+
+## 2026-09-17 - Cobertura municipal de Zona Limpia corregida
+
+Area: zona limpia / calidad de datos / territorio
+
+### Resultado
+
+La auditoria territorial muestra que los registros de Zona Limpia del Municipio
+B estaban presentes, pero el campo `municipio` original aparece vacio en una
+proporcion importante. La asignacion mediante `cluster_id` y
+`cluster_admin_territorial`, que coincide con la usada por la aplicacion,
+recupera esas visitas.
+
+El 2026-05-21 se observan 82 clusters visitados en B y 29 con problema. La
+primera visita espacialmente asignada a B es del 2025-09-11 y la cobertura
+diaria intensa comienza el 2026-05-14.
+
+### Decision
+
+- Usar municipio espacial del cluster para resumenes territoriales.
+- Conservar los analisis anteriores como resultados historicos.
+- Recalcular antes de reutilizar resultados que excluyeron B por la hipotesis
+  de una fuente faltante.
+
+### Archivos relacionados
+
+- `zona_limpia/reportes/14_cobertura_municipal_zona_limpia.qmd`
+- `zona_limpia/README.qmd`
+- `tareas/T013_diagnosticar_cobertura_territorial_y_fuente_faltante_de_zona_limpia.md`

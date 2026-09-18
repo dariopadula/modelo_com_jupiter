@@ -82,6 +82,10 @@ Se completaron:
 - poda de variables dinamicas: se selecciona la version compacta de cinco
   variables. Obtiene RMSE combinado `156,0`, correlacion `0,691` y reproduce
   `83,0%` de la variabilidad, con mejor test que la especificacion completa.
+- evaluacion de `dia_semana` dentro de la correccion XGBoost compacta para
+  habilitar interacciones con feriado y variables dinamicas. En cinco semillas
+  mejora principalmente validacion, pero empeora el RMSE medio de test en 0,73
+  y solo mejora test en dos semillas; no desplaza al compacto vigente.
 - prototipo retrospectivo en la app con total estimado, mapa barrial, cupos
   dinamicos COM, seleccion ZL independiente y capas superpuestas. No implica
   promocion operativa del modelo agregado.

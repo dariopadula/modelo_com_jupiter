@@ -27,6 +27,10 @@ Documentar el pipeline de integracion de datos hasta la construcción de la base
 7. `scripts/asignar_com_contenedores_clusters.R`
 8. `scripts/construir_base_cluster_dia.R`
 9. `scripts/construir_features_historicas_cluster_dia.R`
+10. `scripts/construir_features_compartidas_modelos.R`
+11. `scripts/validar_features_compartidas_modelos.R`
+12. `scripts/congelar_splits_reevaluacion_2026.R`
+13. `scripts/validar_splits_reevaluacion_2026.R`
 
 ## Levantes
 
@@ -200,6 +204,34 @@ Decisiones principales:
 - Se excluyen repetidos.
 - Las coordenadas se transforman a EPSG:32721.
 
+### Actualización incremental desde snapshots locales
+
+Cuando se recibe un snapshot completo nuevo, primero se compara por mes contra
+el snapshot anterior. Solo se reemplazan las particiones nuevas o aquellas que
+contienen correcciones retrospectivas.
+
+La actualización de septiembre de 2026 se reproduce con:
+
+- `scripts/auditar_fuentes_actualizacion_202609.R`;
+- `scripts/actualizar_particiones_fuentes_202609.R`.
+
+El segundo script actualiza `data/parquet/com/`, `data/parquet/com_completo/` y
+`data/parquet/levante/` con corte explícito al 14 de septiembre de 2026. COM y
+COM ampliado reemplazan abril-septiembre; levantes usa abril como contexto y
+reemplaza mayo-septiembre. Antes de escribir, valida los meses, la fecha máxima
+y la unicidad contenedor/día de levantes; después comprueba que las particiones
+no objetivo conserven su cantidad de filas.
+
+Los snapshots COM actuales guardan las fechas como `timestamp` sin zona
+horaria. Para conservar la hora civil registrada, el actualizador recupera la
+representación UTC del snapshot y luego la interpreta como
+`America/Montevideo`. Leer esos campos directamente con la zona local desplaza
+la hora tres horas hacia atrás y puede cambiar el día de algunos reclamos.
+
+El campo `id` de COM puede reutilizarse en fechas diferentes. La actualización
+no lo trata como clave global única: el reemplazo se realiza sobre la partición
+mensual completa después de comparar y validar el contenido.
+
 ## Clusters
 
 ::: {.callout-note}
@@ -371,6 +403,78 @@ Reglas:
 - `dias_desde_ultimo_reclamo_o_inicio` usa `dias_desde_ultimo_reclamo` cuando existe reclamo previo; si no existe, usa `dias_historia_observada_cluster`.
 
 Está separacion evita que el modelo trate igual a un cluster sin reclamo previo en su primer día observado y a un cluster sin reclamo previo luego de muchos días de historia.
+
+## Capa compartida para modelos
+
+La reevaluación iniciada en septiembre de 2026 usa una capa compartida y
+normalizada. No existe una única tabla ancha que deba consumir todos los
+modelos. Cada familia combina las piezas que corresponden a su unidad de
+análisis:
+
+- `data/processed/modelo_cluster_dia/features_cluster_dia/`: historia dinámica
+  por `cluster_id`/`dia`, usada por los modelos predictivos COM y como insumo de
+  Zona Limpia;
+- `data/processed/cluster_territorial/cluster_segmento_censal/` y
+  `cluster_admin_territorial/`: atributos territoriales estáticos por cluster;
+- `data/processed/features_compartidas/calendario_dia.parquet`: calendario
+  común por día;
+- `data/processed/features_compartidas/segmento_dia/`: agregados destinados a
+  los modelos diarios e inferenciales por segmento;
+- `data/processed/zona_limpia/comparacion_com_zona_limpia_cluster_dia/`: target
+  observado específico de Zona Limpia, que se mantiene separado del target
+  COM.
+
+El script `scripts/construir_features_compartidas_modelos.R` crea el calendario
+y la tabla segmento/día. Esta última contiene atraso operativo, exceso sobre el
+período teórico, densidad, NBI y resúmenes de `q7`, `q30`, `w7` y `w30`. Las
+propensiones usan solamente reclamos conocidos hasta `D-2`, con suavizado
+cluster/barrio/global. Los parámetros actuales son 30 observaciones equivalentes
+para el prior de barrio y 200 para el prior global.
+
+La salida segmento/día tiene 571.954 filas, 952 segmentos, 62 barrios y cubre
+desde el 3 de enero de 2025 hasta el 14 de septiembre de 2026. El calendario
+cubre los 622 días desde el 1 de enero de 2025. Los dos primeros días no tienen
+una fila modelable en la tabla agregada porque se reservan para respetar el
+rezago de dos días. Después de ese arranque se conserva el 100 % de las filas;
+la cobertura total respecto de la fuente es 99,666 %.
+
+Esta capa no contiene etiquetas de entrenamiento, validación o test. Tampoco
+incorpora clima: temperatura y precipitación terminan el 13 de julio de 2026,
+mientras viento llega a septiembre. El clima se conserva como una unión
+opcional por día hasta resolver esa diferencia de cobertura.
+
+`scripts/validar_features_compartidas_modelos.R` controla claves, cobertura,
+rangos de las propensiones y ponderaciones, atributos territoriales, ausencia
+de splits y clima, y actualización del target de Zona Limpia.
+
+### Calendario temporal congelado
+
+Los splits se almacenan fuera de las features para que todas las familias usen
+el mismo calendario sin duplicar etiquetas en las tablas base. El contrato
+versionado está en `config/splits_reevaluacion_2026.csv` y se materializa en:
+
+- `data/processed/features_compartidas/calendario_splits_reevaluacion_2026.parquet`;
+- `data/processed/features_compartidas/metadata_splits_reevaluacion_2026.csv`.
+
+La versión `reevaluacion_2026_v1` define:
+
+| Rol | Desde | Hasta | Días | Uso |
+|---|---:|---:|---:|---|
+| Contexto | 2025-01-01 | 2025-03-31 | 90 | Construir historia y rezagos |
+| Entrenamiento | 2025-04-01 | 2026-03-31 | 365 | Ajustar modelos |
+| Validación | 2026-04-01 | 2026-06-30 | 91 | Comparar candidatos |
+| Test | 2026-07-01 | 2026-09-14 | 76 | Evaluación final única |
+
+El test está marcado como sellado. Antes del paso 8 no puede informar ajustes,
+selección de candidatos ni métricas. El contexto tampoco participa en el
+ajuste. La función `asignar_split_congelado()` permite unir este contrato por
+`dia` a cualquier unidad de modelado.
+
+Para reducir el costo de reconstrucción, las ventanas históricas se calculan
+con sumas acumuladas y desplazamientos. El resultado es algebraicamente
+equivalente a la ventana móvil previa, pero evita recorrer cada ventana para
+cada fila. La asignación de vecinos usa `FNN` cuando está disponible y `nabor`
+como alternativa compatible.
 
 ## Interpretación de `_pred` e inferencia de actividad
 

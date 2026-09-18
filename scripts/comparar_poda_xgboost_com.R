@@ -54,6 +54,13 @@ especificaciones <- list(
       "delta_q_7_60", "es_feriado"
     )
   ),
+  P3_compacto_calendario = list(
+    dia_semana = TRUE,
+    variables = c(
+      "media_tiempo_levante", "rms_q_7", "rms_w_7",
+      "delta_q_7_60", "es_feriado"
+    )
+  ),
   P4_minimo = list(
     dia_semana = FALSE,
     variables = c(

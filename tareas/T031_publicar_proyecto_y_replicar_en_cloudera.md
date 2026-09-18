@@ -1,17 +1,17 @@
 # T031 - Publicar el proyecto y completar la replica en Cloudera
 
-- Estado: en proceso
+- Estado: finalizada
 - Prioridad: alta
 
 ## Contexto
 
-El proyecto se prepara para el flujo local -> Git -> Cloudera. El repositorio
-publico en GitHub y su clon en Cloudera ya fueron creados. El codigo todavia
-debe revisarse y publicarse mediante el primer commit.
+El proyecto quedo integrado al flujo local -> Git -> Cloudera. El repositorio
+publico en GitHub contiene el codigo acordado y su clon en Cloudera sirve la
+app v2.
 
 La app v2 concentra sus datos de ejecucion en `app_operativa_v2/data/`. Esos
-datos, al igual que los datos generales y resultados pesados, se transfieren a
-Cloudera por fuera de Git.
+datos, al igual que los datos generales y resultados pesados, se transfirieron
+a Cloudera por fuera de Git.
 
 ## Avance 2026-09-10
 
@@ -26,16 +26,14 @@ Cloudera por fuera de Git.
   `app_operativa_v2/data/`.
 - El usuario creo el repositorio publico en GitHub y lo clono en Cloudera.
 
-## Plan Propuesto
+## Plan Ejecutado
 
-1. Rotar las credenciales que estuvieron escritas en el codigo anterior.
-2. Revisar la lista exacta de archivos que entrara al primer commit.
-3. Buscar credenciales, secretos y archivos pesados antes de publicar.
-4. Inicializar o vincular el repositorio local con GitHub.
-5. Crear y subir el primer commit.
-6. Cargar en Cloudera los datos requeridos por fuera de Git, conservando las
+1. Revisar los archivos del primer commit y excluir secretos y datos pesados.
+2. Vincular el repositorio local con GitHub y publicar `main`.
+3. Cargar en Cloudera los datos requeridos por fuera de Git, conservando las
    rutas relativas.
-7. Configurar las variables de entorno en Cloudera y validar la app v2.
+4. Instalar las dependencias R y unificar `R_LIBS_USER` en Cloudera.
+5. Validar los datos, la sesion Shiny y la aplicacion desplegada.
 
 ## Avance 2026-09-11
 
@@ -48,6 +46,15 @@ Se ajusto el lanzador para localizar `app_operativa_v2/app.R` tanto desde la
 raiz del proyecto como desde la propia carpeta de la app. La prueba local desde
 la raiz inicio correctamente en `127.0.0.1` y el puerto configurado.
 
+Las dependencias R se instalaron en la biblioteca persistente del proyecto y
+`R_LIBS_USER` quedo configurado en el `.Renviron` local de Cloudera. Las pruebas
+finalizaron con `HISTORICO_OK` y `SESSION_OK`. La aplicacion quedo en estado
+`Running`; se verifico en navegador que carga la interfaz y muestra los mapas.
+
+El repositorio local quedo limpio sobre `main`, vinculado a GitHub. La revision
+de archivos versionados confirmo que no contiene `.Renviron`, Parquet ni
+GeoPackage. Los datos se transfirieron mediante upload por fuera de Git.
+
 ## Criterio De Finalizacion
 
 - El codigo acordado esta publicado en el repositorio sin secretos ni datos
@@ -55,8 +62,9 @@ la raiz inicio correctamente en `127.0.0.1` y el puerto configurado.
 - Cloudera contiene el codigo y los datos en la estructura relativa definida.
 - La app v2 inicia y supera sus validaciones basicas en Cloudera.
 
-## Decisiones Pendientes
+## Cierre
 
-- Definir el mecanismo concreto para transferir los datos a Cloudera por fuera
-  de Git.
-- Confirmar las variables y rutas de conexion disponibles en Cloudera.
+Se cumple el criterio de finalizacion: codigo publicado sin datos pesados,
+estructura relativa replicada, dependencias disponibles y app validada en
+Cloudera. La rotacion de las credenciales locales anteriores sigue siendo una
+recomendacion administrativa independiente del despliegue.

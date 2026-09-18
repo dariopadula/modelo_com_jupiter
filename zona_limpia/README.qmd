@@ -23,6 +23,14 @@ La base ampliada para analisis se genera en:
 
 - `data/parquet/com_completo/`
 
+La actualización incremental de septiembre de 2026 deja ambas fuentes con
+corte al `2026-09-14`. El script
+`scripts/actualizar_particiones_fuentes_202609.R` reemplaza en
+`com_completo` solo abril-septiembre de 2026 y conserva las particiones
+anteriores. La comparación `cluster_id`/`dia` ya fue reconstruida hasta ese
+corte. Los modelos y sus resultados todavía deben recalcularse en los pasos
+posteriores; actualizar la fuente no los actualiza automáticamente.
+
 `com_completo` incluye:
 
 - incidentes usados por el modelo;
@@ -41,6 +49,7 @@ La base ampliada para analisis se genera en:
 - `reportes/07_visualizar_seleccion_zl_vs_modelo.qmd`: reporte visual con tasas, diferencias diarias, comparacion mensual y solapamiento entre seleccion Zona Limpia y top N del modelo.
 - `08_modelo_problema_observado_zl_xgboost.R`: primer baseline XGBoost para problema observado en visitas efectivas de Zona Limpia, sin usar COM como target principal ni como feature.
 - `reportes/13_modelo_problema_observado_zl.qmd`: reporte metodologico del baseline XGBoost para problema observado Zona Limpia.
+- `reportes/14_cobertura_municipal_zona_limpia.qmd`: auditoría actualizada de visitas y problemas por municipio usando la ubicación territorial del cluster.
 - `09_diagnostico_criterio_levante_zl.R`: diagnostica si la seleccion de Zona Limpia se asocia con tiempo desde ultimo levante, periodo teorico, ratio tiempo/periodo y exceso `tiempo - periodo` truncado.
 - `reportes/10_sesgos_seleccion_zona_limpia.qmd`: reporte que consolida sesgos de seleccion territorial, correspondencia COM-Zona Limpia y patrones asociados al criterio de levante.
 - `11_diagnostico_correspondencia_com_zl_territorio.R`: diagnostica, por municipio, CCZ y barrio, que proporcion de problemas observados por Zona Limpia tiene reclamo COM asociado.
@@ -87,6 +96,33 @@ La comparacion se realiza a nivel `cluster_id`/`dia`, usando la misma referencia
 - `data/processed/zona_limpia/asignaciones_zona_limpia/`
 - `data/processed/zona_limpia/zona_limpia_cluster_dia/`
 - `data/processed/zona_limpia/comparacion_com_zona_limpia_cluster_dia/`
+
+La reconstrucción del 16 de septiembre de 2026 usa las fuentes actualizadas y
+la referencia de clusters `v2026_05_25`. La comparación resultante cubre desde
+el 1 de enero de 2025 hasta el 14 de septiembre de 2026, con 988.986 filas
+`cluster_id`/`dia` y 9.012 clusters con algún evento COM o registro de Zona
+Limpia. Esta tabla prepara el target ZL para la reevaluación, pero no entrena ni
+evalúa ningún modelo.
+
+Para la próxima reevaluación, Zona Limpia usa las mismas fronteras temporales
+del contrato `reevaluacion_2026_v1`: entrenamiento hasta el 31 de marzo de
+2026, validación entre abril y junio y test sellado desde el 1 de julio hasta el
+14 de septiembre. Los meses con cobertura anómala se siguen excluyendo dentro
+de cada período; no se desplazan las fronteras para compensarlos.
+
+En el paso 5 de la reevaluación se entrenaron dos candidatos sin abrir el test:
+
+- `zl_operativo_segmento`, con 36 variables numéricas;
+- `zl_amplio_actual`, con 52 variables numéricas y municipio, CCZ y barrio como
+  variables categóricas.
+
+Ambos conservan 250 rondas fijas de XGBoost y generan únicamente predicciones
+de validación. La comparación de desempeño se realiza en el paso 6.
+
+Después de la comparación se agregó un tercer candidato,
+`zl_operativo_segmento_demografia`, con las 36 variables operativas más
+población, hogares y viviendas del segmento. Suma 39 variables numéricas y no
+utiliza municipio, CCZ, barrio, mes calendario ni agregados territoriales.
 
 Los resumenes livianos quedan en:
 
@@ -241,16 +277,21 @@ Lectura inicial:
 
 ## Sesgo Territorial Y Cobertura De Zona Limpia
 
-La cobertura territorial de Zona Limpia no debe interpretarse automaticamente como criterio operativo real. En particular, los registros de Zona Limpia del Municipio B no aparecen en esta fuente de datos; existen en otra tabla pendiente de integracion. Por lo tanto, la baja cobertura observada para Municipio B en estos analisis refleja un faltante de fuente y no necesariamente una decision de no visitar ese territorio.
+La cobertura territorial de Zona Limpia no debe interpretarse automáticamente como criterio operativo real. La auditoría del 17 de septiembre de 2026 corrigió la lectura previa sobre el Municipio B: los registros sí están presentes, pero el campo `municipio` de la fuente original está vacío en una proporción importante. Al asignar cada registro al municipio de su cluster, aparecen visitas en B desde el 11 de septiembre de 2025 y una cobertura diaria intensa desde el 14 de mayo de 2026.
+
+Para cualquier resumen territorial debe usarse `cluster_admin_territorial` y no el campo `municipio` del reclamo original. El informe reproducible queda en:
+
+- `zona_limpia/reportes/14_cobertura_municipal_zona_limpia.qmd`;
+- `zona_limpia/reportes/14_cobertura_municipal_zona_limpia.html`.
 
 Esto afecta:
 
 - diagnosticos de cobertura territorial;
 - comparaciones entre municipios, CCZ o barrios;
 - modelos entrenados con visitas efectivas de Zona Limpia;
-- evaluaciones contrafactuales que usen Zona Limpia como observacion de campo.
+- evaluaciones contrafactuales que usen Zona Limpia como observación de campo.
 
-Hasta integrar la fuente adicional del Municipio B, las lecturas territoriales deben marcar ese municipio como cobertura incompleta.
+Los análisis anteriores que excluyeron B bajo la hipótesis de una fuente faltante se conservan como resultados históricos. Antes de incorporar B a esos modelos o comparaciones deben recalcularse sus insumos con la asignación espacial corregida.
 
 ## Diagnostico De Criterio De Levante
 
@@ -276,7 +317,7 @@ Lectura inicial:
 - la tasa de visita aumenta al pasar de exceso `0` a excesos positivos moderados;
 - la tasa de problema observado en visitas tambien sube con excesos moderados;
 - el patron no es lineal simple: en excesos altos hay menos casos y la tasa de visita cae;
-- Municipio B debe interpretarse con cobertura incompleta por fuente faltante.
+- los resultados territoriales deben asignar el municipio mediante el cluster; el campo municipal original es incompleto, especialmente para los registros recuperados espacialmente en B.
 
 Este resultado sugiere que una variable de exceso sobre periodo teorico puede ser relevante para explicar la seleccion de Zona Limpia y deberia probarse explicitamente en el modelo observado.
 
@@ -288,7 +329,7 @@ El reporte consolidado queda en:
 
 Incluye:
 
-- advertencia de fuente faltante para Municipio B;
+- la advertencia histórica de fuente faltante para Municipio B, revisada por la auditoría territorial posterior;
 - cobertura por municipio y CCZ;
 - correspondencia COM-Zona Limpia cruda y ajustada por propension de visita;
 - diagnostico del exceso sobre periodo teorico de levante;
@@ -313,7 +354,7 @@ tasa_com_dado_zl_problema = ambos / zl_problema
 
 Es decir, entre los cluster-dias donde Zona Limpia observo un problema comparable, que proporcion tuvo tambien reclamo COM.
 
-Lectura inicial, excluyendo Municipio B por fuente incompleta:
+Lectura inicial histórica, calculada excluyendo Municipio B bajo la hipótesis entonces vigente de fuente incompleta:
 
 - la correspondencia global es baja: aproximadamente `10,8%` de los problemas observados por Zona Limpia tienen COM asociado;
 - existe variacion territorial fuerte entre municipios y CCZ;
@@ -340,7 +381,7 @@ El modelo estima:
 P(visita efectiva Zona Limpia | features previas de levante, territorio y calendario)
 ```
 
-Se excluye Municipio B por fuente incompleta. El baseline usa todas las visitas y una muestra de no visitados como controles; luego corrige las probabilidades por la prevalencia real de visita. Las visitas observadas se ponderan con pesos IPW estabilizados.
+Este análisis histórico excluyó Municipio B bajo la hipótesis entonces vigente de fuente incompleta. La auditoría territorial posterior mostró que los registros pueden recuperarse mediante la asignación espacial del cluster, por lo que estas estimaciones deben recalcularse antes de interpretar nuevamente la exclusión. El baseline usa todas las visitas restantes y una muestra de no visitados como controles; luego corrige las probabilidades por la prevalencia real de visita. Las visitas observadas se ponderan con pesos IPW estabilizados.
 
 Resultado inicial:
 
@@ -352,3 +393,28 @@ Resultado inicial:
 - ratio ajustado por propension `solo ZL problema / COM`: `5,07`.
 
 La lectura ajustada no elimina la hipotesis de subreclamo; si algo, la mantiene o la refuerza levemente dentro de los supuestos del modelo de propension.
+
+## Reevaluación 2026: comparación en validación
+
+Con el split `reevaluacion_2026_v1`, los candidatos se compararon solo entre el
+1 de abril y el 30 de junio de 2026. Se mantuvieron las exclusiones de meses con
+cobertura anómala y de `Voluminosos`; quedaron 108.854 visitas evaluables en 87
+días.
+
+| Candidato | AUC | Logloss | Brier | Probabilidad media |
+|---|---:|---:|---:|---:|
+| `operativo_segmento` | 0,6065 | 0,6826 | 0,2446 | 46,33 % |
+| `operativo_segmento_demografia` | 0,6107 | 0,6816 | 0,2441 | 46,17 % |
+| `amplio_actual` | 0,6263 | 0,6745 | 0,2408 | 46,43 % |
+
+Agregar demografía del segmento mejora las tres métricas frente al operativo
+básico y el AUC en abril, mayo y junio. En el 10 % priorizado por día, la
+precisión media aumenta de 70,18 % a 70,61 % y el lift de 1,296 a 1,303. El
+modelo amplio mantiene la mayor capacidad de discriminación, pero depende de
+territorio nominal y agregados de barrio y CCZ.
+
+La prevalencia observada es 52,67 %, superior a la probabilidad media de ambos
+modelos. Por tanto, una eventual versión operativa necesitará resolver la
+calibración. La variante con demografía queda como candidata principal más
+transportable y el modelo amplio como benchmark territorial. El test permanece
+sellado.

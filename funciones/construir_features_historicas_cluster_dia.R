@@ -65,23 +65,20 @@ construir_features_historicas_cluster_dia <- function(base_cluster_dia,
     col_dias <- paste0("dias_cluster_existente_", ventana, "d")
     col_pct <- paste0("pct_dias_cluster_existente_", ventana, "d")
 
-    hist[
-      ,
-      (col_sum) := zoo::rollapplyr(reclamos_previos, width = ventana, FUN = sum, partial = TRUE, fill = NA),
-      by = cluster_id
-    ]
+    hist[, (col_sum) := {
+      acumulado <- cumsum(reclamos_previos)
+      acumulado - data.table::shift(acumulado, ventana, fill = 0)
+    }, by = cluster_id]
 
-    hist[
-      ,
-      (col_tuvo) := zoo::rollapplyr(tuvo_previos, width = ventana, FUN = sum, partial = TRUE, fill = NA),
-      by = cluster_id
-    ]
+    hist[, (col_tuvo) := {
+      acumulado <- cumsum(tuvo_previos)
+      acumulado - data.table::shift(acumulado, ventana, fill = 0)
+    }, by = cluster_id]
 
-    hist[
-      ,
-      (col_dias) := zoo::rollapplyr(existente_previos, width = ventana, FUN = sum, partial = TRUE, fill = NA),
-      by = cluster_id
-    ]
+    hist[, (col_dias) := {
+      acumulado <- cumsum(existente_previos)
+      acumulado - data.table::shift(acumulado, ventana, fill = 0)
+    }, by = cluster_id]
 
     hist[, (col_pct) := get(col_dias) / ventana]
   }
@@ -89,9 +86,13 @@ construir_features_historicas_cluster_dia <- function(base_cluster_dia,
   hist[
     ,
     dias_desde_ultimo_reclamo := {
-      dias_reclamo_previos <- data.table::shift(data.table::fifelse(tuvo_reclamo_hist, dia, as.IDate(NA)), 1L)
-      ultimo_reclamo <- zoo::na.locf(dias_reclamo_previos, na.rm = FALSE)
-      as.numeric(dia - ultimo_reclamo)
+      dia_entero <- as.integer(dia)
+      dias_reclamo_previos <- data.table::shift(
+        data.table::fifelse(tuvo_reclamo_hist, dia_entero, NA_integer_),
+        1L
+      )
+      ultimo_reclamo <- data.table::nafill(dias_reclamo_previos, type = "locf")
+      as.numeric(dia_entero - ultimo_reclamo)
     },
     by = cluster_id
   ]

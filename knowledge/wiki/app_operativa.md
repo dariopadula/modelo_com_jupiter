@@ -164,5 +164,6 @@ dia COM compara distribuciones seleccionadas y observadas en dos mapas de
 hexagonos con escala comun, capas opcionales de puntos y una tabla de ocho
 estrategias. Evaluacion del dia ZL combina en un mapa seleccion, visita y
 problema, incluyendo visitas no seleccionadas, y compara cinco estrategias.
-Pendientes: validacion visual y de sincronizacion, metricas territoriales
-adicionales y lectura barrial de la serie. Retomar desde T030.
+La app se valido en Cloudera el 2026-09-11: inicio correctamente y mostro la
+interfaz y los mapas. Quedan metricas territoriales adicionales y la lectura
+barrial de la serie. Retomar desde T030.

@@ -6,7 +6,8 @@ format:
     theme: cosmo
     toc: true
     toc-depth: 2
-    embed-resources: true
+    embed-resources: false
+    html-math-method: plain
 execute:
   echo: false
   warning: false
@@ -26,6 +27,14 @@ de todos los clusters. Esto importa para:
 - entrenar modelos con target observado por Zona Limpia;
 - evaluar rankings contrafactuales;
 - estudiar posibles problemas no reclamados.
+
+> **Actualización del 17/09/2026.** La advertencia histórica sobre una fuente
+> faltante para el Municipio B fue revisada. Los registros de B están presentes,
+> pero el campo `municipio` original está incompleto. La auditoría actualizada
+> asigna el municipio mediante el cluster y se documenta en
+> `14_cobertura_municipal_zona_limpia.qmd`. Las tablas de este informe se
+> conservan como resultados históricos y no deben usarse para afirmar que B no
+> tuvo visitas.
 
 ```{r}
 library(data.table)
@@ -97,16 +106,18 @@ fmt_pct <- function(x) percent(x, accuracy = 0.1, decimal.mark = ",")
 
 ## Advertencia Sobre Municipio B
 
-Los registros de Zona Limpia del Municipio B no aparecen completos en la fuente
-actual usada por este análisis. Existen en otra tabla pendiente de integracion.
+Esta sección conserva el supuesto con el que se generó originalmente el
+informe. La auditoría posterior mostró que los registros del Municipio B sí
+están presentes, aunque el campo `municipio` original suele estar vacío. La
+asignación espacial por cluster recupera esas visitas.
 
 Por lo tanto:
 
-- la baja cobertura observada en Municipio B refleja un faltante de fuente;
-- no debe interpretarse como baja prioridad real, ausencia de visitas o decisión
-  operativa de no cubrir ese territorio;
-- cualquier diagnóstico territorial debe marcar Municipio B como cobertura
-  incompleta hasta integrar la fuente adicional.
+- la baja cobertura de B en las tablas históricas de este informe refleja el
+  criterio de identificación usado entonces;
+- no debe interpretarse como ausencia de visitas;
+- para resultados actuales debe consultarse el informe 14 y asignarse el
+  municipio mediante `cluster_admin_territorial`.
 
 ## Cobertura Territorial
 

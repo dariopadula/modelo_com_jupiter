@@ -3,10 +3,6 @@ asignar_puntos_a_clusters_referencia <- function(puntos_nuevos,
                                                  umbral_asignacion_m = 50,
                                                  umbral_revision_m = 100,
                                                  crs = 32721) {
-  if (!requireNamespace("FNN", quietly = TRUE)) {
-    stop("El paquete FNN es necesario para asignar puntos a clusters de referencia")
-  }
-
   data.table::setDT(puntos_nuevos)
   data.table::setDT(cluster_members_ref)
 
@@ -28,7 +24,7 @@ asignar_puntos_a_clusters_referencia <- function(puntos_nuevos,
   ref <- cluster_members_ref[!is.na(x) & !is.na(y)]
   if (nrow(ref) == 0) stop("cluster_members_ref no tiene coordenadas validas")
 
-  nn <- FNN::get.knnx(
+  nn <- vecinos_cercanos(
     data = as.matrix(ref[, .(x, y)]),
     query = as.matrix(puntos_validos[, .(x, y)]),
     k = 1

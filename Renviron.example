@@ -4,3 +4,12 @@ IMPALA_JDBC_URL=jdbc:impala://servidor:puerto/;parametros_de_conexion
 IMPALA_USER=usuario_impala
 IMPALA_PASSWORD=contrasena_impala
 
+# Fuente de datos de app_operativa_v2: local o cloudera_s3.
+APP_DATA_SOURCE=local
+
+# Configuracion requerida solamente cuando APP_DATA_SOURCE=cloudera_s3.
+APP_S3_CONNECTION=S3 Object Store
+APP_S3_BUCKET=bucket
+APP_S3_PREFIX=dario/modelo_com_app/data
+# APP_S3_CACHE_PATH=/ruta/cache/modelo_com_app_s3
+# APP_S3_REFRESH=0

@@ -119,10 +119,13 @@ Fuente metodologica breve: `documentacion/HITOS.md` y `TAREAS.md`, tarea T020.
 
 T028 estudia la cantidad diaria de clusters con al menos un reclamo mediante
 modelos con unidades barrio/dia, CCZ/dia y segmento/dia. La referencia
-estructural actual es A0, con jerarquia barrio/segmento, y la referencia
-dinamica es E1, que agrega colas altas del score COM y del exceso local de
-levante. Las interacciones lineales territoriales probadas no mejoraron de forma
-estable fuera de muestra.
+predictiva combina A0, con jerarquia barrio/segmento, y una correccion XGBoost
+compacta. T029 fija ademas una referencia inferencial segmento/dia con
+`mgcv::bam()`: calendario, densidad, NBI, atraso, propension historica, cambio
+reciente y efectos penalizados de barrio y segmento. Su bootstrap conjunto de
+50 replicas remuestrea semanas y segmentos completos. Densidad y NBI conservan
+el signo, mientras que la interaccion atraso por cambio reciente incluye cero.
+Estos resultados son asociaciones dentro de los barrios observados.
 
 Para consultar rapidamente cada familia, su unidad y el hallazgo principal,
 ver [[modelos_agregados_com]].
@@ -131,6 +134,8 @@ Fuentes:
 
 - `tareas/T028_pronosticar_y_explicar_volumen_diario_reclamos_com.md`;
 - `documentacion/pronostico_diario_clusters_reclamo_com.qmd`;
+- `tareas/T029_explicar_dias_alta_afectacion_territorial_com.md`;
+- `documentacion/informe_diagnostico_temporal_modelo_inferencial_com.qmd`;
 - `scripts/benchmark_modelo_segmento_barrio_com.R`;
 - `scripts/experimentar_*_com.R`.
 
@@ -241,9 +246,18 @@ Detalles en [[datos_y_leakage]].
 
 ## Pendiente De Confirmar
 
+Para T032, `com_xgboost_d2` supera al logistico reducido en la validacion
+`reevaluacion_2026_v1`: AUC `0,7752` contra `0,7667`, con menor logloss y Brier.
+La ventaja aparece en abril, mayo y junio y tambien en el ranking diario. El
+logistico se conserva como referencia parsimoniosa para congelar finalistas en
+el paso 7. El test no fue leido.
+
 - Si conviene tuning acotado de Random Forest o XGBoost.
 - Evaluacion futura de modelos de conteo para `n_reclamos`.
 - Regla alternativa de actividad reciente por levantes.
-- Si clima debe revaluarse con otra especificacion antes de entrar a un baseline.
+- Si conviene reevaluar clima en el modelo inferencial agregado una vez que
+  temperatura y precipitacion cubran todo el nuevo periodo. La exploracion
+  actual con `D-1` no produjo una mejora estable y no justifica por si sola
+  incorporarlo.
 - Si el exceso sobre periodo teorico debe revaluarse con interacciones o sin las variables base de tiempo/periodo.
 - Si la heterogeneidad barrio/levante persiste al usar scores COM realmente OOF.

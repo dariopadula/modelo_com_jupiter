@@ -9,6 +9,7 @@ library(sf)
 library(arrow)
 library(data.table)
 
+source(file.path("R", "datos_fuente.R"))
 source(file.path("R", "datos_app.R"))
 source(file.path("R", "datos_operacion.R"))
 source(file.path("R", "mod_seleccion.R"))

@@ -131,4 +131,5 @@ COM completo + Zona Limpia
 
 - Ruta productiva final de scoring (`data/processed/app/`) frente a rutas de emulacion.
 - Definicion final de columnas explicativas que debe consumir la app.
-- Integracion de la fuente faltante de Zona Limpia para Municipio B.
+- Recalculo de productos ZL que excluyeron Municipio B usando la asignacion
+  territorial del cluster.

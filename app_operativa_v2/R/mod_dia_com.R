@@ -1,20 +1,34 @@
 abrir_detalle_com <- function() {
-  base <- Sys.getenv("APP_HISTORICO_PATH", "data/historico")
-  arrow::open_dataset(file.path(base, "detalle_cluster_dia"),
-    partitioning = arrow::hive_partition(dia_objetivo = arrow::date32(), modelo_id = arrow::utf8()))
+  abrir_detalle_local_app()
 }
 
 preparar_historia_com <- function() {
-  base <- Sys.getenv("APP_HISTORICO_PATH", "data/historico")
-  ds <- abrir_detalle_com()
-  fechas <- ds |>
-    dplyr::filter(modelo_id == "com_reclamo", estado_observacion == "cerrado") |>
-    dplyr::distinct(dia_objetivo) |> dplyr::collect()
-  serie <- arrow::open_dataset(file.path(base, "serie_historica_com")) |>
+  serie <- arrow::open_dataset(resolver_path_serie_app()) |>
     dplyr::filter(escenario == "P3_compacto") |> dplyr::collect() |> data.table::as.data.table()
+  if (!usar_s3_app()) {
+    ds <- abrir_detalle_com()
+    fechas <- ds |>
+      dplyr::filter(modelo_id == "com_reclamo", estado_observacion == "cerrado") |>
+      dplyr::distinct(dia_objetivo) |> dplyr::collect()
+    dias_detalle <- as.character(fechas$dia_objetivo)
+  } else {
+    ds <- NULL
+    dias_detalle <- listar_dias_detalle_s3_app("com_reclamo")
+    if (length(dias_detalle)) {
+      cierre <- max(as.Date(dias_detalle)) - dias_validacion_app()
+      dias_detalle <- dias_detalle[as.Date(dias_detalle) <= cierre]
+    }
+  }
   # Los criterios de cupos requieren pronostico agregado disponible.
-  dias <- sort(intersect(as.character(fechas$dia_objetivo), as.character(serie$dia_objetivo)))
-  list(ds = ds, serie = serie, dias = dias)
+  dias <- sort(intersect(dias_detalle, as.character(serie$dia_objetivo)))
+  list(
+    ds = ds,
+    serie = serie,
+    dias = dias,
+    cargar_dia = function(fecha) {
+      cargar_detalle_dia_app(fecha, "com_reclamo", ds_local = ds)
+    }
+  )
 }
 
 crear_grilla_com <- function(centroides, metros) {
@@ -67,8 +81,7 @@ dia_com_server <- function(id, historia, centroides, version_cluster) {
     dia <- reactive({
       req(input$dia)
       fecha <- as.Date(input$dia)
-      dt <- historia$ds |> dplyr::filter(dia_objetivo == !!fecha, modelo_id == "com_reclamo") |>
-        dplyr::collect() |> data.table::as.data.table()
+      dt <- historia$cargar_dia(fecha)
       validate(need(nrow(dt) > 0, "Sin datos para este d\u00eda."),
         need(all(dt$estado_observacion == "cerrado") && !anyNA(dt$tuvo_reclamo_observado), "El d\u00eda no est\u00e1 cerrado."),
         need(all(dt$version_cluster == version_cluster), "La versi\u00f3n territorial no coincide."),

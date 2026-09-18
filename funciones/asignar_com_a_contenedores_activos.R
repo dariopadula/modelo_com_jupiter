@@ -9,10 +9,6 @@ asignar_com_a_contenedores_activos <- function(datos_com,
                                                usar_solo_contenedor_dia_elegible_modelo = TRUE,
                                                estados_cluster_validos = c("referencia", "asignado", "revision"),
                                                crs = 32721) {
-  if (!requireNamespace("FNN", quietly = TRUE)) {
-    stop("El paquete FNN es necesario para asignar reclamos COM")
-  }
-
   data.table::setDT(datos_com)
   data.table::setDT(datos_levante)
   data.table::setDT(contenedor_posicion_cluster)
@@ -185,7 +181,7 @@ asignar_com_a_contenedores_activos <- function(datos_com,
       )
     ])
 
-    nn <- FNN::get.knnx(
+    nn <- vecinos_cercanos(
       data = as.matrix(cand_pos[, .(x_contenedor, y_contenedor)]),
       query = as.matrix(com_dia[, .(x, y)]),
       k = 1

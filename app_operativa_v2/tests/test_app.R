@@ -1,4 +1,5 @@
 Sys.setenv(
+  APP_DATA_SOURCE = "local",
   APP_DATA_PATH = normalizePath(
     "../data/operacional",
     winslash = "/",

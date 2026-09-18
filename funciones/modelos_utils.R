@@ -253,30 +253,29 @@ aplicar_rezago_historia_reclamos <- function(dt,
     col_sum <- paste0("n_reclamos_sum_", ventana, "d")
     col_tuvo <- paste0("tuvo_reclamo_sum_", ventana, "d")
 
-    dt[
-      ,
-      (col_sum) := zoo::rollapplyr(reclamos_previos_tmp, width = ventana, FUN = sum, partial = TRUE, fill = NA),
-      by = cluster_id
-    ]
+    dt[, (col_sum) := {
+      acumulado <- cumsum(reclamos_previos_tmp)
+      acumulado - data.table::shift(acumulado, ventana, fill = 0)
+    }, by = cluster_id]
 
     if (col_tuvo %in% names(dt)) {
-      dt[
-        ,
-        (col_tuvo) := zoo::rollapplyr(tuvo_previos_tmp, width = ventana, FUN = sum, partial = TRUE, fill = NA),
-        by = cluster_id
-      ]
+      dt[, (col_tuvo) := {
+        acumulado <- cumsum(tuvo_previos_tmp)
+        acumulado - data.table::shift(acumulado, ventana, fill = 0)
+      }, by = cluster_id]
     }
   }
 
   dt[
     ,
     dias_desde_ultimo_reclamo := {
+      dia_entero <- as.integer(dia)
       dias_reclamo_rezagados <- data.table::shift(
-        data.table::fifelse(tuvo_reclamo_hist_tmp, dia, data.table::as.IDate(NA)),
+        data.table::fifelse(tuvo_reclamo_hist_tmp, dia_entero, NA_integer_),
         rezago_reclamos_dias
       )
-      ultimo_reclamo <- zoo::na.locf(dias_reclamo_rezagados, na.rm = FALSE)
-      as.numeric(dia - ultimo_reclamo)
+      ultimo_reclamo <- data.table::nafill(dias_reclamo_rezagados, type = "locf")
+      as.numeric(dia_entero - ultimo_reclamo)
     },
     by = cluster_id
   ]

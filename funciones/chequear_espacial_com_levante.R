@@ -3,10 +3,6 @@ chequear_espacial_com_levante <- function(datos_com,
                                           sample_n = 5000,
                                           seed = 123,
                                           crs = 32721) {
-  if (!requireNamespace("FNN", quietly = TRUE)) {
-    stop("El paquete FNN es necesario para calcular vecinos mas cercanos")
-  }
-
   data.table::setDT(datos_com)
   data.table::setDT(datos_levante)
 
@@ -67,7 +63,7 @@ chequear_espacial_com_levante <- function(datos_com,
     com_sample <- com_xy
   }
 
-  nn <- FNN::get.knnx(
+  nn <- vecinos_cercanos(
     data = as.matrix(levante_xy[, .(x, y)]),
     query = as.matrix(com_sample[, .(x, y)]),
     k = 1

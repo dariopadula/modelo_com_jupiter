@@ -7,7 +7,10 @@ Fecha de creacion: 2026-08-20
 
 ### Contexto
 
-`operativo_segmento` muestra senal, pero el desempeno temporal es menor que en particiones aleatorias y Municipio B sigue incompleto.
+`operativo_segmento` muestra senal, pero el desempeno temporal es menor que en
+particiones aleatorias. La auditoria de T013 mostro que los registros del
+Municipio B pueden recuperarse mediante la asignacion espacial del cluster; el
+campo `municipio` original era el que estaba incompleto.
 
 ### Plan propuesto
 
@@ -15,7 +18,8 @@ Fecha de creacion: 2026-08-20
 2. Comparar prediccion pura y ajustes por propension sin confundir interpretaciones.
 3. Revisar sensibilidad territorial y redundancias.
 4. Definir criterios minimos de utilidad.
-5. Repetir entrenamiento y evaluacion al integrar Municipio B.
+5. Medir el efecto de reincorporar Municipio B con la asignacion espacial
+   corregida antes de repetir entrenamiento y evaluacion.
 
 ### Criterio de finalizacion
 
@@ -23,5 +27,5 @@ Queda decidido si el modelo es exploratorio, complementario u operativo, con res
 
 ### Notas
 
-La fase definitiva depende de T013; mientras tanto solo pueden cerrarse evaluaciones parciales.
-
+La fase definitiva depende de recalcular los insumos historicos afectados por
+T013; mientras tanto solo pueden cerrarse evaluaciones parciales.

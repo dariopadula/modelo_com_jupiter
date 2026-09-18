@@ -1,6 +1,5 @@
 library(arrow)
 library(data.table)
-library(FNN)
 
 fun <- dir("funciones/", pattern = ".R", ignore.case = TRUE)
 for (ii in fun) source(file.path("funciones", ii))

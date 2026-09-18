@@ -1,6 +1,5 @@
 library(arrow)
 library(data.table)
-library(FNN)
 
 ##############################
 ## funciones

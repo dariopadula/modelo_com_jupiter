@@ -54,7 +54,7 @@ Reportes:
 - `Voluminosos` queda separado y no cuenta como problema comparable estricto con COM.
 - Problemas comparables ZL: `basura_fuera` y `contenedor_desbordado`.
 - Meses `202508`, `202509`, `202601` y `202602` se excluyen de analisis por cobertura anomala.
-- Municipio B tiene fuente incompleta; no interpretar baja cobertura como baja prioridad real.
+- El campo `municipio` original esta incompleto. Para cobertura territorial se debe usar el municipio asignado espacialmente al cluster; este criterio recupera visitas del Municipio B desde 2025-09-11 y cobertura diaria intensa desde 2026-05-14.
 - COM no es verdad absoluta: depende de propension territorial a reclamar.
 - Zona Limpia con visita efectiva se trata como evidencia observacional de campo.
 - El modelo de problema observado ZL usa COM solo para definir target, no como feature.
@@ -105,13 +105,13 @@ Sesgos y propension:
 ## Riesgos
 
 - Generalizar desde visitas ZL a toda la ciudad sin corregir ni explicitar supuestos.
-- Olvidar la fuente incompleta de Municipio B.
+- Agrupar por el campo `municipio` original y omitir las visitas recuperables mediante la asignacion espacial del cluster.
 - Mezclar `Voluminosos` con problemas comparables.
 - Usar COM como feature en modelos cuyo objetivo es problema observado ZL limpio de COM.
 - Comparar modelo COM contra ZL sin aclarar que optimizan objetivos distintos.
 
 ## Pendiente De Confirmar
 
-- Integracion de la fuente faltante de Zona Limpia para Municipio B.
+- Recalculo de los diagnosticos historicos que excluyeron Municipio B bajo la hipotesis de una fuente faltante.
 - Comparacion del modelo ZL puro contra ajustes por propension de visita.
 - Integracion futura del score ZL puro con el score COM en la app operativa.

@@ -48,18 +48,23 @@ ul.task-list li input[type="checkbox"] {
   <li><a href="#objetivo" id="toc-objetivo" class="nav-link active" data-scroll-target="#objetivo">Objetivo</a></li>
   <li><a href="#contrato-de-datos" id="toc-contrato-de-datos" class="nav-link" data-scroll-target="#contrato-de-datos">Contrato De Datos</a></li>
   <li><a href="#scripts" id="toc-scripts" class="nav-link" data-scroll-target="#scripts">Scripts</a></li>
+  <li><a href="#reportes" id="toc-reportes" class="nav-link" data-scroll-target="#reportes">Reportes</a></li>
   <li><a href="#mapeo-de-etiquetas" id="toc-mapeo-de-etiquetas" class="nav-link" data-scroll-target="#mapeo-de-etiquetas">Mapeo De Etiquetas</a></li>
   <li><a href="#periodo-valido-de-analisis" id="toc-periodo-valido-de-analisis" class="nav-link" data-scroll-target="#periodo-valido-de-analisis">Periodo Valido De Analisis</a></li>
   <li><a href="#decision-actual" id="toc-decision-actual" class="nav-link" data-scroll-target="#decision-actual">Decision Actual</a></li>
   <li><a href="#comparacion-com-vs-zona-limpia" id="toc-comparacion-com-vs-zona-limpia" class="nav-link" data-scroll-target="#comparacion-com-vs-zona-limpia">Comparacion COM vs Zona Limpia</a></li>
   <li><a href="#scores-com-vs-zona-limpia" id="toc-scores-com-vs-zona-limpia" class="nav-link" data-scroll-target="#scores-com-vs-zona-limpia">Scores COM vs Zona Limpia</a></li>
   <li><a href="#seleccion-zona-limpia-vs-modelo-a-igual-n-diario" id="toc-seleccion-zona-limpia-vs-modelo-a-igual-n-diario" class="nav-link" data-scroll-target="#seleccion-zona-limpia-vs-modelo-a-igual-n-diario">Seleccion Zona Limpia vs Modelo A Igual N Diario</a></li>
-  <li><a href="#modelo-de-problema-observado-zona-limpia" id="toc-modelo-de-problema-observado-zona-limpia" class="nav-link" data-scroll-target="#modelo-de-problema-observado-zona-limpia">Modelo De Problema Observado Zona Limpia</a></li>
+  <li><a href="#modelo-de-problema-observado-zona-limpia" id="toc-modelo-de-problema-observado-zona-limpia" class="nav-link" data-scroll-target="#modelo-de-problema-observado-zona-limpia">Modelo De Problema Observado Zona Limpia</a>
+  <ul class="collapse">
+  <li><a href="#cascada-de-features-zl" id="toc-cascada-de-features-zl" class="nav-link" data-scroll-target="#cascada-de-features-zl">Cascada De Features ZL</a></li>
+  </ul></li>
   <li><a href="#sesgo-territorial-y-cobertura-de-zona-limpia" id="toc-sesgo-territorial-y-cobertura-de-zona-limpia" class="nav-link" data-scroll-target="#sesgo-territorial-y-cobertura-de-zona-limpia">Sesgo Territorial Y Cobertura De Zona Limpia</a></li>
   <li><a href="#diagnostico-de-criterio-de-levante" id="toc-diagnostico-de-criterio-de-levante" class="nav-link" data-scroll-target="#diagnostico-de-criterio-de-levante">Diagnostico De Criterio De Levante</a></li>
   <li><a href="#reporte-de-sesgos-de-seleccion" id="toc-reporte-de-sesgos-de-seleccion" class="nav-link" data-scroll-target="#reporte-de-sesgos-de-seleccion">Reporte De Sesgos De Seleccion</a></li>
   <li><a href="#correspondencia-com-y-problemas-observados" id="toc-correspondencia-com-y-problemas-observados" class="nav-link" data-scroll-target="#correspondencia-com-y-problemas-observados">Correspondencia COM Y Problemas Observados</a></li>
   <li><a href="#ajuste-por-propension-de-visita-zona-limpia" id="toc-ajuste-por-propension-de-visita-zona-limpia" class="nav-link" data-scroll-target="#ajuste-por-propension-de-visita-zona-limpia">Ajuste Por Propension De Visita Zona Limpia</a></li>
+  <li><a href="#reevaluación-2026-comparación-en-validación" id="toc-reevaluación-2026-comparación-en-validación" class="nav-link" data-scroll-target="#reevaluación-2026-comparación-en-validación">Reevaluación 2026: comparación en validación</a></li>
   </ul>
 </nav>
 </div>
@@ -97,6 +102,7 @@ ul.task-list li input[type="checkbox"] {
 <ul>
 <li><code>data/parquet/com_completo/</code></li>
 </ul>
+<p>La actualización incremental de septiembre de 2026 deja ambas fuentes con corte al <code>2026-09-14</code>. El script <code>scripts/actualizar_particiones_fuentes_202609.R</code> reemplaza en <code>com_completo</code> solo abril-septiembre de 2026 y conserva las particiones anteriores. La comparación <code>cluster_id</code>/<code>dia</code> ya fue reconstruida hasta ese corte. Los modelos y sus resultados todavía deben recalcularse en los pasos posteriores; actualizar la fuente no los actualiza automáticamente.</p>
 <p><code>com_completo</code> incluye:</p>
 <ul>
 <li>incidentes usados por el modelo;</li>
@@ -114,13 +120,23 @@ ul.task-list li input[type="checkbox"] {
 <li><code>04_comparar_com_zona_limpia_cluster_dia.R</code>: asigna Zona Limpia a clusters y compara, por <code>cluster_id</code>/<code>dia</code>, reclamos COM contra resultados Zona Limpia.</li>
 <li><code>05_evaluar_scores_com_vs_zona_limpia.R</code>: cruza scores COM existentes con eventos Zona Limpia para evaluar si el modelo prioriza problemas observados en campo sin reclamo COM.</li>
 <li><code>06_comparar_seleccion_zl_vs_modelo_diario.R</code>: compara, por dia, la seleccion efectiva de Zona Limpia contra el top N sugerido por el modelo logistico reducido D-2, usando el mismo N diario de visitas efectivas.</li>
-<li><code>07_visualizar_seleccion_zl_vs_modelo.qmd</code>: reporte visual con tasas, diferencias diarias, comparacion mensual y solapamiento entre seleccion Zona Limpia y top N del modelo.</li>
-<li><code>08_modelo_problema_observado_zl_xgboost.R</code>: primer baseline XGBoost para problema observado en visitas efectivas de Zona Limpia, usando COM solo para definir el target y no como feature.</li>
+<li><code>reportes/07_visualizar_seleccion_zl_vs_modelo.qmd</code>: reporte visual con tasas, diferencias diarias, comparacion mensual y solapamiento entre seleccion Zona Limpia y top N del modelo.</li>
+<li><code>08_modelo_problema_observado_zl_xgboost.R</code>: primer baseline XGBoost para problema observado en visitas efectivas de Zona Limpia, sin usar COM como target principal ni como feature.</li>
+<li><code>reportes/13_modelo_problema_observado_zl.qmd</code>: reporte metodologico del baseline XGBoost para problema observado Zona Limpia.</li>
+<li><code>reportes/14_cobertura_municipal_zona_limpia.qmd</code>: auditoría actualizada de visitas y problemas por municipio usando la ubicación territorial del cluster.</li>
 <li><code>09_diagnostico_criterio_levante_zl.R</code>: diagnostica si la seleccion de Zona Limpia se asocia con tiempo desde ultimo levante, periodo teorico, ratio tiempo/periodo y exceso <code>tiempo - periodo</code> truncado.</li>
-<li><code>10_sesgos_seleccion_zona_limpia.qmd</code>: reporte que consolida sesgos de seleccion territorial, correspondencia COM-Zona Limpia y patrones asociados al criterio de levante.</li>
+<li><code>reportes/10_sesgos_seleccion_zona_limpia.qmd</code>: reporte que consolida sesgos de seleccion territorial, correspondencia COM-Zona Limpia y patrones asociados al criterio de levante.</li>
 <li><code>11_diagnostico_correspondencia_com_zl_territorio.R</code>: diagnostica, por municipio, CCZ y barrio, que proporcion de problemas observados por Zona Limpia tiene reclamo COM asociado.</li>
 <li><code>12_modelo_propension_visita_zl_y_ajuste_correspondencia.R</code>: entrena un modelo exploratorio de propension de visita Zona Limpia y recalcula la correspondencia COM-ZL con pesos IPW.</li>
 </ul>
+</section>
+<section id="reportes" class="level2">
+<h2 class="anchored" data-anchor-id="reportes">Reportes</h2>
+<p>Los reportes Quarto y sus HTML renderizados quedan separados de los scripts en:</p>
+<ul>
+<li><code>zona_limpia/reportes/</code></li>
+</ul>
+<p>Esto mantiene en la raiz de <code>zona_limpia/</code> los scripts, funciones, configuracion liviana y README del modulo.</p>
 </section>
 <section id="mapeo-de-etiquetas" class="level2">
 <h2 class="anchored" data-anchor-id="mapeo-de-etiquetas">Mapeo De Etiquetas</h2>
@@ -138,7 +154,7 @@ ul.task-list li input[type="checkbox"] {
 </section>
 <section id="periodo-valido-de-analisis" class="level2">
 <h2 class="anchored" data-anchor-id="periodo-valido-de-analisis">Periodo Valido De Analisis</h2>
-<p>Los analisis de Zona Limpia excluyen los meses <code>202601</code> y <code>202602</code>. En esos meses la cantidad de registros es anormalmente baja y se interpreta como un problema de registro/cobertura, no como una reduccion real de actividad o problemas.</p>
+<p>Los analisis de Zona Limpia excluyen los meses <code>202508</code>, <code>202509</code>, <code>202601</code> y <code>202602</code>. En esos meses la cantidad de registros es anormalmente baja y se interpreta como un problema de registro/cobertura, no como una reduccion real de actividad o problemas.</p>
 <p>La exclusion se aplica en los scripts analiticos, pero no modifica la base ampliada <code>data/parquet/com_completo/</code>.</p>
 </section>
 <section id="decision-actual" class="level2">
@@ -154,6 +170,15 @@ ul.task-list li input[type="checkbox"] {
 <li><code>data/processed/zona_limpia/zona_limpia_cluster_dia/</code></li>
 <li><code>data/processed/zona_limpia/comparacion_com_zona_limpia_cluster_dia/</code></li>
 </ul>
+<p>La reconstrucción del 16 de septiembre de 2026 usa las fuentes actualizadas y la referencia de clusters <code>v2026_05_25</code>. La comparación resultante cubre desde el 1 de enero de 2025 hasta el 14 de septiembre de 2026, con 988.986 filas <code>cluster_id</code>/<code>dia</code> y 9.012 clusters con algún evento COM o registro de Zona Limpia. Esta tabla prepara el target ZL para la reevaluación, pero no entrena ni evalúa ningún modelo.</p>
+<p>Para la próxima reevaluación, Zona Limpia usa las mismas fronteras temporales del contrato <code>reevaluacion_2026_v1</code>: entrenamiento hasta el 31 de marzo de 2026, validación entre abril y junio y test sellado desde el 1 de julio hasta el 14 de septiembre. Los meses con cobertura anómala se siguen excluyendo dentro de cada período; no se desplazan las fronteras para compensarlos.</p>
+<p>En el paso 5 de la reevaluación se entrenaron dos candidatos sin abrir el test:</p>
+<ul>
+<li><code>zl_operativo_segmento</code>, con 36 variables numéricas;</li>
+<li><code>zl_amplio_actual</code>, con 52 variables numéricas y municipio, CCZ y barrio como variables categóricas.</li>
+</ul>
+<p>Ambos conservan 250 rondas fijas de XGBoost y generan únicamente predicciones de validación. La comparación de desempeño se realiza en el paso 6.</p>
+<p>Después de la comparación se agregó un tercer candidato, <code>zl_operativo_segmento_demografia</code>, con las 36 variables operativas más población, hogares y viviendas del segmento. Suma 39 variables numéricas y no utiliza municipio, CCZ, barrio, mes calendario ni agregados territoriales.</p>
 <p>Los resumenes livianos quedan en:</p>
 <ul>
 <li><code>zona_limpia/outputs/comparacion_com_zona_limpia_resumen_estado.csv</code></li>
@@ -223,7 +248,7 @@ ul.task-list li input[type="checkbox"] {
 <p>Esta comparacion es conservadora para el modelo, porque en clusters sugeridos por el modelo pero no visitados por Zona Limpia solo se observan problemas si hubo reclamo COM.</p>
 <p>El reporte visual para comunicar estos resultados esta en:</p>
 <ul>
-<li><code>zona_limpia/07_visualizar_seleccion_zl_vs_modelo.qmd</code></li>
+<li><code>zona_limpia/reportes/07_visualizar_seleccion_zl_vs_modelo.qmd</code></li>
 </ul>
 </section>
 <section id="modelo-de-problema-observado-zona-limpia" class="level2">
@@ -231,9 +256,13 @@ ul.task-list li input[type="checkbox"] {
 <p>El primer baseline queda en:</p>
 <ul>
 <li><code>zona_limpia/08_modelo_problema_observado_zl_xgboost.R</code></li>
+<li><code>zona_limpia/reportes/13_modelo_problema_observado_zl.qmd</code></li>
 <li><code>data/processed/modelos/zona_limpia_problema_observado_xgboost/</code></li>
 <li><code>zona_limpia/outputs/modelo_zl_observado_resumen_base.csv</code></li>
+<li><code>zona_limpia/outputs/modelo_zl_observado_resumen_splits.csv</code></li>
 <li><code>zona_limpia/outputs/modelo_zl_observado_metricas.csv</code></li>
+<li><code>zona_limpia/outputs/modelo_zl_observado_metricas_random_dia_reps.csv</code></li>
+<li><code>zona_limpia/outputs/modelo_zl_observado_metricas_targets.csv</code></li>
 <li><code>zona_limpia/outputs/modelo_zl_observado_lift.csv</code></li>
 <li><code>zona_limpia/outputs/modelo_zl_observado_importancia.csv</code></li>
 </ul>
@@ -241,44 +270,83 @@ ul.task-list li input[type="checkbox"] {
 <ul>
 <li>visitas efectivas de Zona Limpia;</li>
 <li>meses <code>202510</code>, <code>202511</code>, <code>202512</code>, <code>202603</code>, <code>202604</code>, <code>202605</code>;</li>
-<li>se excluyen <code>202601</code> y <code>202602</code>;</li>
+<li>se excluyen <code>202508</code>, <code>202509</code>, <code>202601</code> y <code>202602</code>;</li>
 <li>se excluyen registros con <code>Voluminosos</code>.</li>
 </ul>
 <p>Target:</p>
 <ul>
-<li><code>1</code> si hay reclamo COM o problema comparable observado por Zona Limpia;</li>
-<li><code>0</code> si no hay reclamo COM ni problema comparable observado;</li>
-<li>COM se usa solo para definir el target, no como feature predictiva.</li>
+<li><code>1</code> si hay problema comparable observado por Zona Limpia;</li>
+<li><code>0</code> si Zona Limpia tuvo visita efectiva sin problema comparable;</li>
+<li>COM no se usa como target principal ni como feature predictiva; queda solo como evaluacion secundaria.</li>
 </ul>
 <p>Features:</p>
 <ul>
 <li>variables operativas de levante y periodicidad con corte predictivo <code>_pred</code>;</li>
+<li>exceso positivo y truncado a 7 dias entre tiempo desde ultimo levante y periodo teorico;</li>
 <li>variables territoriales censales;</li>
 <li>municipio, CCZ y barrio asignados al cluster;</li>
-<li>variables calendario simples.</li>
+<li>variables calendario simples;</li>
+<li>feriados, vispera de feriado y dia habil.</li>
 </ul>
+<p>Fuente climatica disponible para evaluacion futura:</p>
+<ul>
+<li><code>scripts/descargar_clima_inumet_melilla_g3.R</code> procesa CSV locales de datos abiertos de INUMET para <code>Aeropuerto Melilla G3</code>;</li>
+<li>archivos fuente en <code>data/raw/inumet/datos_abiertos/inumet_temperatura_del_aire.csv</code> y <code>data/raw/inumet/datos_abiertos/inumet_precipitacion_acumulada_horaria.csv</code>;</li>
+<li>salidas procesadas en <code>data/processed/clima/inumet_melilla_g3/</code>;</li>
+<li>variables diarias disponibles: temperatura media, minima, maxima y precipitacion acumulada;</li>
+<li>tabla de features predictivas disponible en <code>data/processed/clima/inumet_melilla_g3/clima_inumet_melilla_g3_features_diarias.csv</code>;</li>
+<li>las features predictivas para el dia <code>D</code> usan clima hasta <code>D-1</code>, incluyendo resumen del dia anterior y ventana <code>D-3</code> a <code>D-1</code>;</li>
+<li>la cobertura procesada actual va desde <code>2025-01-01</code> hasta <code>2026-07-13</code>;</li>
+<li>se corrio una evaluacion exploratoria en salidas separadas (<code>zona_limpia/outputs/experimentos_clima/</code>); el clima mejora el split random por fila, pero no mejora random por dia ni temporal, por lo que no se promueve al baseline.</li>
+</ul>
+<section id="cascada-de-features-zl" class="level3">
+<h3 class="anchored" data-anchor-id="cascada-de-features-zl">Cascada De Features ZL</h3>
+<p>Para ordenar el modelo de problema observado Zona Limpia se agrego una comparacion de escenarios de complejidad creciente mediante <code>FEATURE_SET_ZL</code>:</p>
+<ul>
+<li><code>operativo_minimo</code>: levante, contenedores, inferencia y calendario operativo;</li>
+<li><code>operativo_segmento</code>: minimo + variables censales parsimoniosas de segmento;</li>
+<li><code>operativo_clima</code>: minimo + clima;</li>
+<li><code>segmento_clima</code>: minimo + segmento + clima;</li>
+<li><code>amplio_actual</code>: especificacion amplia con agregados territoriales y municipio/CCZ/barrio nominal.</li>
+</ul>
+<p>Salidas:</p>
+<ul>
+<li><code>data/processed/modelos/experimentos_cascada_zl/</code>;</li>
+<li><code>zona_limpia/outputs/experimentos_cascada_zl/</code>.</li>
+</ul>
+<p>Lectura inicial: <code>amplio_actual</code> mejora los splits random, pero usa muchas mas columnas y territorio nominal. En evaluacion temporal, <code>operativo_segmento</code> queda muy competitivo y evita municipio, CCZ y barrio como categorias; por ahora es el candidato parsimonioso mas prudente para seguir explorando.</p>
 <p>Evaluaciones:</p>
 <ul>
 <li>temporal: train <code>202510-202512</code>, validacion <code>202603</code>, test <code>202604-202605</code>;</li>
-<li>random estratificada por mes y target.</li>
+<li>random por fila, estratificada por mes y target;</li>
+<li>random por dia, sorteando dias completos dentro de cada mes.</li>
+<li>random por dia repetido con cinco semillas para medir sensibilidad del split.</li>
 </ul>
 <p>Lectura inicial:</p>
 <ul>
-<li>el split random muestra senal aprendible con AUC cercano a <code>0,67</code>;</li>
+<li>el split random por fila muestra senal aprendible con AUC cercano a <code>0,68</code>;</li>
+<li>el split random por dia mantiene AUC cercano a <code>0,68</code> en validacion y <code>0,66</code> en test;</li>
+<li>las repeticiones random por dia ubican el AUC test aproximadamente entre <code>0,663</code> y <code>0,681</code>;</li>
 <li>el split temporal baja a AUC cercano a <code>0,60</code> en validacion/test, consistente con posibles cambios de criterio o regimen entre fines de 2025 y 2026.</li>
 </ul>
 </section>
+</section>
 <section id="sesgo-territorial-y-cobertura-de-zona-limpia" class="level2">
 <h2 class="anchored" data-anchor-id="sesgo-territorial-y-cobertura-de-zona-limpia">Sesgo Territorial Y Cobertura De Zona Limpia</h2>
-<p>La cobertura territorial de Zona Limpia no debe interpretarse automaticamente como criterio operativo real. En particular, los registros de Zona Limpia del Municipio B no aparecen en esta fuente de datos; existen en otra tabla pendiente de integracion. Por lo tanto, la baja cobertura observada para Municipio B en estos analisis refleja un faltante de fuente y no necesariamente una decision de no visitar ese territorio.</p>
+<p>La cobertura territorial de Zona Limpia no debe interpretarse automáticamente como criterio operativo real. La auditoría del 17 de septiembre de 2026 corrigió la lectura previa sobre el Municipio B: los registros sí están presentes, pero el campo <code>municipio</code> de la fuente original está vacío en una proporción importante. Al asignar cada registro al municipio de su cluster, aparecen visitas en B desde el 11 de septiembre de 2025 y una cobertura diaria intensa desde el 14 de mayo de 2026.</p>
+<p>Para cualquier resumen territorial debe usarse <code>cluster_admin_territorial</code> y no el campo <code>municipio</code> del reclamo original. El informe reproducible queda en:</p>
+<ul>
+<li><code>zona_limpia/reportes/14_cobertura_municipal_zona_limpia.qmd</code>;</li>
+<li><code>zona_limpia/reportes/14_cobertura_municipal_zona_limpia.html</code>.</li>
+</ul>
 <p>Esto afecta:</p>
 <ul>
 <li>diagnosticos de cobertura territorial;</li>
 <li>comparaciones entre municipios, CCZ o barrios;</li>
 <li>modelos entrenados con visitas efectivas de Zona Limpia;</li>
-<li>evaluaciones contrafactuales que usen Zona Limpia como observacion de campo.</li>
+<li>evaluaciones contrafactuales que usen Zona Limpia como observación de campo.</li>
 </ul>
-<p>Hasta integrar la fuente adicional del Municipio B, las lecturas territoriales deben marcar ese municipio como cobertura incompleta.</p>
+<p>Los análisis anteriores que excluyeron B bajo la hipótesis de una fuente faltante se conservan como resultados históricos. Antes de incorporar B a esos modelos o comparaciones deben recalcularse sus insumos con la asignación espacial corregida.</p>
 </section>
 <section id="diagnostico-de-criterio-de-levante" class="level2">
 <h2 class="anchored" data-anchor-id="diagnostico-de-criterio-de-levante">Diagnostico De Criterio De Levante</h2>
@@ -300,7 +368,7 @@ ul.task-list li input[type="checkbox"] {
 <li>la tasa de visita aumenta al pasar de exceso <code>0</code> a excesos positivos moderados;</li>
 <li>la tasa de problema observado en visitas tambien sube con excesos moderados;</li>
 <li>el patron no es lineal simple: en excesos altos hay menos casos y la tasa de visita cae;</li>
-<li>Municipio B debe interpretarse con cobertura incompleta por fuente faltante.</li>
+<li>los resultados territoriales deben asignar el municipio mediante el cluster; el campo municipal original es incompleto, especialmente para los registros recuperados espacialmente en B.</li>
 </ul>
 <p>Este resultado sugiere que una variable de exceso sobre periodo teorico puede ser relevante para explicar la seleccion de Zona Limpia y deberia probarse explicitamente en el modelo observado.</p>
 </section>
@@ -308,11 +376,11 @@ ul.task-list li input[type="checkbox"] {
 <h2 class="anchored" data-anchor-id="reporte-de-sesgos-de-seleccion">Reporte De Sesgos De Seleccion</h2>
 <p>El reporte consolidado queda en:</p>
 <ul>
-<li><code>zona_limpia/10_sesgos_seleccion_zona_limpia.qmd</code></li>
+<li><code>zona_limpia/reportes/10_sesgos_seleccion_zona_limpia.qmd</code></li>
 </ul>
 <p>Incluye:</p>
 <ul>
-<li>advertencia de fuente faltante para Municipio B;</li>
+<li>la advertencia histórica de fuente faltante para Municipio B, revisada por la auditoría territorial posterior;</li>
 <li>cobertura por municipio y CCZ;</li>
 <li>correspondencia COM-Zona Limpia cruda y ajustada por propension de visita;</li>
 <li>diagnostico del exceso sobre periodo teorico de levante;</li>
@@ -333,7 +401,7 @@ ul.task-list li input[type="checkbox"] {
 <p>Definicion principal:</p>
 <pre class="text"><code>tasa_com_dado_zl_problema = ambos / zl_problema</code></pre>
 <p>Es decir, entre los cluster-dias donde Zona Limpia observo un problema comparable, que proporcion tuvo tambien reclamo COM.</p>
-<p>Lectura inicial, excluyendo Municipio B por fuente incompleta:</p>
+<p>Lectura inicial histórica, calculada excluyendo Municipio B bajo la hipótesis entonces vigente de fuente incompleta:</p>
 <ul>
 <li>la correspondencia global es baja: aproximadamente <code>10,8%</code> de los problemas observados por Zona Limpia tienen COM asociado;</li>
 <li>existe variacion territorial fuerte entre municipios y CCZ;</li>
@@ -356,7 +424,7 @@ ul.task-list li input[type="checkbox"] {
 </ul>
 <p>El modelo estima:</p>
 <pre class="text"><code>P(visita efectiva Zona Limpia | features previas de levante, territorio y calendario)</code></pre>
-<p>Se excluye Municipio B por fuente incompleta. El baseline usa todas las visitas y una muestra de no visitados como controles; luego corrige las probabilidades por la prevalencia real de visita. Las visitas observadas se ponderan con pesos IPW estabilizados.</p>
+<p>Este análisis histórico excluyó Municipio B bajo la hipótesis entonces vigente de fuente incompleta. La auditoría territorial posterior mostró que los registros pueden recuperarse mediante la asignación espacial del cluster, por lo que estas estimaciones deben recalcularse antes de interpretar nuevamente la exclusión. El baseline usa todas las visitas restantes y una muestra de no visitados como controles; luego corrige las probabilidades por la prevalencia real de visita. Las visitas observadas se ponderan con pesos IPW estabilizados.</p>
 <p>Resultado inicial:</p>
 <ul>
 <li>AUC de validacion en muestra de controles: <code>0,706</code>;</li>
@@ -367,6 +435,46 @@ ul.task-list li input[type="checkbox"] {
 <li>ratio ajustado por propension <code>solo ZL problema / COM</code>: <code>5,07</code>.</li>
 </ul>
 <p>La lectura ajustada no elimina la hipotesis de subreclamo; si algo, la mantiene o la refuerza levemente dentro de los supuestos del modelo de propension.</p>
+</section>
+<section id="reevaluación-2026-comparación-en-validación" class="level2">
+<h2 class="anchored" data-anchor-id="reevaluación-2026-comparación-en-validación">Reevaluación 2026: comparación en validación</h2>
+<p>Con el split <code>reevaluacion_2026_v1</code>, los candidatos se compararon solo entre el 1 de abril y el 30 de junio de 2026. Se mantuvieron las exclusiones de meses con cobertura anómala y de <code>Voluminosos</code>; quedaron 108.854 visitas evaluables en 87 días.</p>
+<table class="table">
+<thead>
+<tr class="header">
+<th>Candidato</th>
+<th style="text-align: right;">AUC</th>
+<th style="text-align: right;">Logloss</th>
+<th style="text-align: right;">Brier</th>
+<th style="text-align: right;">Probabilidad media</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>operativo_segmento</code></td>
+<td style="text-align: right;">0,6065</td>
+<td style="text-align: right;">0,6826</td>
+<td style="text-align: right;">0,2446</td>
+<td style="text-align: right;">46,33 %</td>
+</tr>
+<tr class="even">
+<td><code>operativo_segmento_demografia</code></td>
+<td style="text-align: right;">0,6107</td>
+<td style="text-align: right;">0,6816</td>
+<td style="text-align: right;">0,2441</td>
+<td style="text-align: right;">46,17 %</td>
+</tr>
+<tr class="odd">
+<td><code>amplio_actual</code></td>
+<td style="text-align: right;">0,6263</td>
+<td style="text-align: right;">0,6745</td>
+<td style="text-align: right;">0,2408</td>
+<td style="text-align: right;">46,43 %</td>
+</tr>
+</tbody>
+</table>
+<p>Agregar demografía del segmento mejora las tres métricas frente al operativo básico y el AUC en abril, mayo y junio. En el 10 % priorizado por día, la precisión media aumenta de 70,18 % a 70,61 % y el lift de 1,296 a 1,303. El modelo amplio mantiene la mayor capacidad de discriminación, pero depende de territorio nominal y agregados de barrio y CCZ.</p>
+<p>La prevalencia observada es 52,67 %, superior a la probabilidad media de ambos modelos. Por tanto, una eventual versión operativa necesitará resolver la calibración. La variante con demografía queda como candidata principal más transportable y el modelo amplio como benchmark territorial. El test permanece sellado.</p>
 </section>
 
 </main>

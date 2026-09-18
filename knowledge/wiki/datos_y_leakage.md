@@ -56,6 +56,19 @@ Base diaria por cluster con targets COM y features contemporaneas de levante.
 
 Tabla principal de modelado con features historicas.
 
+### `data/processed/features_compartidas/`
+
+Capa normalizada para la reevaluacion 2026. Contiene calendario por dia y
+agregados segmento/dia con q7, q30, w7, w30, ciclo anual, densidad y NBI. No
+contiene splits ni clima. Los modelos cluster/dia siguen usando
+`features_cluster_dia` y unen calendario y territorio segun corresponda.
+
+El split compartido vive separado en
+`config/splits_reevaluacion_2026.csv`. La version `reevaluacion_2026_v1` usa
+train `2025-04-01` a `2026-03-31`, validacion `2026-04-01` a `2026-06-30` y
+test sellado `2026-07-01` a `2026-09-14`. El test no puede informar seleccion
+ni metricas hasta el paso 8 de T032.
+
 ### `data/processed/app_*/predicciones_operativas_cluster_dia/`
 
 Predicciones ya calculadas para consumo de app.
@@ -79,6 +92,10 @@ Datos:
 - `scripts/asignar_com_contenedores_clusters.R`
 - `scripts/construir_base_cluster_dia.R`
 - `scripts/construir_features_historicas_cluster_dia.R`
+- `scripts/construir_features_compartidas_modelos.R`
+- `scripts/validar_features_compartidas_modelos.R`
+- `scripts/congelar_splits_reevaluacion_2026.R`
+- `scripts/validar_splits_reevaluacion_2026.R`
 - `scripts/descargar_clima_inumet_melilla_g3.R`
 
 Modelos:

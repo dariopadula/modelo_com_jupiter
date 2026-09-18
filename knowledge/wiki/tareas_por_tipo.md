@@ -11,7 +11,7 @@ Esta nota es el router operativo de la wiki. Para cada tipo de tarea indica que 
 | Entender el proyecto | [[arquitectura]], [[componentes]], `README.qmd` | Ninguno | No aplica | Confundir wiki con fuente primaria |
 | Cambiar flujo de datos | [[datos_y_leakage]], `documentacion/flujo_datos.qmd` | `scripts/get_*`, `scripts/construir_*`, `funciones/preparar_*` | `flujo_datos.qmd`, `TAREAS.md`, `HITOS.md` | Leakage, romper target, cambiar salidas |
 | Cambiar modelo COM | [[modelos_com]], [[datos_y_leakage]] | `scripts/modelo_*.R`, `funciones/modelos_utils.R` | `modelos.qmd`, `diagnostico_variables_modelo.qmd`, `TAREAS.md`, `HITOS.md` | Comparabilidad, leakage, splits |
-| Modelar volumen diario COM | [[modelos_agregados_com]], [[datos_y_leakage]], T028 | `scripts/*agregado*_com.R`, `scripts/experimentar_*_com.R`, `scripts/probar_*_com.R`, `scripts/comparar_*_com.R` | `pronostico_diario_clusters_reclamo_com.qmd`, T028 y wiki sintetica | Leakage temporal, mezclar prediccion e inferencia, duplicar metricas |
+| Modelar volumen diario COM | [[modelos_agregados_com]], [[datos_y_leakage]], T028 y T029 | `scripts/*agregado*_com.R`, `scripts/experimentar_*_com.R`, `scripts/probar_*_com.R`, `scripts/comparar_*_com.R`, `scripts/estimar_modelo_inferencial_final_com.R` | `pronostico_diario_clusters_reclamo_com.qmd`, `informe_diagnostico_temporal_modelo_inferencial_com.qmd`, T028, T029 y wiki sintetica | Leakage temporal, mezclar prediccion e inferencia, duplicar metricas |
 | Cambiar scoring operativo | [[scoring_operativo]], [[datos_y_leakage]] | `scripts/proceso_scoring_operativo_cluster_dia.R`, `funciones/scoring_operativo_utils.R` | `proceso_scoring_operativo.qmd`, `TAREAS.md`, `HITOS.md` | Frescura, D-2, reproceso |
 | Cambiar app | [[app_operativa]], [[scoring_operativo]], `app_operativa/README.md` | `app_operativa/app.R`, `app_operativa/R/datos_app.R` | app README, `proceso_scoring_operativo.qmd` si cambia contrato | App recalculando features, contrato roto, targets mezclados |
 | Analizar Zona Limpia | [[zona_limpia]], [[datos_y_leakage]] | `zona_limpia/*.R`, `zona_limpia/reportes/*.qmd` | `zona_limpia/README.qmd`, `TAREAS.md`, `HITOS.md` | Municipio B, Voluminosos, generalizacion |
@@ -122,7 +122,8 @@ Leer:
 
 Antes de tocar:
 
-- confirmar si Municipio B debe excluirse o marcarse incompleto;
+- confirmar que el municipio se asigne mediante el cluster y revisar si el
+  producto historico excluyo Municipio B;
 - confirmar si `Voluminosos` entra o no;
 - separar `com` de `com_completo`;
 - explicitar universo comparable.

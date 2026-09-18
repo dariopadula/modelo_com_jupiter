@@ -20,7 +20,6 @@ ul.task-list li input[type="checkbox"] {
   margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
   vertical-align: middle;
 }
-.display.math{display: block; text-align: center; margin: 0.5rem auto;}
 </style>
 
 
@@ -35,6 +34,8 @@ ul.task-list li input[type="checkbox"] {
 <link href="resumen_pronostico_diario_com_files/libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
 <link href="resumen_pronostico_diario_com_files/libs/bootstrap/bootstrap.min.css" rel="stylesheet" id="quarto-bootstrap" data-mode="light">
 
+  <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml-full.js" type="text/javascript"></script>
 
 </head>
 
@@ -97,7 +98,9 @@ ul.task-list li input[type="checkbox"] {
 <section id="suma-de-scores" class="level3">
 <h3 class="anchored" data-anchor-id="suma-de-scores">1. Suma de scores</h3>
 <p>Es el baseline natural. Para cada día suma las probabilidades producidas por el modelo COM de cada cluster:</p>
-<p><span class="math display"><em>Ŷ</em><sub><em>d</em></sub> = ∑<sub><em>i</em></sub><em>p̂</em><sub><em>i</em>, <em>d</em></sub>.</span></p>
+<p><span class="math display">\[
+\widehat Y_d=\sum_i \widehat p_{i,d}.
+\]</span></p>
 <p>Si las probabilidades estuvieran perfectamente calibradas y los errores se compensaran, la suma aproximaría la cantidad de clusters con reclamo. Es una referencia directa, pero reproduce poca variación diaria y depende del modelo de probabilidad por cluster.</p>
 </section>
 <section id="modelo-estructural-a0" class="level3">
@@ -115,15 +118,109 @@ ul.task-list li input[type="checkbox"] {
 <p>El modelo seleccionado conserva A0 como expectativa basal y usa un XGBoost compacto para corregir su <em>logit</em>. La parte dinámica tiene cinco variables:</p>
 <ol type="1">
 <li><code>media_tiempo_levante</code>: tiempo medio desde el último levante en el segmento;</li>
-<li><code>rms_q_7</code>: intensidad y dispersión de la propensión histórica reciente de los clusters, estimada con las últimas siete observaciones y cerrada en <code>D-2</code>;</li>
-<li><code>rms_w_7</code>: carga que combina propensión reciente y severidad actual del atraso, donde <span class="math inline"><em>w</em> = <em>q</em><sub>7</sub><em>h</em></span>;</li>
+<li><code>rms_q_7</code>: resumen de la propensión reciente a tener reclamos de los clusters del segmento, que da mayor peso a los valores altos;</li>
+<li><code>rms_w_7</code>: el mismo tipo de resumen, pero combinando la propensión reciente de cada cluster con su atraso actual de levante;</li>
 <li><code>q7 - q60</code>: cambio entre la propensión reciente y el nivel habitual;</li>
 <li><code>es_feriado</code>: indicador del calendario de feriados del proyecto.</li>
 </ol>
-<p>La severidad del atraso se define como:</p>
-<p><span class="math display"><em>h</em> = min {max (ratio−1,0), 3}.</span></p>
+<section id="cómo-leer-rms_q_7-y-rms_w_7" class="level4">
+<h4 class="anchored" data-anchor-id="cómo-leer-rms_q_7-y-rms_w_7">Cómo leer <code>rms_q_7</code> y <code>rms_w_7</code></h4>
+<p>Las dos variables se construyen en dos pasos: primero se calcula un valor para cada <strong>cluster</strong> y después se resumen esos valores para cada <strong>segmento censal y día</strong>. El sufijo <code>7</code> indica la ventana de historia usada para la propensión; el RMS se calcula entre clusters del segmento, no entre los siete días.</p>
+<p><strong>1. <code>q_7</code>: propensión reciente del cluster a tener al menos un reclamo.</strong> Se parte de sus últimas siete observaciones disponibles, con rezago de dos registros. Cuando la serie es diaria y continua, para predecir <code>D</code> corresponden a los días <code>D-8</code> a <code>D-2</code>. Cada observación vale 1 si hubo al menos un reclamo y 0 si no lo hubo: varios reclamos en un mismo día siguen contando como 1. La implementación usa filas observadas; si faltan fechas, la ventana puede abarcar más de siete días calendario.</p>
+<p>Como siete observaciones son pocas, la proporción del cluster se <strong>suaviza hacia la de su barrio</strong>, y la del barrio hacia la global. En concreto:</p>
+<p><span class="math display">\[
+q_{7,i}
+=
+\frac{E_{7,i}+30 \times q_{7,b(i)}}{N_{7,i}+30}.
+\]</span></p>
+<p>En esta expresión, <span class="math inline">\(E_{7,i}\)</span> es la cantidad de observaciones con reclamo del cluster <span class="math inline">\(i\)</span>; <span class="math inline">\(N_{7,i}\)</span> es la cantidad de observaciones disponibles de ese cluster, normalmente siete; y <span class="math inline">\(q_{7,b(i)}\)</span> es la proporción de su barrio. <span class="math inline">\(N_{7,i}\)</span> no es la cantidad de clusters del segmento. El valor 30 tampoco es una cantidad de días ni de clusters: es el peso de regularización asignado a la referencia barrial, equivalente a agregar 30 observaciones con la tasa del barrio.</p>
+<p>La proporción barrial <span class="math inline">\(q_{7,b(i)}\)</span> está, a su vez, suavizada con 200 observaciones equivalentes de la proporción global, usando el mismo horizonte. Por ejemplo, si un cluster tuvo reclamo en 2 de 7 observaciones y <span class="math inline">\(q_{7,b(i)}=0{,}10\)</span>, entonces:</p>
+<p><span class="math display">\[
+q_{7,i}
+=
+\frac{2+30 \times 0{,}10}{7+30}
+=
+0{,}135.
+\]</span></p>
+<p>Esto evita tomar el cociente bruto <span class="math inline">\(2/7\)</span> como una estimación estable. <span class="math inline">\(q_7\)</span> proviene de la historia observada de reclamos; no es el score del modelo COM por cluster.</p>
+<p><strong>2. <code>rms_q_7</code>: raíz del promedio de los cuadrados de esas propensiones.</strong> RMS viene del inglés <em>root mean square</em> (media cuadrática). Si el segmento tiene <code>n</code> clusters incluidos en la base del día:</p>
+<p><span class="math display">\[
+\mathrm{RMS}_{q,7}
+=
+\sqrt{\frac{1}{n}\sum_{i=1}^{n}q_{7,i}^{2}}.
+\]</span></p>
+<p>Esta expresión también puede escribirse como:</p>
+<p><span class="math display">\[
+\mathrm{RMS}_{q,7}^{2}
+=
+\bar q_{7}^{2}+\operatorname{Var}_{n}(q_7),
+\]</span></p>
+<p>donde la varianza usa divisor <span class="math inline">\(n\)</span>. Esta identidad muestra por qué el RMS combina el nivel medio con la heterogeneidad entre clusters; no es una medida pura de dispersión.</p>
+<p>Elevar al cuadrado hace que los valores altos pesen más que en un promedio simple. Por ejemplo, las propensiones <code>0,10; 0,10</code> tienen media y RMS de <code>0,10</code>. Las propensiones <code>0,00; 0,20</code> tienen la misma media, pero RMS de <code>0,141</code>. Por eso combina <strong>nivel y heterogeneidad entre clusters</strong>: puede subir porque suben todas las propensiones o porque aparecen valores altos en algunos clusters. No es una medida pura de dispersión ni el total esperado de clusters con reclamo.</p>
+<p><strong>3. <code>w_7</code>: propensión reciente multiplicada por el atraso actual.</strong> Para cada cluster se calcula <span class="math inline">\(w_{7,i}=q_{7,i}\times h_i\)</span>. La severidad <span class="math inline">\(h_i\)</span> parte del ratio medio del cluster entre tiempo desde el último levante y período teórico (<code>mean_ratio_tiempo_periodo_pred</code>), disponible al corte operativo:</p>
+<p><span class="math display">\[
+h_i=\min\left\{\max\left(r_i-1,0\right),3\right\}.
+\]</span></p>
+<p>Un ratio <span class="math inline">\(r_i\)</span> de 1 o menos da <span class="math inline">\(h_i=0\)</span>; un ratio de 2 da <span class="math inline">\(h_i=1\)</span>; un ratio de 3 da <span class="math inline">\(h_i=2\)</span>. Desde un ratio de 4, <span class="math inline">\(h_i\)</span> queda limitado a 3 para acotar los extremos. Así, <span class="math inline">\(w_{7,i}\)</span> aumenta cuando <strong>coinciden en el mismo cluster</strong> una propensión alta y un atraso alto.</p>
+<p><strong>4. <code>rms_w_7</code>: media cuadrática de esas cargas dentro del segmento.</strong></p>
+<p><span class="math display">\[
+\mathrm{RMS}_{w,7}
+=
+\sqrt{\frac{1}{n}\sum_{i=1}^{n}
+\left(q_{7,i}\times h_i\right)^{2}}.
+\]</span></p>
+<p>Por ejemplo, para dos clusters con <code>q_7 = 0,10; 0,20</code>:</p>
+<table class="table">
+<colgroup>
+<col style="width: 20%">
+<col style="width: 20%">
+<col style="width: 20%">
+<col style="width: 20%">
+<col style="width: 20%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Situación de levante</th>
+<th><code>h</code> de cada cluster</th>
+<th><code>w_7</code> de cada cluster</th>
+<th><code>rms_q_7</code></th>
+<th><code>rms_w_7</code></th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Ninguno supera su período teórico</td>
+<td>0; 0</td>
+<td>0,00; 0,00</td>
+<td>0,158</td>
+<td>0,000</td>
+</tr>
+<tr class="even">
+<td>El segundo duplica su período teórico</td>
+<td>0; 1</td>
+<td>0,00; 0,20</td>
+<td>0,158</td>
+<td>0,141</td>
+</tr>
+<tr class="odd">
+<td>El segundo triplica su período teórico</td>
+<td>0; 2</td>
+<td>0,00; 0,40</td>
+<td>0,158</td>
+<td>0,283</td>
+</tr>
+</tbody>
+</table>
+<p>La historia de reclamos es la misma en las tres filas, por eso <code>rms_q_7</code> no cambia. <code>rms_w_7</code> sí cambia con el atraso. Un valor cero de <code>rms_w_7</code> indica ausencia de esta carga combinada, no ausencia de riesgo de reclamo. Es un índice que puede superar 1, no una probabilidad ni una cantidad de reclamos.</p>
+<p>Para recordarlas: <strong><code>rms_q_7</code> resume la propensión reciente; <code>rms_w_7</code> resume esa propensión combinada con el atraso actual.</strong> El modelo aprende cómo usar ambas señales; su construcción no demuestra un efecto causal del atraso.</p>
+<p>El cálculo está implementado en <code>scripts/comparar_ventanas_propension_xgboost_com.R</code>.</p>
+</section>
+<section id="uso-de-estas-variables-en-la-corrección" class="level4">
+<h4 class="anchored" data-anchor-id="uso-de-estas-variables-en-la-corrección">Uso de estas variables en la corrección</h4>
 <p>La corrección intenta modelar apartamientos respecto de la estructura: cambios operativos de levante, territorios más sensibles al atraso, aumentos o descensos recientes de la propensión y días feriados. No utiliza los scores del modelo de probabilidad por cluster.</p>
 <p>La versión compacta fue elegida frente a una variante de trece entradas porque reduce la corrección dinámica a cinco variables, mejora test y mantiene un desempeño combinado muy similar.</p>
+<p>Se evaluó también agregar <code>dia_semana</code> a esta corrección para permitir interacciones con feriados y señales dinámicas. En cinco repeticiones, la variante mejoró principalmente validación, pero no mostró una mejora estable en test: el RMSE de test aumentó en promedio 0,73 y solo mejoró en dos de cinco semillas. Por ahora se conserva la especificación compacta sin día de semana; el detalle está en el informe técnico completo.</p>
+</section>
 </section>
 </section>
 <section id="resultados" class="level2">

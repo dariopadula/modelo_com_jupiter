@@ -66,7 +66,9 @@ Metrica probabilistica que penaliza predicciones muy seguras pero equivocadas.
 
 ## Municipio B
 
-Municipio con cobertura incompleta en la fuente actual de Zona Limpia. Sus lecturas territoriales deben marcarse como pendientes hasta integrar la fuente faltante.
+Municipio cuyos registros de Zona Limpia suelen tener vacio el campo municipal
+original. Sus visitas se recuperan asignando el municipio por `cluster_id`; los
+analisis territoriales no deben agrupar directamente por el campo original.
 
 ## Problema Comparable Zona Limpia
 

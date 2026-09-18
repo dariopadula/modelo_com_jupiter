@@ -282,3 +282,13 @@ el proyecto.
 
 Validacion posterior al cambio: `SESSION_OK`, `HISTORICO_OK`, `DIA_COM_OK`,
 `DIA_ZL_OK` y `EVOLUCION_OK`. No se recalcularon modelos ni predicciones.
+
+### Avance 2026-09-11 - despliegue y prueba visual en Cloudera
+
+La app v2 se desplego como aplicacion persistente en Cloudera. Las pruebas del
+entorno finalizaron con `HISTORICO_OK` y `SESSION_OK`; el usuario verifico en
+navegador que la interfaz carga y que los mapas se muestran correctamente.
+
+Esta prueba cierra el pendiente general de arranque y visualizacion en el
+entorno destino. T030 permanece en proceso por la lectura barrial y las
+metricas territoriales adicionales.

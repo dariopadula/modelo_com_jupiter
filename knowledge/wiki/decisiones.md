@@ -92,10 +92,14 @@ Esta nota registra decisiones que se infieren claramente de la documentacion act
 
 ## Municipio B En Zona Limpia
 
-- Municipio B tiene cobertura incompleta en la fuente actual de Zona Limpia.
-- No debe interpretarse como baja prioridad real ni ausencia de visitas.
-- Se excluye de diagnosticos de correspondencia/propension hasta integrar la fuente faltante.
-- Fuentes: `zona_limpia/README.qmd`, `zona_limpia/reportes/10_sesgos_seleccion_zona_limpia.qmd`, `TAREAS.md`.
+- Los registros de Municipio B estan presentes, pero el campo `municipio`
+  original esta incompleto.
+- Los resumenes territoriales deben asignar municipio mediante `cluster_id` y
+  `cluster_admin_territorial`, como hace la aplicacion.
+- Los diagnosticos que excluyeron B se conservan como historicos y deben
+  recalcularse antes de reutilizarse.
+- Fuentes: `zona_limpia/README.qmd`,
+  `zona_limpia/reportes/14_cobertura_municipal_zona_limpia.qmd`, `TAREAS.md`.
 
 ## Propension De Visita Zona Limpia
 
@@ -107,6 +111,6 @@ Esta nota registra decisiones que se infieren claramente de la documentacion act
 
 ## Pendiente De Confirmar
 
-- Integracion de fuente faltante de Municipio B.
+- Efecto de reincorporar Municipio B en diagnosticos y modelos ZL historicos.
 - Decision final sobre usar regla alternativa de actividad reciente por levantes en ultimos 5, 7 o 10 dias.
 - Ruta productiva final y versionado definitivo de artefactos operativos.

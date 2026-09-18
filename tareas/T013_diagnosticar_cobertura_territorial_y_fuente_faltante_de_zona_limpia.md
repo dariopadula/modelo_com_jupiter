@@ -1,6 +1,6 @@
-# T013 - Diagnosticar cobertura territorial y fuente faltante de Zona Limpia
+# T013 - Diagnosticar cobertura territorial de Zona Limpia
 
-Estado: pendiente
+Estado: en proceso
 
 Prioridad: alta
 
@@ -10,62 +10,39 @@ Fecha de creacion: 2026-07-03
 
 ### Contexto
 
-El analisis preliminar por municipio, CCZ y barrio muestra
-diferencias fuertes de cobertura territorial de Zona Limpia. En
-particular, Municipio B aparece muy subrepresentado en la fuente actual,
-pero esto se debe a que sus registros de Zona Limpia estan en otra tabla
-aun no integrada.
+El analisis preliminar mostraba al Municipio B muy subrepresentado y se habia
+interpretado que sus registros estaban en otra tabla no integrada.
 
-Esto implica que la baja cobertura observada para Municipio B no debe
-interpretarse como baja prioridad operativa real ni como ausencia de
-visitas. Es un faltante de fuente.
+La auditoria del 2026-09-17 corrigio esa lectura. Los registros de B estan
+presentes, pero el campo `municipio` original esta vacio para una proporcion
+importante. La asignacion espacial mediante `cluster_id` y
+`cluster_admin_territorial` recupera las visitas que muestra la aplicacion.
+
+En particular, el 2026-05-21 la aplicacion muestra 82 clusters visitados en B,
+29 de ellos con problema. La actividad intensa y continua comienza el
+2026-05-14, aunque existen antecedentes desde el 2025-09-11.
 
 ### Plan propuesto
 
-- Documentar explicitamente que Municipio B tiene cobertura incompleta en la fuente actual.
-
-- Conseguir e integrar la tabla adicional con registros Zona Limpia de Municipio B.
-
-- Recalcular la base ampliada o crear un anexo de Zona Limpia que unifique ambas fuentes.
-
-- Rehacer diagnosticos de cobertura por municipio, CCZ y barrio.
-
-- Reentrenar o reevaluar el modelo Zona Limpia observado si cambia sustancialmente la distribucion territorial.
+- Usar la asignacion espacial del cluster en todos los resumenes territoriales.
+- Recalcular los diagnosticos historicos que excluyeron B por la hipotesis de
+  fuente faltante.
+- Verificar si el vacio del campo `municipio` afecta otros productos o controles
+  de calidad.
+- Reevaluar el modelo Zona Limpia si la reincorporacion de B cambia la
+  distribucion territorial o temporal.
 
 ### Criterio de finalizacion
 
-La cobertura territorial de Zona Limpia queda auditada con todas las
-fuentes disponibles, y Municipio B deja de aparecer como subrepresentado
-por un faltante de datos.
+Todos los diagnosticos territoriales vigentes usan el municipio del cluster,
+la cobertura de B queda auditada y se determina si corresponde recalcular los
+modelos o resultados historicos que lo excluyeron.
 
-### Notas
+### Avance 2026-09-17
 
-Hasta integrar la fuente adicional, las comparaciones territoriales y
-modelos Zona Limpia deben marcar Municipio B como cobertura
-incompleta.
-
-// add bootstrap table styles to pandoc tables
-function bootstrapStylePandocTables() {
-  $('tr.odd').parent('tbody').parent('table').addClass('table table-condensed');
-}
-$(document).ready(function () {
-  bootstrapStylePandocTables();
-});
-
-$(document).ready(function () {
-  window.buildTabsets("TOC");
-});
-
-$(document).ready(function () {
-  $('.tabset-dropdown > .nav-tabs > li').click(function () {
-    $(this).parent().toggleClass('nav-tabs-open');
-  });
-});
-
-  (function () {
-    var script = document.createElement("script");
-    script.type = "text/javascript";
-    script.src  = "https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML";
-    document.getElementsByTagName("head")[0].appendChild(script);
-  })();
-
+- Se genero `zona_limpia/reportes/14_cobertura_municipal_zona_limpia.qmd`.
+- Se documento la diferencia entre municipio informado y municipio espacial.
+- Se calcularon visitas y porcentaje de problemas por municipio con unidad
+  cluster-dia.
+- Resta revisar y, si corresponde, recalcular los analisis historicos que
+  excluyeron B.

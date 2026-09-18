@@ -1,14 +1,30 @@
 preparar_historia_zl <- function() {
-  ds <- abrir_detalle_com()
-  fechas <- ds |>
-    dplyr::filter(
-      modelo_id == "zl_problema",
-      estado_periodo_app == "historico_cerrado",
-      hay_zl_visita_efectiva == 1L
-    ) |>
-    dplyr::distinct(dia_objetivo) |>
-    dplyr::collect()
-  list(ds = ds, dias = sort(as.character(fechas$dia_objetivo)))
+  if (!usar_s3_app()) {
+    ds <- abrir_detalle_com()
+    fechas <- ds |>
+      dplyr::filter(
+        modelo_id == "zl_problema",
+        estado_periodo_app == "historico_cerrado",
+        hay_zl_visita_efectiva == 1L
+      ) |>
+      dplyr::distinct(dia_objetivo) |>
+      dplyr::collect()
+    dias <- sort(as.character(fechas$dia_objetivo))
+  } else {
+    ds <- NULL
+    dias <- listar_dias_detalle_s3_app("zl_problema")
+    if (length(dias)) {
+      cierre <- max(as.Date(dias)) - dias_validacion_app()
+      dias <- dias[as.Date(dias) <= cierre]
+    }
+  }
+  list(
+    ds = ds,
+    dias = dias,
+    cargar_dia = function(fecha) {
+      cargar_detalle_dia_app(fecha, "zl_problema", ds_local = ds)
+    }
+  )
 }
 
 clasificar_puntos_zl <- function(dia, seleccionados) {
@@ -63,10 +79,7 @@ dia_zl_server <- function(id, historia, centroides, version_cluster) {
     dia <- reactive({
       req(input$dia)
       fecha <- as.Date(input$dia)
-      dt <- historia$ds |>
-        dplyr::filter(dia_objetivo == !!fecha, modelo_id == "zl_problema") |>
-        dplyr::collect() |>
-        data.table::as.data.table()
+      dt <- historia$cargar_dia(fecha)
       validate(
         need(nrow(dt) > 0, "Sin datos para este d\u00eda."),
         need(all(dt$estado_periodo_app == "historico_cerrado"), "El d\u00eda todav\u00eda est\u00e1 pendiente de validaci\u00f3n."),

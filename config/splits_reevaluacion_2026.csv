@@ -1,0 +1,5 @@
+version_split,orden,split,fecha_desde,fecha_hasta,uso_permitido,puede_ajustar,puede_seleccionar,puede_reportar_metricas_ahora,estado
+reevaluacion_2026_v1,1,contexto,2025-01-01,2025-03-31,historia_previa,FALSE,FALSE,FALSE,contexto
+reevaluacion_2026_v1,2,entrenamiento,2025-04-01,2026-03-31,ajuste_modelos,TRUE,FALSE,TRUE,abierto
+reevaluacion_2026_v1,3,validacion,2026-04-01,2026-06-30,comparacion_candidatos,FALSE,TRUE,TRUE,abierto
+reevaluacion_2026_v1,4,test,2026-07-01,2026-09-14,evaluacion_final_unica,FALSE,FALSE,FALSE,sellado

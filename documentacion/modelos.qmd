@@ -31,6 +31,23 @@ Contiene:
 - features históricas de reclamos;
 - ratios de tiempo desde último levante respecto a la periodicidad teórica.
 
+Para la reevaluación con datos hasta el 14 de septiembre de 2026, esta tabla se
+complementa con una capa compartida normalizada:
+
+- `data/processed/features_compartidas/calendario_dia.parquet` para calendario
+  y ciclo anual;
+- `data/processed/cluster_territorial/` para atributos estáticos;
+- `data/processed/features_compartidas/segmento_dia/` para modelos diarios e
+  inferenciales por segmento;
+- `data/processed/zona_limpia/comparacion_com_zona_limpia_cluster_dia/` para el
+  target específico de Zona Limpia.
+
+No todas las familias consumen exactamente las mismas columnas, porque sus
+unidades y targets difieren. Comparten las mismas fuentes canónicas, el corte
+temporal y las reglas de disponibilidad. La capa no contiene todavía etiquetas
+de entrenamiento, validación o test, y no incluye clima por su cobertura
+incompleta al final del período.
+
 ## Target inicial
 
 Target binario:
@@ -42,7 +59,7 @@ Interpretación:
 - `TRUE`: el cluster tuvo al menos un reclamo COM asignado o en revisión ese día.
 - `FALSE`: no tuvo reclamos validos ese día.
 
-## Split temporal
+## Split temporal de la última corrida cerrada
 
 - Entrenamiento: primeros 12 meses disponibles.
 - Validación: siguientes 3 meses.
@@ -53,6 +70,50 @@ En la corrida actual:
 - Entrenamiento: `202501` a `202512`.
 - Validación: `202601` a `202603`.
 - Test: `202604` a `202605`.
+
+Estos cortes describen la última corrida cerrada y no se reutilizan en la
+reevaluación de 2026.
+
+## Split congelado para la reevaluación 2026
+
+El contrato `reevaluacion_2026_v1` fija:
+
+- contexto histórico: 1 de enero a 31 de marzo de 2025;
+- entrenamiento: 1 de abril de 2025 a 31 de marzo de 2026;
+- validación: 1 de abril a 30 de junio de 2026;
+- test puro: 1 de julio a 14 de septiembre de 2026.
+
+El año de entrenamiento incluye un ciclo anual completo y contiene enero y
+febrero de 2026. Los tres meses siguientes se destinan a seleccionar modelos.
+El test permanece sellado hasta que los candidatos hayan sido comparados con
+validación y los finalistas estén congelados.
+
+Las fechas son comunes a COM predictivo, inferencia y Zona Limpia. Cada modelo
+mantiene su definición de universo; por ejemplo, Zona Limpia continúa
+excluyendo meses con cobertura anómala. El contrato y su calendario materializado
+están en `config/splits_reevaluacion_2026.csv` y
+`data/processed/features_compartidas/calendario_splits_reevaluacion_2026.parquet`.
+Todavía no se calcularon métricas del nuevo test.
+
+## Candidatos de la reevaluación 2026
+
+El paso 5 fijó y entrenó siete candidatos. Todos usan solamente el período de
+entrenamiento del contrato `reevaluacion_2026_v1`. Las predicciones de abril a
+junio se guardan para la comparación posterior; el test no fue leído.
+
+| Familia | Candidato | Especificación |
+|---|---|---|
+| COM cluster/día | `com_logistico_reducido_d2` | Logístico reducido operativo, historia COM D−2 y 15 features |
+| COM cluster/día | `com_xgboost_d2` | XGBoost con las mismas features y 120 rondas fijas |
+| Pronóstico agregado | `pronostico_a0` | Binomial con día de semana y efectos penalizados de barrio y segmento |
+| Pronóstico agregado | `pronostico_a0_xgb_compacto_q30` | A0 más XGBoost compacto con cinco variables y 57 rondas fijas |
+| Inferencia | `inferencial_q30_ciclo` | Binomial con q30, ciclo anual, territorio, atraso, interacciones y jerarquía territorial |
+| Zona Limpia | `zl_operativo_segmento` | XGBoost con 36 variables operativas, censales y de calendario |
+| Zona Limpia | `zl_amplio_actual` | XGBoost con 52 variables numéricas y tres territoriales categóricas |
+
+Las cantidades de rondas y demás hiperparámetros provienen de las decisiones
+anteriores; no se reajustaron con la nueva validación. El candidato inferencial
+se entrenó sin bootstrap. No se calcularon métricas en este paso.
 
 ## Modelo logístico baseline
 
@@ -1139,3 +1200,22 @@ Opciones a evaluar:
 - Evaluar modelos de conteo para `n_reclamos`.
 
 El baseline logístico sirve como referencia interpretable para comparar esos modelos.
+
+## Reevaluación 2026: comparación en validación
+
+La comparación del paso 6 usa únicamente el período de validación congelado,
+del 1 de abril al 30 de junio de 2026. El test de julio al 14 de septiembre no
+fue leído y no se ejecutó bootstrap.
+
+| Candidato COM | AUC | Logloss | Brier |
+|---|---:|---:|---:|
+| Logístico reducido D-2 | 0,7667 | 0,2980 | 0,0870 |
+| XGBoost D-2 | 0,7752 | 0,2944 | 0,0862 |
+
+XGBoost mejora las tres métricas globales y el AUC de cada mes. En el 10 % de
+clusters priorizados por día, la captura media pasa de 32,30 % a 32,80 % y el
+lift medio de 3,23 a 3,28. La mejora es consistente, aunque moderada, por lo que
+el paso 7 deberá valorar también el costo de complejidad frente al logístico.
+
+Las tablas completas, incluidos lift y calibración por deciles, están en
+`outputs/reevaluacion_2026/validacion/`.

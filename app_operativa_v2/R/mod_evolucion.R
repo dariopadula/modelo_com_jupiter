@@ -1,7 +1,6 @@
 # Solo se materializa la serie agregada COM de evaluacion, nunca el detalle.
 cargar_serie_evolucion <- function() {
-  base <- Sys.getenv("APP_HISTORICO_PATH", "data/historico")
-  path <- file.path(base, "serie_historica_com")
+  path <- resolver_path_serie_app()
   if (!dir.exists(path)) return(data.table::data.table())
   dt <- arrow::open_dataset(path) |>
     dplyr::filter(nivel_territorial == "montevideo", escenario == "P3_compacto",

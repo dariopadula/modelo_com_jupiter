@@ -170,7 +170,15 @@ dia_zl_server <- function(id, historia, centroides, version_cluster) {
 
     output$mapa <- renderLeaflet({
       leaflet(options = leafletOptions(preferCanvas = TRUE)) |>
-        addProviderTiles(providers$CartoDB.Positron) |>
+        addTiles(
+          urlTemplate = paste0(
+            "https://montevideo.gub.uy/app/geowebcache/service/wmts/rest/",
+            "mapstore-base:capas_base_puerta/default/",
+            "EPSG:900913/EPSG:900913:{z}/{y}/{x}",
+            "?format=image/jpeg"
+          )
+        ) |>
+        # addProviderTiles(providers$CartoDB.Positron) |>
         setView(-56.16, -34.86, 11)
     })
 

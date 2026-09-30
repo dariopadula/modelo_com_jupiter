@@ -137,7 +137,16 @@ dia_com_server <- function(id, historia, centroides, version_cluster) {
     for (nombre in c("seleccionados", "observados")) local({
       id_mapa <- nombre
       output[[id_mapa]] <- renderLeaflet(leaflet(options = leafletOptions(preferCanvas = TRUE)) |>
-        addProviderTiles(providers$CartoDB.Positron) |> setView(-56.16, -34.86, 11))
+                           addTiles(
+                             urlTemplate = paste0(
+                               "https://montevideo.gub.uy/app/geowebcache/service/wmts/rest/",
+                               "mapstore-base:capas_base_puerta/default/",
+                               "EPSG:900913/EPSG:900913:{z}/{y}/{x}",
+                               "?format=image/jpeg"
+                             )
+                           ) |>
+        # addProviderTiles(providers$CartoDB.Positron) |> 
+          setView(-56.16, -34.86, 11))
       observe({
         h <- distribucion()
         limite <- max(c(h$pct_sel, h$pct_obs, 1), na.rm = TRUE)

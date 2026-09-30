@@ -25,7 +25,16 @@ mapa_operativo_server <- function(id, com, zl, barrios, pronostico_barrio_dia) {
   moduleServer(id, function(input, output, session) {
     output$mapa <- renderLeaflet({
       mapa <- leaflet(options = leafletOptions(preferCanvas = TRUE)) |>
-        addProviderTiles(providers$CartoDB.Positron) |>
+        addTiles(
+          urlTemplate = paste0(
+            "https://montevideo.gub.uy/app/geowebcache/service/wmts/rest/",
+            "mapstore-base:capas_base_puerta/default/",
+            "EPSG:900913/EPSG:900913:{z}/{y}/{x}",
+            "?format=image/jpeg"
+          )
+        ) |>
+        # addTiles() |>
+        # addProviderTiles(providers$CartoDB.Positron) |>
         setView(lng = -56.16, lat = -34.86, zoom = 12)
 
       if (nrow(barrios)) {

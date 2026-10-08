@@ -36,6 +36,7 @@ skills/
 # Archivos que pueden tener credenciales
 /app_operativa_v2/R/s3_io.R
 /app_operativa_v2/py/
+/decisiones tomadas/
 
 # Datos generales: conservar solo la descripcion de la estructura.
 /data/**

@@ -117,7 +117,7 @@ ruta_cache_key_s3_app <- function(key) {
   if (!length(segmentos) || any(segmentos %in% c("", ".", ".."))) {
     stop("Clave S3 no valida para la cache local: ", key)
   }
-  file.path(cfg$cache, segmentos)
+  do.call(file.path, as.list(c(cfg$cache, segmentos))) #file.path(cfg$cache, segmentos)
 }
 
 descargar_objeto_s3_app <- function(key) {

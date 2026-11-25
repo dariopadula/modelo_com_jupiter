@@ -1,0 +1,5 @@
+{
+  "status": "equivalencia_salvo_corte_aprobado",
+  "cutoff_difference_hours": 3,
+  "intentional_change": "01:00 America/Montevideo para nuevos levantes; no backfill historico"
+}

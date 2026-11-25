@@ -1,0 +1,79 @@
+# Configuracion del sistema reconstruido. Copiar este archivo como .Renviron
+# dentro de reconstruccion/ y ejecutar R desde esa carpeta.
+# No incluir el .Renviron real en Git ni guardar aqui credenciales reales.
+# IMPORTANTE: Rscript --vanilla NO lee .Renviron. Para usarlo, ejecutar por ejemplo:
+# Rscript scripts/run_app.R
+# Reiniciar R despues de editar .Renviron; una sesion abierta conserva su entorno.
+# Las rutas locales de entregas, salidas e insumos se pasan como argumentos a
+# los scripts: no existen variables de entorno adicionales para esas rutas.
+
+# 1. Entorno general. runtime debe ser relativo a la raiz reconstruccion/.
+RF_ENVIRONMENT=local
+RF_RUNTIME_PATH=runtime
+RF_TIMEZONE=America/Montevideo
+# Biblioteca R ya instalada, opcional. No instala paquetes.
+# RF_R_LIBRARY="C:/Users/<usuario>/AppData/Local/R/win-library/4.5"
+
+# 2. Extraccion: entrega usa archivos existentes; impala genera una entrega nueva.
+# Impala no es un backend de archivos: su entrega luego se lee desde local/S3.
+RF_EXTRACTOR=entrega
+
+# 3. De donde se lee la entrega cruda: local o cloudera_s3.
+INGESTA_INPUT_BACKEND=local
+
+# 4. Donde se guardan resultados/publicaciones: local o cloudera_s3.
+PIPELINE_STORAGE_BACKEND=local
+
+# 5. De donde lee la app: local o cloudera_s3, independiente de los anteriores.
+# Para que la app lea lo publicado, su almacen debe coincidir con el de salida.
+APP_DATA_SOURCE=local
+
+# 6. App local: elegir publicacion directa O almacen versionado.
+# Sin ambas variables se abre el piloto R08 predeterminado.
+# RF_APP_PUBLICATION="C:/ruta/reconstruccion/runtime/<corrida>/publicacion"
+# RF_APP_STORE="C:/ruta/reconstruccion/runtime/<corrida>/almacen"
+# Si RF_APP_STORE tiene valor, prevalece sobre RF_APP_PUBLICATION en local.
+APP_PORT=3843
+RF_OPEN_BROWSER=1
+# Cloudera proporciona CDSW_APP_PORT; prevalece sobre APP_PORT si esta definido.
+# No fijarlo aqui salvo que el entorno de despliegue lo requiera.
+# CDSW_APP_PORT=3843
+
+# 7. S3 para entrada Y salida del pipeline: comparten conexion y bucket.
+# Descomentar/completar solo si INGESTA_INPUT_BACKEND o PIPELINE_STORAGE_BACKEND
+# vale cloudera_s3. Nunca inventar ubicaciones ni usar publicaciones vigentes.
+# PIPELINE_S3_CONNECTION="S3 Object Store"
+# PIPELINE_S3_BUCKET="<bucket_confirmado>"
+
+# Entrada cruda: prefijo de una entrega concreta y su manifiesto listo.
+# Requerido solamente con INGESTA_INPUT_BACKEND=cloudera_s3.
+# INGESTA_S3_PREFIX="<prefijo_aislado_entrega>"
+# INGESTA_S3_MANIFEST_KEY="<prefijo_aislado_entrega>/manifest.json"
+
+# Salida del pipeline: versiones e indicador current.json dentro de este prefijo.
+# Requerido solamente con PIPELINE_STORAGE_BACKEND=cloudera_s3.
+# PIPELINE_S3_PREFIX="<prefijo_aislado_publicaciones>"
+
+# 8. S3 de la app: requerido solamente con APP_DATA_SOURCE=cloudera_s3.
+# Para consumir la salida anterior, repetir su conexion, bucket y prefijo.
+# APP_S3_CONNECTION="S3 Object Store"
+# APP_S3_BUCKET="<mismo_bucket_de_publicaciones>"
+# APP_S3_PREFIX="<mismo_prefijo_aislado_publicaciones>"
+# Python ya instalado con cml.data_v1; se usa la conexion administrada de CML.
+# RETICULATE_PYTHON="<ruta_absoluta_python_CML_instalado>"
+# En Cloudera cambiar RF_ENVIRONMENT a cloudera y RF_OPEN_BROWSER a 0.
+
+# 9. Impala: requerido solamente con RF_EXTRACTOR=impala.
+# Requiere RJDBC/DBI, Java y driver ya instalados. El pedido JSON declara meses,
+# cierres y disponibilidad reales; ver config/pedido_impala_r09.json.example.
+# IMPALA_JDBC_JAR="<ruta_absoluta_driver_ImpalaJDBC42.jar>"
+# IMPALA_JDBC_URL="<jdbc_url_confirmada_sin_secretos>"
+# IMPALA_USER e IMPALA_PASSWORD deben proveerse desde el entorno administrado
+# o una configuracion privada fuera de Git. No contienen valores de ejemplo.
+# IMPALA_USER=
+# IMPALA_PASSWORD=
+
+# Las caches de R09 se crean bajo RF_RUNTIME_PATH; no son datos canonicos.
+# Los parametros antiguos INGESTA_INPUT_CACHE_PATH, APP_S3_CACHE_PATH y
+# APP_S3_REFRESH del sistema original no son utilizados por R09.
+# Referencia y comandos: cerebro_rf/acceso_publicacion_r09.md.

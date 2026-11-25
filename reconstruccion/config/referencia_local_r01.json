@@ -1,0 +1,262 @@
+{
+  "reference_id": "local_r01_2026-10-20",
+  "scope": "local",
+  "cloudera_verified": false,
+  "user_approved_local_first": true,
+  "artifact_identity": "hashes_of_present_files_not_proof_of_historical_generation",
+  "numeric_equivalence_verified": false,
+  "cluster_version": "v2026_05_25",
+  "metadata": {
+    "R": "R version 4.5.1 (2025-06-13 ucrt)",
+    "paquetes": {
+      "arrow": "20.0.0.2",
+      "dplyr": "1.1.4",
+      "jsonlite": "2.0.0",
+      "xgboost": "1.7.11.1",
+      "mgcv": "1.9.3"
+    },
+    "com": {
+      "features_modelo": [
+        "n_reclamos_lag1",
+        "sin_reclamo_previo_observado",
+        "historia_observada_7_29",
+        "historia_observada_30_89",
+        "historia_observada_90_179",
+        "historia_observada_180_mas",
+        "dias_desde_ultimo_reclamo_o_inicio_trunc_90",
+        "n_reclamos_sum_7d",
+        "n_reclamos_sum_30d",
+        "dias_cluster_existente_30d",
+        "n_contenedores_activos",
+        "pct_contenedores_inferidos",
+        "mean_tiempo_desde_ultimo_levante_pred",
+        "mean_levante_periodo",
+        "mean_dias_total_tramo_inferido_estado"
+      ],
+      "meses_train": [
+        202501,
+        202502,
+        202503,
+        202504,
+        202505,
+        202506,
+        202507,
+        202508,
+        202509,
+        202510,
+        202511,
+        202512
+      ],
+      "meses_validacion": [
+        202601,
+        202602,
+        202603
+      ],
+      "meses_test": [
+        202604,
+        202605
+      ],
+      "fecha_min_modelo": "2025-01-08",
+      "rezago_reclamos_dias": 2,
+      "version_cluster": "v2026_05_25",
+      "no_agregar_na_features": "mean_tiempo_desde_ultimo_levante_pred"
+    },
+    "com_prep_campos": [
+      "n_reclamos_lag1",
+      "sin_reclamo_previo_observado",
+      "historia_observada_7_29",
+      "historia_observada_30_89",
+      "historia_observada_90_179",
+      "historia_observada_180_mas",
+      "dias_desde_ultimo_reclamo_o_inicio_trunc_90",
+      "n_reclamos_sum_7d",
+      "n_reclamos_sum_30d",
+      "dias_cluster_existente_30d",
+      "n_contenedores_activos",
+      "pct_contenedores_inferidos",
+      "mean_tiempo_desde_ultimo_levante_pred",
+      "mean_levante_periodo",
+      "mean_dias_total_tramo_inferido_estado"
+    ],
+    "zl": {
+      "features_numericas": [
+        "n_contenedores_activos",
+        "n_contenedores_elegibles_modelo",
+        "n_contenedores_observados",
+        "n_contenedores_inferidos",
+        "pct_contenedores_inferidos",
+        "pct_contenedores_elegibles_modelo",
+        "min_tiempo_desde_ultimo_levante_pred",
+        "mean_tiempo_desde_ultimo_levante_pred",
+        "median_tiempo_desde_ultimo_levante_pred",
+        "max_tiempo_desde_ultimo_levante_pred",
+        "min_ratio_tiempo_periodo_pred",
+        "mean_ratio_tiempo_periodo_pred",
+        "median_ratio_tiempo_periodo_pred",
+        "max_ratio_tiempo_periodo_pred",
+        "min_levante_periodo",
+        "mean_levante_periodo",
+        "max_levante_periodo",
+        "exceso_min_tiempo_periodo_pred_pos",
+        "exceso_mean_tiempo_periodo_pred_pos",
+        "exceso_max_tiempo_periodo_pred_pos",
+        "exceso_min_tiempo_periodo_pred_trunc7",
+        "exceso_mean_tiempo_periodo_pred_trunc7",
+        "exceso_max_tiempo_periodo_pred_trunc7",
+        "mean_dias_total_tramo_inferido_estado",
+        "max_dias_total_tramo_inferido_estado",
+        "porc_nbi_segmento",
+        "porc_asentamiento_nbi_segmento",
+        "porc_vivienda_inadecuada_segmento",
+        "densidad_pob_km2",
+        "cluster_multisegmento",
+        "pct_posiciones_segmento_principal",
+        "dia_semana",
+        "fin_de_semana",
+        "es_feriado",
+        "vispera_feriado",
+        "dia_habil"
+      ],
+      "features_categoricas": [],
+      "feature_set_zl": "operativo_segmento"
+    },
+    "zl_campos": [
+      "temporal",
+      "random_estratificado_mes",
+      "random_dia_estratificado_mes",
+      "feature_set_zl",
+      "features_numericas",
+      "features_categoricas",
+      "parametros"
+    ],
+    "escenario_zl_presente": true,
+    "zl_escenario_campos": [
+      "fit",
+      "prep"
+    ],
+    "a0_clase": [
+      "bam",
+      "gam",
+      "glm",
+      "lm"
+    ],
+    "a0_formula": "prop_clusters_reclamo ~ dia_semana + s(barrio, bs = \"re\") + s(segmento,      bs = \"re\")",
+    "p3_clase": "xgb.Booster",
+    "p3_features": [
+      "media_tiempo_levante",
+      "rms_q_7",
+      "rms_w_7",
+      "delta_q_7_60",
+      "es_feriado"
+    ],
+    "muestra": {
+      "dia": "2026-05-24",
+      "filas_pred": 16,
+      "modelos": [
+        "com_reclamo",
+        "zl_problema"
+      ],
+      "versiones_cluster": "v2026_05_25",
+      "filas_maestro": 16,
+      "filas_serie": 8,
+      "escenarios": "P3_compacto"
+    }
+  },
+  "files": [
+    {
+      "path": "data/processed/modelos/logistico_cluster_dia_reducido_reclamos_d2/modelo_logistico_reducido.rds",
+      "bytes": 439624069,
+      "sha256": "9d0ba10347f21b999f7347c4e9556b2456815fef221167dce2c9dbf2fe20007d"
+    },
+    {
+      "path": "data/processed/modelos/experimentos_cascada_zl/operativo_segmento/modelo_zl_xgboost.rds",
+      "bytes": 180849,
+      "sha256": "09af41e1936795c90e581a0c12888d1d6894f6334d16f97bcd3bd1e86d315656"
+    },
+    {
+      "path": "outputs/comparacion_poda_xgboost_com/modelo_P3_compacto.rds",
+      "bytes": 12855,
+      "sha256": "2e2b2c7bb28b68b39353b1c1018786030c52896ab68512dfd263235262230c1b"
+    },
+    {
+      "path": "outputs/prueba_xgboost_correccion_estructural_com/modelo_A0_final.rds",
+      "bytes": 40373908,
+      "sha256": "01caa8cf931e21d96aaf06b3c68e7f6a586c8685d0b25057269f0127fce2dd78"
+    },
+    {
+      "path": "app_operativa_v2/data/operacional/resumen_modelos_largo.csv",
+      "bytes": 397,
+      "sha256": "9d5e50cff6d2edda34b2f8891464f4807c8990f1e067a04788caa9e656fab153"
+    },
+    {
+      "path": "app_operativa_v2/data/historico/resumen_publicacion.csv",
+      "bytes": 217,
+      "sha256": "f59143d4402e17c9f380b828c1709800e8fa110b6e186a87de85f441b3248daf"
+    },
+    {
+      "path": "outputs/comparacion_poda_xgboost_com/predicciones_diarias.csv",
+      "bytes": 172947,
+      "sha256": "f91d016cc893359920947ba0885e9decc3ce9367df7310a46923511b00ac2802"
+    },
+    {
+      "path": "outputs/comparacion_poda_xgboost_com/predicciones_barrio_dia.csv",
+      "bytes": 14047109,
+      "sha256": "24f46e1148941c8034b096e27285821cc7539beb48ec193a523316a3d9d029c6"
+    },
+    {
+      "path": "scripts/construir_app_modelos_largo_historico.R",
+      "bytes": 13251,
+      "sha256": "03e3480476dbdb4cddb87f9ddc836b0b0bdb80eabe4e6154cd5d34f0aa0a8745"
+    },
+    {
+      "path": "scripts/construir_tablas_historicas_app_v2.R",
+      "bytes": 6534,
+      "sha256": "639d92830677d252b7b18cbe3dcb03e41213fc09c183c0eba20e57f4c3b78c86"
+    },
+    {
+      "path": "scripts/comparar_poda_xgboost_com.R",
+      "bytes": 7380,
+      "sha256": "34c2a560dd5ff02a664c12f1f652835cf7b82c15045efa08a73be2304a96f933"
+    },
+    {
+      "path": "scripts/probar_xgboost_correccion_estructural_com.R",
+      "bytes": 10200,
+      "sha256": "fd935fe1389e2d3cc96283f74faa02ae38089e83ce28eb179fb5cb6178639a53"
+    },
+    {
+      "path": "scripts/comparar_ventanas_propension_xgboost_com.R",
+      "bytes": 10409,
+      "sha256": "86ac8c023476caf228cce2ae909a6f0e14cf43df45e3b7513e33745a05138b1d"
+    },
+    {
+      "path": "app_operativa_v2/R/datos_fuente.R",
+      "bytes": 10423,
+      "sha256": "0fc2638f5c7f5d28715acc3783ccf15b751a99ac13232ac6c837b3359b8af63c"
+    },
+    {
+      "path": "app_operativa_v2/R/datos_operacion.R",
+      "bytes": 2870,
+      "sha256": "f0d0ea627ff5d74299319f1f82a8835a9c3052044e12ef2bcfc0dd0619c3838a"
+    },
+    {
+      "path": "reconstruccion/runtime/referencia_r01/metadatos_modelos.json",
+      "bytes": 3564,
+      "sha256": "70f2c2a8faf3d04cc64885ddc4c6249fc836d28bb88235683b2c3b6cf527d6ce"
+    },
+    {
+      "path": "reconstruccion/runtime/referencia_r01/muestra_predicciones.csv",
+      "bytes": 6856,
+      "sha256": "dda946d52554157a9c578befc817e748b6f37c764396d9d5c2bb183dc2df9dc1"
+    },
+    {
+      "path": "reconstruccion/runtime/referencia_r01/muestra_maestro.csv",
+      "bytes": 1527,
+      "sha256": "0dfb86e3147e558a7f1786c5d88ca1effc8378b011989f3ef4fed1b05a28c154"
+    },
+    {
+      "path": "reconstruccion/runtime/referencia_r01/muestra_serie.csv",
+      "bytes": 1000,
+      "sha256": "aa9bb694e7ebb8405997e91269c5dda75940492595251416159ccf74f88d5077"
+    }
+  ]
+}

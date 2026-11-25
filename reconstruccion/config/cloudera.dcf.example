@@ -1,0 +1,15 @@
+RF_ENVIRONMENT: cloudera
+RF_RUNTIME_PATH: runtime
+INGESTA_INPUT_BACKEND: cloudera_s3
+PIPELINE_STORAGE_BACKEND: cloudera_s3
+APP_DATA_SOURCE: cloudera_s3
+RF_EXTRACTOR: entrega
+PIPELINE_S3_CONNECTION: S3 Object Store
+PIPELINE_S3_BUCKET: <bucket_fuentes>
+INGESTA_S3_PREFIX: <prefijo_entregas>
+INGESTA_S3_MANIFEST_KEY: <prefijo_entregas>/manifests/<entrega_id>.json
+PIPELINE_S3_PREFIX: <prefijo_pipeline>
+APP_S3_CONNECTION: S3 Object Store
+APP_S3_BUCKET: <bucket_app>
+APP_S3_PREFIX: <prefijo_app>
+RF_TIMEZONE: America/Montevideo

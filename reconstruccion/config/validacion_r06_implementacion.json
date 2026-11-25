@@ -1,0 +1,61 @@
+{
+  "date": "2026-10-22",
+  "scope": "same_current_model_and_inputs",
+  "rows": 8,
+  "features": 36,
+  "max_score_difference": 0,
+  "matrices_equal": true,
+  "rankings_and_top_equal": true,
+  "tolerance": 1E-06,
+  "training_fixtures": "com_and_zl_pass",
+  "parquet_import_fixtures": "com_and_zl_pass",
+  "full_training": "pending_user",
+  "historical_publication": "pending_provenance_three_differences",
+  "r06_status": "en proceso",
+  "files": [
+    {
+      "path": "reconstruccion/runtime/r06_zl/modelo_zl.rds",
+      "sha256": "98178893e407c89556ff10a4faad5209266185adc08afb2fae4151c81a5228fd"
+    },
+    {
+      "path": "reconstruccion/runtime/r06_zl/muestra_zl.rds",
+      "sha256": "5c32a2a106d19517fbc939304558296d3b77b0540ebed01fb1c2ab647fe19b3b"
+    },
+    {
+      "path": "reconstruccion/R/features/zl_receta.R",
+      "sha256": "1da55b31a7bc6e90df5a9057b22cd0ae9912d2d521fe208032b95ba119549467"
+    },
+    {
+      "path": "reconstruccion/R/modelos/zl_xgboost.R",
+      "sha256": "649a087e2354874baca42589c24d145c1ab290627d02956396fe9cde1738f0b3"
+    },
+    {
+      "path": "reconstruccion/R/entrenamiento/com_zl.R",
+      "sha256": "6feaec628d234c5fd4513a20cacdc4c990f05a4cbe17a74e122d6d429b3e17a9"
+    },
+    {
+      "path": "reconstruccion/scripts/entrenar_modelo.R",
+      "sha256": "96db00f16a99be96b021e8773b2f1c9a52ae7cc3adec2ea3e92e3e715907550d"
+    },
+    {
+      "path": "reconstruccion/herramientas_migracion/preparar_entrenamiento_r06.R",
+      "sha256": "9e809053bc192f5d07a2fef013c26923bda1386306380dd488b9f2addb05f98a"
+    },
+    {
+      "path": "reconstruccion/herramientas_migracion/comparar_inferencia_zl_r06.R",
+      "sha256": "68eefdeca7f798fd7fabfb06434956ad4651f3acb226e2f763023a5c0c845564"
+    },
+    {
+      "path": "reconstruccion/tests/test_entrenamiento_r06.R",
+      "sha256": "2ada5849ab0f25e55e56d5250c71cbc93365baf162b1975ca853732c1b4ee9e5"
+    },
+    {
+      "path": "scripts/construir_app_modelos_largo_historico.R",
+      "sha256": "03e3480476dbdb4cddb87f9ddc836b0b0bdb80eabe4e6154cd5d34f0aa0a8745"
+    },
+    {
+      "path": "funciones/scoring_operativo_utils.R",
+      "sha256": "fdb495147ea312638dec4e99f408634da34020695e4521b76afe5abb952d1eac"
+    }
+  ]
+}

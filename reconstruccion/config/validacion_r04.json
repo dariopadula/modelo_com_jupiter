@@ -1,0 +1,11 @@
+{
+  "status": "validado_bloque_historico",
+  "rows": 22013,
+  "columns": 57,
+  "assignment_rows": 17773,
+  "score_max_error": 0,
+  "derivados_sha256": "cce42991d65b622924cb3c589c7119ba616bb83e47524fe18c09c1bb50f2aebb",
+  "scope": "historical_snapshot_march_50_clusters",
+  "closure_verified": false,
+  "new_raw_cutoff_policy": "01:00_America/Montevideo_aprobado"
+}

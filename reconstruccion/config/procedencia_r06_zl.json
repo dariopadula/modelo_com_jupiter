@@ -1,0 +1,12 @@
+{
+  "reference_id": "local_r01_2026-10-20",
+  "source_model": "data/processed/modelos/experimentos_cascada_zl/operativo_segmento/modelo_zl_xgboost.rds",
+  "source_sha256": "09af41e1936795c90e581a0c12888d1d6894f6334d16f97bcd3bd1e86d315656",
+  "imported_bundle": "runtime/r06_zl/modelo_zl.rds",
+  "imported_sample": "runtime/r06_zl/muestra_zl.rds",
+  "scenario": "random_dia_estratificado_mes",
+  "sample_day": "2026-05-24",
+  "sample_rows": 8,
+  "model_numeric_features": ["n_contenedores_activos", "n_contenedores_elegibles_modelo", "n_contenedores_observados", "n_contenedores_inferidos", "pct_contenedores_inferidos", "pct_contenedores_elegibles_modelo", "min_tiempo_desde_ultimo_levante_pred", "mean_tiempo_desde_ultimo_levante_pred", "median_tiempo_desde_ultimo_levante_pred", "max_tiempo_desde_ultimo_levante_pred", "min_ratio_tiempo_periodo_pred", "mean_ratio_tiempo_periodo_pred", "median_ratio_tiempo_periodo_pred", "max_ratio_tiempo_periodo_pred", "min_levante_periodo", "mean_levante_periodo", "max_levante_periodo", "exceso_min_tiempo_periodo_pred_pos", "exceso_mean_tiempo_periodo_pred_pos", "exceso_max_tiempo_periodo_pred_pos", "exceso_min_tiempo_periodo_pred_trunc7", "exceso_mean_tiempo_periodo_pred_trunc7", "exceso_max_tiempo_periodo_pred_trunc7", "mean_dias_total_tramo_inferido_estado", "max_dias_total_tramo_inferido_estado", "porc_nbi_segmento", "porc_asentamiento_nbi_segmento", "porc_vivienda_inadecuada_segmento", "densidad_pob_km2", "cluster_multisegmento", "pct_posiciones_segmento_principal", "dia_semana", "fin_de_semana", "es_feriado", "vispera_feriado", "dia_habil"],
+  "model_categorical_features": []
+}

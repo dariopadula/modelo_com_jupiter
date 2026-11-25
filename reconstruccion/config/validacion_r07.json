@@ -1,0 +1,85 @@
+{
+  "date": "2026-10-22",
+  "task": "R07",
+  "status": "finalizada",
+  "reference_day": "2026-05-24",
+  "segment_rows": 924,
+  "neighborhood_rows": 62,
+  "exposure": 7849,
+  "max_a0_probability_difference": 5.2736E-16,
+  "max_daily_prediction_difference": 3.4106E-13,
+  "tolerance": 1E-06,
+  "fixture_features_rows": 2508,
+  "fixture_oof_folds": 9,
+  "canonical_without_app_test": "passed",
+  "no_leakage_D_D1_test": "passed",
+  "small_training": "passed",
+  "full_preparation": "passed_user_run_20261022_111500",
+  "full_training": "passed_user_run_20261022_111500",
+  "models_promoted": false,
+  "source_models": [
+    {
+      "path": "outputs/comparacion_poda_xgboost_com/modelo_P3_compacto.rds",
+      "sha256": "2e2b2c7bb28b68b39353b1c1018786030c52896ab68512dfd263235262230c1b"
+    },
+    {
+      "path": "outputs/prueba_xgboost_correccion_estructural_com/modelo_A0_final.rds",
+      "sha256": "01caa8cf931e21d96aaf06b3c68e7f6a586c8685d0b25057269f0127fce2dd78"
+    }
+  ],
+  "files": [
+    {
+      "path": "reconstruccion/R/configuracion/runtime_r07.R",
+      "sha256": "2617b8feb513cb1932731d2c0543c606baa06e0fa4bd4300466be3d298d10498"
+    },
+    {
+      "path": "reconstruccion/R/features/agregado_receta.R",
+      "sha256": "1959656cd42035bc7791589da5750ee955806d35e58364906cffa1af6adf117e"
+    },
+    {
+      "path": "reconstruccion/R/modelos/agregado_a0_p3.R",
+      "sha256": "773b35d6d1ae8171340440bc31d6f2d6e51a54117a60619f088a0734f464d568"
+    },
+    {
+      "path": "reconstruccion/R/entrenamiento/agregado_a0_p3.R",
+      "sha256": "a6bd246b92ac8930b70d5c04dd1c8234fae2b40643ec810513000bf23b5d48f8"
+    },
+    {
+      "path": "reconstruccion/scripts/preparar_agregado.R",
+      "sha256": "066c2eaaecf5b0f651d6a2781d28ccc2b974830ddd334bccc22b1d2489deebaa"
+    },
+    {
+      "path": "reconstruccion/scripts/predecir_agregado.R",
+      "sha256": "e76e6936767b2094412ef8fdd3581b52c34debbf41cc3760577cfe2ebde8b374"
+    },
+    {
+      "path": "reconstruccion/scripts/entrenar_agregado.R",
+      "sha256": "ee060a95e9240af4a6f9953311bfd7ef7547c7724189f4a15be602cd0c1490e3"
+    },
+    {
+      "path": "reconstruccion/herramientas_migracion/importar_agregado_r07.R",
+      "sha256": "09096cf185002e167f44a3dea38039a342e30bab01d159a6e42f6ad5722b6380"
+    },
+    {
+      "path": "reconstruccion/herramientas_migracion/importar_insumos_agregado_r07.R",
+      "sha256": "e3a1df503a8422b1d684d9af270d3a15676b4dfaeded6733138b68a12f54842a"
+    },
+    {
+      "path": "reconstruccion/tests/test_agregado_r07.R",
+      "sha256": "d86edbbd650eb256da75f224b5e7555d6661e8cf14527b49fea51976d85d0fc0"
+    },
+    {
+      "path": "reconstruccion/runtime/r07_agregado/bundle.rds",
+      "sha256": "a84de59145ddd1c4d6ca4eb0be7d6bc99674753aeb8fc67004ddf2dd4b45fda1"
+    },
+    {
+      "path": "reconstruccion/runtime/r07_agregado/muestra.rds",
+      "sha256": "e1380c632b014f9b8af2b82621e57450e69bf7552a73b253fbdfa9505781d814"
+    }
+  ],
+  "unknown_observed_remains_na_test": "passed",
+  "full_oof_folds": 9,
+  "selected_iterations": 44,
+  "training_seconds": 264.97,
+  "full_exposure_and_territory_sums": "passed"
+}

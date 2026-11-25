@@ -1,0 +1,43 @@
+{
+  "day": "2026-05-24",
+  "rows": 50,
+  "max_abs_error": 0.0087,
+  "feature_differences": [
+    {
+      "variable": "n_reclamos_lag1",
+      "different": 0,
+      "max_error": 0
+    },
+    {
+      "variable": "n_reclamos_sum_7d",
+      "different": 0,
+      "max_error": 0
+    },
+    {
+      "variable": "n_reclamos_sum_30d",
+      "different": 0,
+      "max_error": 0
+    },
+    {
+      "variable": "dias_desde_ultimo_reclamo_o_inicio_trunc_90",
+      "different": 0,
+      "max_error": 0
+    },
+    {
+      "variable": "mean_tiempo_desde_ultimo_levante_pred",
+      "different": 0,
+      "max_error": 0
+    },
+    {
+      "variable": "n_contenedores_activos",
+      "different": 0,
+      "max_error": 0
+    },
+    {
+      "variable": "pct_contenedores_inferidos",
+      "different": 0,
+      "max_error": 0
+    }
+  ],
+  "interpretation": "Diferencias observadas entre resumen publicado y features actuales; causa de origen no inferida"
+}

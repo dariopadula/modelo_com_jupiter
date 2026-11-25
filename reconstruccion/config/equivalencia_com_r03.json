@@ -1,0 +1,16 @@
+{
+  "sample_id": "r03_com_2026-03-31_top50",
+  "model_sha256": "9d0ba10347f21b999f7347c4e9556b2456815fef221167dce2c9dbf2fe20007d",
+  "day": "2026-03-31",
+  "context_from": "2025-10-02",
+  "rows_history": 9011,
+  "rows_sample": 50,
+  "universe_reference": 7996,
+  "max_abs_error": 0,
+  "tolerance": 1e-10,
+  "same_ranking": true,
+  "observational_state": "copied_from_reference_not_recomputed",
+  "scope": "top50_retrospective_sample_not_daily_production",
+  "product_sha256": "1f36d7001ded57f2b4f2d7012d7be8e806af4c4620a83912f630304808c3f1c3",
+  "inference_bundle_sha256": "c1e711fd5482572a20a6f947b89f1c7e4d0a1b94f43e0dd77e5316c85c2f3fe1"
+}

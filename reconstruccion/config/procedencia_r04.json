@@ -1,0 +1,65 @@
+[
+  {
+    "source": "funciones/preparar_datos_com.R",
+    "destination": "R/ingesta/preparar_datos_com.R",
+    "source_sha256": "b811b1cf10cccd1ba2115c19d02a275734dffa559f4c00218fa0dd499357281b",
+    "destination_sha256": "f9c2db761ae829a0782b127da86d8c15bf13390db45b555501488ffb1d4dda0d",
+    "intentional_change": "Namespaces explicitos as.IDate/setorder; comentarios y formato"
+  },
+  {
+    "source": "funciones/definir_intervalos_actividad_contenedor.R",
+    "destination": "R/ingesta/definir_intervalos_actividad_contenedor.R",
+    "source_sha256": "8a1e47d3fac16f08de00142fb636202b6b7ae0d0b756bbfc1ace8ba1d8c2213b",
+    "destination_sha256": "0fb287e4e283d2d2a221166f7003c8719b52403a961e83bcd80ae41481eb1c29",
+    "intentional_change": "Namespaces explicitos as.IDate/setorder; comentarios y formato"
+  },
+  {
+    "source": "funciones/preparar_datos_levante.R",
+    "destination": "R/ingesta/preparar_datos_levante.R",
+    "source_sha256": "a2c628e76930babf7a0d7f5cef24a16374d31dc588cb3998f049be3e0dae4265",
+    "destination_sha256": "acad30e5fe14d44f63d8a3c07f0e1f161ae4c6f4ddb54a27317dd0a6c47dce4c",
+    "intentional_change": "Namespaces y formato; corte 01:00 America/Montevideo aprobado expresamente por usuario"
+  },
+  {
+    "source": "funciones/vecinos_cercanos.R",
+    "destination": "R/referencias/vecinos_cercanos.R",
+    "source_sha256": "ea0bf565318012021ce2bceab3a2959a4149be70b9263a56b49eb8350451ecf1",
+    "destination_sha256": "3a91427ed53d21fe94532c241872e3d621016277f21e623fec13508bcd1ab97f",
+    "intentional_change": "Namespaces explicitos as.IDate/setorder; comentarios y formato"
+  },
+  {
+    "source": "funciones/asignar_puntos_a_clusters_referencia.R",
+    "destination": "R/referencias/asignar_puntos_a_clusters_referencia.R",
+    "source_sha256": "77abb2926ebba8d13d0807031ae714693a9a7507fc24d05345510fffa37ff63e",
+    "destination_sha256": "f2983a1bd1850e696f2e83c48e1ec476fe83e532f73602c499d9f35c951727b7",
+    "intentional_change": "Namespaces explicitos as.IDate/setorder; comentarios y formato"
+  },
+  {
+    "source": "funciones/asignar_posiciones_levante_a_clusters.R",
+    "destination": "R/referencias/asignar_posiciones_levante_a_clusters.R",
+    "source_sha256": "40b086554899b67a3ad61a01c6da1cf17bae7101ff59291c86f673db257d60f8",
+    "destination_sha256": "461a153601e01222aa135439b4d762d53f384c80a709853ae02246a4f13bf71c",
+    "intentional_change": "Namespaces explicitos as.IDate/setorder; comentarios y formato"
+  },
+  {
+    "source": "funciones/asignar_com_a_contenedores_activos.R",
+    "destination": "R/referencias/asignar_com_a_contenedores_activos.R",
+    "source_sha256": "b12027682312a59dfdefdcc256d68432a6cbea0f180b2c7f55601ebacc102ee3",
+    "destination_sha256": "bf96ad28ce627c6f9d93d6ca0b57764b2901ed881b56ff2664691f92d49d38f1",
+    "intentional_change": "Namespaces explicitos as.IDate/setorder; comentarios y formato"
+  },
+  {
+    "source": "funciones/construir_base_cluster_dia.R",
+    "destination": "R/features/construir_base_cluster_dia.R",
+    "source_sha256": "63a69afb5741d3df792512d5a22fc27722478c1f112fc4db23578f8d1f8bc4f7",
+    "destination_sha256": "829d576ca93db6495f0624186d71a0a89d6c894437dbbf31f35e35c0b9039856",
+    "intentional_change": "Namespaces explicitos as.IDate/setorder; comentarios y formato"
+  },
+  {
+    "source": "funciones/construir_features_historicas_cluster_dia.R",
+    "destination": "R/features/construir_features_historicas_cluster_dia.R",
+    "source_sha256": "40cd297bc178e61b87515da4e5b02df27f66f8e56f2af376ca095ad0b5326626",
+    "destination_sha256": "8cb797cee1f68e0b5393e53df5c15f1c69cfc307efcdef91fd056069f0856eb8",
+    "intentional_change": "Namespaces explicitos as.IDate/setorder; comentarios y formato"
+  }
+]
